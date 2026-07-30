@@ -1,65 +1,76 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1000" viewBox="0 0 1700 1000">
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100">
   <defs>
     <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#172b4d"/></marker>
     <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#de350b"/></marker>
     <style>
       text{font-family:"Microsoft YaHei","Noto Sans CJK SC",sans-serif;fill:#172b4d}
-      .title{font-size:30px;font-weight:700}.sub{font-size:15px;fill:#5e6c84}.label{font-size:16px;font-weight:700;text-anchor:middle}
-      .small{font-size:13px;fill:#5e6c84;text-anchor:middle}.box{stroke-width:2;rx:12}.edge{fill:none;stroke-width:2.4;marker-end:url(#a)}
+      .title{font-size:30px;font-weight:700}.sub{font-size:15px;fill:#5e6c84}.head{font-size:18px;font-weight:700}
+      .label{font-size:15px;font-weight:700;text-anchor:middle}.small{font-size:13px;fill:#5e6c84;text-anchor:middle}
+      .box{stroke-width:2;rx:11}.edge{fill:none;stroke:#172b4d;stroke-width:2.2;marker-end:url(#a)}
     </style>
   </defs>
-  <rect width="1700" height="1000" fill="#fff"/>
-  <text x="50" y="62" class="title">任务状态机：事件驱动、受控返工、证据失效</text>
-  <text x="50" y="94" class="sub">内核守卫决定目标状态；模型只能提交事件和证据</text>
+  <rect width="1800" height="1100" fill="#fff"/>
+  <text x="50" y="62" class="title">Task 正交状态模型：业务阶段、运行状态、门禁状态分离</text>
+  <text x="50" y="94" class="sub">Suspension 覆盖当前业务阶段并记录 resume_stage；Operation/Gate 失败由领域矩阵决定返工、挂起或保持阶段</text>
 
-  <circle cx="105" cy="235" r="45" fill="#f4f5f7" stroke="#7a869a" stroke-width="2"/>
-  <text x="105" y="241" class="label">开始</text>
+  <rect x="50" y="135" width="1700" height="210" rx="16" fill="#f4f5f7" stroke="#7a869a" stroke-width="2"/>
+  <text x="80" y="170" class="head">TaskStage：批准、交付与回滚边界</text>
   <g>
-    <rect x="210" y="180" width="190" height="110" class="box" fill="#deebff" stroke="#0052cc"/>
-    <rect x="470" y="180" width="190" height="110" class="box" fill="#fffae6" stroke="#ff991f"/>
-    <rect x="730" y="180" width="190" height="110" class="box" fill="#eae6ff" stroke="#6554c0"/>
-    <rect x="990" y="180" width="190" height="110" class="box" fill="#fffae6" stroke="#ff991f"/>
-    <rect x="1250" y="180" width="190" height="110" class="box" fill="#e6fcff" stroke="#00a3bf"/>
-    <rect x="1250" y="430" width="190" height="110" class="box" fill="#fffae6" stroke="#ff991f"/>
-    <rect x="990" y="430" width="190" height="110" class="box" fill="#e3fcef" stroke="#00875a"/>
-    <rect x="730" y="430" width="190" height="110" class="box" fill="#ffebe6" stroke="#de350b"/>
+    <rect x="75" y="210" width="180" height="80" class="box" fill="#deebff" stroke="#0052cc"/>
+    <rect x="285" y="210" width="180" height="80" class="box" fill="#fffae6" stroke="#ff991f"/>
+    <rect x="495" y="210" width="180" height="80" class="box" fill="#eae6ff" stroke="#6554c0"/>
+    <rect x="705" y="210" width="180" height="80" class="box" fill="#fffae6" stroke="#ff991f"/>
+    <rect x="915" y="210" width="180" height="80" class="box" fill="#e6fcff" stroke="#00a3bf"/>
+    <rect x="1125" y="210" width="180" height="80" class="box" fill="#fffae6" stroke="#ff991f"/>
+    <rect x="1335" y="210" width="180" height="80" class="box" fill="#e3fcef" stroke="#00875a"/>
+    <rect x="1545" y="210" width="180" height="80" class="box" fill="#ffebe6" stroke="#de350b"/>
   </g>
-  <text x="305" y="225" class="label">草稿</text><text x="305" y="254" class="small">增量提案编辑 / 校验</text>
-  <text x="565" y="220" class="label"><tspan x="565">等待规格</tspan><tspan x="565" dy="23">批准</tspan></text>
-  <text x="825" y="225" class="label">执行中</text><text x="825" y="254" class="small">实现 + 快速门禁</text>
-  <text x="1085" y="220" class="label"><tspan x="1085">等待人工评审</tspan></text><text x="1085" y="254" class="small">人工业务预览</text>
-  <text x="1345" y="225" class="label">验收中</text><text x="1345" y="254" class="small">真实运行 / 功能门禁</text>
-  <text x="1345" y="470" class="label"><tspan x="1345">等待交付</tspan><tspan x="1345" dy="23">批准</tspan></text>
-  <text x="1085" y="493" class="label">已固化</text>
-  <text x="825" y="475" class="label">已阻塞</text><text x="825" y="505" class="small">环境 / 预算 / 重复失败</text>
+  <text x="165" y="258" class="label">Draft</text>
+  <text x="375" y="247" class="label"><tspan x="375">Awaiting</tspan><tspan x="375" dy="20">SpecApproval</tspan></text>
+  <text x="585" y="258" class="label">Implementing</text>
+  <text x="795" y="247" class="label"><tspan x="795">Awaiting</tspan><tspan x="795" dy="20">HumanReview</tspan></text>
+  <text x="1005" y="258" class="label">Accepting</text>
+  <text x="1215" y="247" class="label"><tspan x="1215">Awaiting</tspan><tspan x="1215" dy="20">DeliveryApproval</tspan></text>
+  <text x="1425" y="258" class="label">Finalized</text>
+  <text x="1635" y="246" class="label">Cancelled</text><text x="1635" y="270" class="small">任一未终态经 Operator</text>
+  <path d="M255 250 H285" class="edge"/><path d="M465 250 H495" class="edge"/>
+  <path d="M675 250 H705" class="edge"/><path d="M885 250 H915" class="edge"/>
+  <path d="M1095 250 H1125" class="edge"/><path d="M1305 250 H1335" class="edge"/>
 
-  <path d="M150 235 H210" class="edge"/>
-  <path d="M400 235 H470" class="edge"/><text x="435" y="218" class="small">校验通过</text>
-  <path d="M660 235 H730" class="edge"/><text x="695" y="212" class="small">人工批准</text>
-  <path d="M920 235 H990" class="edge"/><text x="955" y="212" class="small">快速门禁通过</text>
-  <path d="M1180 235 H1250" class="edge"/><text x="1215" y="212" class="small">评审接受</text>
-  <path d="M1345 290 V430" class="edge"/><text x="1435" y="365" class="small">强制门禁通过</text>
-  <path d="M1250 485 H1180" class="edge"/><text x="1215" y="468" class="small">人工批准</text>
+  <rect x="180" y="390" width="1440" height="120" rx="16" fill="#ffebe6" stroke="#de350b" stroke-width="2"/>
+  <text x="900" y="426" class="head" text-anchor="middle" fill="#bf2600">Suspension：不是 TaskStage</text>
+  <text x="900" y="458" class="sub" text-anchor="middle">code · category · resume_stage · decision_required · retry_after · evidence_ref</text>
+  <text x="900" y="486" class="sub" text-anchor="middle">环境、策略、revision 漂移、预算耗尽、重复失败或未知故障均保留原阶段；解除后只能返回记录的 resume_stage。</text>
+  <path d="M585 290 V390" fill="none" stroke="#de350b" stroke-width="2.2" marker-end="url(#ar)" stroke-dasharray="7 6"/>
+  <path d="M1005 290 V390" fill="none" stroke="#de350b" stroke-width="2.2" marker-end="url(#ar)" stroke-dasharray="7 6"/>
 
-  <path d="M1085 290 V355 H825 V290" class="edge" stroke="#de350b" marker-end="url(#ar)" stroke-dasharray="7 6"/>
-  <text x="955" y="340" class="small" fill="#bf2600">实现问题反馈</text>
-  <path d="M1345 180 V120 H305 V180" class="edge" stroke="#de350b" marker-end="url(#ar)" stroke-dasharray="7 6"/>
-  <text x="825" y="110" class="small" fill="#bf2600">需求 / 设计问题反馈</text>
-  <path d="M875 290 V430" class="edge" stroke="#de350b" marker-end="url(#ar)"/>
-  <text x="975" y="370" class="small" fill="#bf2600">环境 / 预算 / 重复失败</text>
-  <path d="M775 430 V290" class="edge" stroke="#6554c0" stroke-dasharray="7 6"/>
-  <text x="645" y="370" class="small">人工决策后恢复</text>
-
-  <rect x="210" y="680" width="1230" height="100" rx="14" fill="#f4f5f7" stroke="#7a869a" stroke-width="2"/>
-  <text x="825" y="720" class="label">返工规则</text>
-  <text x="825" y="753" class="sub" text-anchor="middle">保留历史证据，只失效受影响的下游门禁运行与批准；已固化后的问题创建关联新任务。</text>
-  <g transform="translate(210 825)">
-    <rect width="385" height="65" rx="10" fill="#deebff" stroke="#0052cc"/>
-    <rect x="420" width="385" height="65" rx="10" fill="#ffebe6" stroke="#de350b"/>
-    <rect x="840" width="390" height="65" rx="10" fill="#e3fcef" stroke="#00875a"/>
-    <text x="192" y="39" class="label">蓝/紫：智能体执行态</text>
-    <text x="612" y="39" class="label">红：阻塞或返工</text>
-    <text x="1035" y="39" class="label">绿：不可回退终态</text>
+  <rect x="50" y="560" width="825" height="250" rx="16" fill="#eae6ff" stroke="#6554c0" stroke-width="2"/>
+  <text x="80" y="598" class="head">OperationStatus：长运行、租约、心跳、取消和恢复</text>
+  <g fill="#fff" stroke="#6554c0">
+    <rect x="85" y="650" width="115" height="62" class="box"/><rect x="220" y="650" width="115" height="62" class="box"/>
+    <rect x="355" y="650" width="115" height="62" class="box"/><rect x="490" y="650" width="115" height="62" class="box"/>
+    <rect x="625" y="650" width="115" height="62" class="box"/><rect x="760" y="650" width="85" height="62" class="box"/>
   </g>
-  <text x="50" y="955" class="sub">可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 3 页</text>
+  <text x="142" y="688" class="label">Pending</text><text x="277" y="688" class="label">Running</text>
+  <text x="412" y="688" class="label">Succeeded</text><text x="547" y="688" class="label">Failed</text>
+  <text x="682" y="688" class="label">Suspended</text><text x="802" y="688" class="label">Cancelled</text>
+  <text x="462" y="760" class="small">Host 断开不取消 Operation；相同副作用步骤接管前必须检查 lease、进程树和 Evidence。</text>
+
+  <rect x="925" y="560" width="825" height="250" rx="16" fill="#e6fcff" stroke="#00a3bf" stroke-width="2"/>
+  <text x="955" y="598" class="head">GateStatus：确定性输入与 Evidence 新鲜度</text>
+  <g fill="#fff" stroke="#00a3bf">
+    <rect x="960" y="650" width="115" height="62" class="box"/><rect x="1095" y="650" width="115" height="62" class="box"/>
+    <rect x="1230" y="650" width="115" height="62" class="box"/><rect x="1365" y="650" width="115" height="62" class="box"/>
+    <rect x="1500" y="650" width="100" height="62" class="box"/><rect x="1620" y="650" width="100" height="62" class="box"/>
+  </g>
+  <text x="1017" y="688" class="label">Pending</text><text x="1152" y="688" class="label">Running</text>
+  <text x="1287" y="688" class="label">Passed</text><text x="1422" y="688" class="label">Failed</text>
+  <text x="1550" y="688" class="label">Stale</text><text x="1670" y="688" class="label">Cancelled</text>
+  <text x="1337" y="760" class="small">只有 input_digest 相同且 Evidence 完整的 Passed GateRun 可以复用；未知变化保守失效。</text>
+
+  <rect x="180" y="860" width="1440" height="105" rx="14" fill="#f4f5f7" stroke="#7a869a" stroke-width="2"/>
+  <text x="900" y="898" class="head" text-anchor="middle">领域矩阵是不变量</text>
+  <text x="900" y="930" class="sub" text-anchor="middle">Event → Guard → TaskStage · Event → Gate/Approval Invalidation · Suspension → Resume</text>
+  <text x="900" y="955" class="small">模型只能提交 observation 和候选内容；不能传入目标阶段、伪造人工 Receipt 或覆盖失效计算。</text>
+  <text x="50" y="1055" class="sub">可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 3 页</text>
 </svg>

@@ -55,7 +55,7 @@
     <rect x="80" y="770" width="220" height="62" class="box"/><rect x="340" y="770" width="240" height="62" class="box"/><rect x="620" y="770" width="210" height="62" class="box"/>
     <rect x="210" y="870" width="220" height="62" class="box"/><rect x="490" y="870" width="220" height="62" class="box"/>
   </g>
-  <text x="190" y="808" class="label">SDLC 领域内核</text><text x="460" y="808" class="label">任务 / 尝试 / 门禁</text><text x="725" y="808" class="label">项目事实服务</text>
+  <text x="190" y="808" class="label">SDLC 领域内核</text><text x="460" y="798" class="label"><tspan x="460">Task / Slice / Operation</tspan><tspan x="460" dy="19">Gate / Suspension</tspan></text><text x="725" y="808" class="label">项目事实服务</text>
   <text x="320" y="908" class="label">证据服务</text><text x="600" y="908" class="label">工作区服务</text>
 
   <rect x="930" y="700" width="820" height="300" class="group" fill="#e6fcff" stroke="#00a3bf"/>
