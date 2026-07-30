@@ -13,6 +13,7 @@
 - Runner：`local_constrained`；
 - canary：隔离 Electron project；
 - Host：OpenCode 薄插件、MCP stdio、CLI/SDK 中实测最短的一种；
+- 权威平台：Windows x64；Linux/macOS 只保留 Schema 能力，不计入 M0 完成；
 - 执行：单 Project、单活动可写 Task，Slice 串行，Gate Operation 可长运行。
 
 第二 Host、数据库、远程服务、多项目调度和自动发布都不是 M0 条件。
@@ -25,14 +26,25 @@
 - TaskStage/Operation/Gate/Suspension 三张矩阵；
 - Agent、Operator、Framework Pack、Interface、Environment Schema；
 - Revision Vector、GateInputManifest、FactChangeSet；
-- StateStore transaction、Diagnostic Code；
+- StateStore/Facts transaction phase、Recovery Decision 和 CrashPoint；
+- Failure Diagnostic 的 category、fault_origin、repair_scope 和 responsible_actor；
+- Shadow Replay Fixture/Driver 契约；
 - 黑盒场景先写成失败测试。
 
-### Slice 1：可靠 Core
+### Slice 1A：Storage Kernel
+
+- FileStateStore transaction journal、framed event/checksum 和 snapshot projection；
+- project/task lock、workspace lease、CAS 和幂等；
+- FactPublisher before/after manifest、staging、rollback material 和 applied-path ledger；
+- 真实临时 NTFS 目录与 FileOps/Clock/CrashPoint 故障注入；
+- M0-11、M0-12、M0-13、M0-25 先通过。
+
+Slice 1A 是后续实现的硬前置。其恢复测试未通过时，不进入 Slice 1B、2 或 3。
+
+### Slice 1B：可靠生命周期
 
 - `sdlc_status`、`sdlc_task_open`；
 - Proposal/Plan/FactChangeSet validation；
-- FileStateStore、workspace lease、幂等、crash recovery；
 - Operator Receipt；
 - Operation/GateRun/Evidence；
 - Failure Router；
@@ -72,12 +84,13 @@
 | Slice | 初始 timebox | 退出条件 |
 |---|---:|---|
 | 0 | 3–4 个工作日 | Schema、矩阵和场景可执行 |
-| 1 | 4–6 个工作日 | Core/FileStateStore 在故障注入下通过 |
+| 1A | 4–6 个工作日 | FileStateStore/FactPublisher 在真实文件系统故障注入下通过 |
+| 1B | 3–4 个工作日 | 生命周期、Receipt、Gate 和 Failure Router 通过 |
 | 2 | 5–7 个工作日 | Runner、Operation、Evidence 和诊断通过 |
 | 3 | 3–5 个工作日 | fake + Electron Pack 在真实 canary 通过 |
 | 4 | 2–3 个工作日 | reference + 一个 Host Adapter conformance 通过 |
 
-M0 初始规划为 17–25 个工作日。时间只用于风险控制，不是完成证据。
+Windows x64 单平台 M0 初始规划为 20–29 个工作日。时间只用于风险控制，不是完成证据；若扩大到第二操作系统，必须单独估算并调整完成条件。
 
 到达 timebox 仍未满足退出条件时必须记录：
 
@@ -107,10 +120,10 @@ M0 初始规划为 17–25 个工作日。时间只用于风险控制，不是�
 | M0-10 | Host Adapter | Schema 与 reference 一致，Host 不拥有状态 |
 | M0-11 | 同一 idempotency key 并发调用 | 只产生一个事件和一个 Operation/GateRun |
 | M0-12 | 同 key 不同 payload | 返回 `IDEMPOTENCY_CONFLICT` |
-| M0-13 | 事件后、snapshot 前崩溃 | 重启后自动恢复 |
+| M0-13 | Prepared、EventDurable、Committed 或 snapshot 替换前后崩溃 | 重启先恢复；Task、幂等结果和 event sequence 唯一 |
 | M0-14 | GateRun 期间源码变化 | GateStatus=`Stale`，Evidence 不可用于 Delivery |
 | M0-15 | symlink/junction 指向项目外 | Core/Runner 拒绝执行 |
-| M0-16 | 后台子进程后测试失败 | 进程树全部清理，无 orphan，产生 Cleanup Receipt |
+| M0-16 | Windows 后台进程生成子/孙进程后测试失败 | Job Object 或等价机制清理整棵进程树，无 orphan，产生 Cleanup Receipt |
 | M0-17 | 日志包含 Token/Secret | Debug Log、Evidence、诊断包全部脱敏 |
 | M0-18 | 外部接口绑定缺失 | 运行前创建 Environment Suspension |
 | M0-19 | 重放旧 Approval Receipt | subject/task/revision 不匹配，拒绝 |
@@ -119,7 +132,8 @@ M0 初始规划为 17–25 个工作日。时间只用于风险控制，不是�
 | M0-22 | Adapter 被删除 | Core、Action/StateStore/Runner TCK 和 lifecycle 仍通过 |
 | M0-23 | 多 AC Task 跨 Session | 从最后 Slice handoff 恢复，不重做已完成 Slice |
 | M0-24 | Spec Approval 后 revision 漂移 | Revision Suspension；相关 Approval/Gate stale，无静默 rebase |
-| M0-25 | 事实文件替换中途崩溃 | 恢复后旧事实或新事实完整有效，无部分发布 |
+| M0-25 | FactsPrepared、逐路径替换、FactsVerified 或 DomainCommitted 前后崩溃 | 开放读取前完成 roll-forward/rollback；旧事实或新事实完整有效，无部分发布 |
+| M0-26 | 同一失败分别来自项目测试与 Pack/parser | 两者均为 `test_contract`，但 fault_origin、repair_scope、responsible_actor 和下一步不同；Pack/parser 不开放产品代码修复 |
 
 ## E.5 M0 成功指标
 
@@ -135,6 +149,7 @@ M0 初始规划为 17–25 个工作日。时间只用于风险控制，不是�
 - 窄 Feature 修正不重跑 init/spec 全流程；
 - 崩溃恢复、事实发布和 Operation 不依赖 Host Session；
 - 缺 Environment、Runner 能力或 Secret 时 fail closed。
+- M0 只对 Windows x64 作完成声明，Pack descriptor 与 Evidence 不得夸大平台覆盖。
 
 ## E.6 M0 停止条件
 
@@ -161,6 +176,7 @@ M0 通过后增加：
 - UI/浏览器可读 Evidence；
 - 更完整 Failure Router；
 - 第二 Adapter conformance；
+- 一个 POSIX 平台的进程树、路径和 cleanup conformance；
 - Delivery 与 Git commit 的显式 Operator 集成，不自动 push；
 - 一个 CSCI/接口追溯或 SBOM canary；
 - 第二种真实 Environment Binding。

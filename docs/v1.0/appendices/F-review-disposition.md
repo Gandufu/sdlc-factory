@@ -10,10 +10,15 @@
 |---|---|---|
 | Task 粒度模糊 | 采纳 | Task 固定为批准、交付和回滚边界；Execution Slice 提供 Task 内执行与恢复粒度，见[附录 A](A-domain-and-lifecycle.md) |
 | 多 Task revision 冲突 | 采纳 | Revision Vector、漂移守卫和 Reconciliation；M0 拒绝漂移，M1 验证多 worktree 协调，见[附录 A](A-domain-and-lifecycle.md)和[附录 E](E-delivery-and-acceptance.md) |
-| 10 个工作日偏乐观 | 采纳 | M0 拆为五个独立 timebox，完整初始规划 17–25 个工作日，见[附录 E](E-delivery-and-acceptance.md) |
+| 10 个工作日偏乐观 | 采纳 | M0 拆为六个独立 timebox；Windows x64 单平台初始规划 20–29 个工作日，见[附录 E](E-delivery-and-acceptance.md) |
 | Cutover 留白 | 采纳 | 隔离 Shadow Replay 后只切换新 Task，拒绝同一 Task 双写，见 [ADR-001](../adr/ADR-001-Core-Cutover.md) |
 | Gate 失效范围未展开 | 采纳 | GateInputManifest、确定性 input digest、保守失效和 M0 TCK，见[附录 B](B-state-evidence-and-recovery.md) |
 | CSCI/合规过晚 | 条件采纳 | M0 验证 Interface/Environment seam，M1 完成合规 canary，2.0 再产品化治理能力 |
+| M0 硬骨头集中 | 采纳 | Storage Kernel 独立为 Slice 1A，恢复测试不过则不进入生命周期、Runner 或 Pack |
+| Shadow Replay 可比性 | 采纳 | 使用版本化 Replay Fixture 和专用 Driver；差分运行不调用现场 LLM，见 [ADR-001](../adr/ADR-001-Core-Cutover.md) |
+| Failure Router 分类可能丢失 | 已有分类，补强合同 | 保留 `test_contract/infrastructure`，新增 fault_origin、repair_scope 和 responsible_actor |
+| FileStateStore 风险集中 | 采纳 | 明确 Task/Facts 事务阶段、轻量 WAL、roll-forward/rollback 和逐阶段故障注入 |
+| M0 跨平台范围不清 | 补充 | 权威 canary 固定 Windows x64；M1 再验证一个 POSIX 平台 |
 
 Task 仍是业务增量聚合；Execution Slice 只解决 Task 内执行和恢复粒度，不引入第二套生命周期。
 

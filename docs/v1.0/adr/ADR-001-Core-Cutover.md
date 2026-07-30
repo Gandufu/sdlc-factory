@@ -34,6 +34,28 @@
 - legacy、1.0 Core 分别运行，不共享 `.sdlc*`、Evidence、端口、进程或环境写入；
 - 只比较可观察不变量，不要求内部状态、事件名或目录布局一致。
 
+Shadow Replay 必须使用版本化的 `Replay Fixture`，不能让 Agent 在两个 Core 上分别现场采样。Fixture 至少固定：
+
+```text
+fixture_id / schema_version / digest
+Git revision 与 ProjectFacts manifest
+用户意图 Markdown artifact + content hash
+预制 Proposal、FactChangeSet 和工作区变化
+Operator 决定序列
+Pack、Policy、Environment 和 toolchain digest
+Gate/Runner 受控结果或故障注入
+```
+
+Fixture 记录的是与版本无关的高层刺激和制品，不是 legacy Action 的原始调用序列。legacy 与 1.0 各自通过版本专用 Replay Driver 把同一刺激翻译为本版 Interface 调用；Driver 只做字段和调用编排转换，不能补充领域裁决。
+
+比较运行期间：
+
+- 不调用现场 LLM；
+- Clock、UUID、临时路径、端口和并发调度必须注入或归一化；
+- 每一步保存输入 digest、输出摘要、领域事件和 Evidence ref；
+- 无法映射的刺激必须标为 `not_comparable` 并进入人工处置，不能静默跳过；
+- 报告必须绑定 Fixture digest、两个 Core 版本和两个起始 revision。
+
 必须比较：
 
 ```text
@@ -48,6 +70,8 @@ Delivery 是否只在新鲜证据下成立
 
 Shadow Replay 不得写入生产仓库、远程分支、发布系统或真实设备。
 
+Live Agent 只在后续 canary 中验证交互可用性和恢复体验；其结果不能替代 Shadow Replay 的差分判断。
+
 ### 3. 1.0 新 Task 试点
 
 - 1.0 只在隔离 canary project 创建新 Task；
@@ -60,7 +84,7 @@ Shadow Replay 不得写入生产仓库、远程分支、发布系统或真实设
 只有同时满足以下条件，指定项目的新 Task 默认入口才能切到 1.0：
 
 - [M0 黑盒场景](../appendices/E-delivery-and-acceptance.md#e4-m0-黑盒场景)全部通过；
-- Shadow Replay 报告无未决高风险差异；
+- 绑定 Replay Fixture digest 的 Shadow Replay 报告无未决高风险差异或未解释的 `not_comparable`；
 - canary 至少一个真实 Task 完成 Spec、Slice、Gate、Review、Delivery 全闭环；
 - FileStateStore crash recovery、Runner cleanup 和诊断包均有 Evidence；
 - Operator 明确批准切换项目和生效 revision。

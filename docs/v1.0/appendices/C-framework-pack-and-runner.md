@@ -86,8 +86,8 @@ metadata:
 
 compatibility:
   core: ">=1.0.0-alpha <1.1.0"
-  supportedOs: [windows, linux, darwin]
-  supportedArch: [x64, arm64]
+  supportedOs: [windows]
+  supportedArch: [x64]
 
 requires:
   packs: []
@@ -263,8 +263,7 @@ Environment Binding：
 
 - clean environment；
 - canonical path 和 symlink/junction escape 检查；
-- Windows Job Object 或等价进程树管理；
-- POSIX process group；
+- Windows Job Object 或等价的 Windows 进程树管理；
 - timeout 后 TERM → KILL；
 - orphan process 检测和 Cleanup Receipt；
 - Electron 临时 `user-data-dir`；
@@ -276,5 +275,7 @@ Environment Binding：
 - Operation 开始和结束 revision 各采样一次。
 
 若当前 OS 无法强制某项限制，Receipt 必须记录 `not_enforced`；高风险 Gate 创建 Suspension，不能静默继续。
+
+M0 的权威 canary 平台固定为 Windows x64，Electron Pack 只能在 `supportedOs/supportedArch` 中声明已经通过 TCK 和进程清理故障注入的平台。Schema 允许 Linux/macOS，但 M0 不实现 POSIX process group，也不对未验证平台作完成声明。M1 再选择一个 POSIX 平台验证第二套进程树 Adapter。
 
 1.0 安全等级是 `local_constrained`，只运行受控 canary 和受信项目。容器/VM、hostile-code sandbox 和强网络隔离属于 2.0 Execution Plane。

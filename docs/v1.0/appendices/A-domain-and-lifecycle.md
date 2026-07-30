@@ -176,15 +176,45 @@ M0 是单 Project、单活动可写 Task，但仍必须检测外部编辑导致�
 
 ![验证反馈闭环](../diagrams/SDLC-Pipeline-1.0-Harness-Loop.svg)
 
+Failure Router 不能只返回阶段，必须返回结构化 Failure Diagnostic：
+
+```json
+{
+  "category": "test_contract",
+  "fault_origin": "project_test",
+  "repair_scope": ["tests/functional/**"],
+  "responsible_actor": "agent",
+  "retryability": "after_change",
+  "resume_stage": "Implementing",
+  "fingerprint": "sha256:...",
+  "evidence_refs": ["sdlc://evidence/GATE-0007"]
+}
+```
+
+字段语义：
+
+| 字段 | 作用 |
+|---|---|
+| `category` | 决定领域路由，不得由 Agent 自报覆盖 |
+| `fault_origin` | 标识故障来源，如 `product_code`、`project_test`、`pack`、`parser`、`runner`、`environment` |
+| `repair_scope` | 限定下一轮允许修改的路径、Capability 或配置；未知时为空并挂起 |
+| `responsible_actor` | `agent`、`operator`、`pack_maintainer` 或 `core_maintainer` |
+| `retryability` | `after_change`、`transient` 或 `manual_only` |
+| `resume_stage` | 修复或解除 Suspension 后唯一允许恢复的阶段 |
+| `fingerprint` | 去重和预算判断的规范化失败指纹 |
+| `evidence_refs` | 支撑分类的日志、测试、Parser 或环境证据 |
+
 | Category | 默认处理 | 示例 |
 |---|---|---|
 | `product` | 回到 Implementing | 编译失败、业务测试失败、运行崩溃 |
 | `spec` | 回到 Draft，Spec Approval stale | Requirement/AC/设计错误 |
-| `test_contract` | 项目测试回 Implementing；Pack/parser 问题 Suspension | 测试或 parser 错误 |
+| `test_contract` | `project_test` 回到 Implementing 且只开放测试 repair_scope；`pack/parser` Suspension 并路由对应维护者 | 测试脚本、fixture、Pack 或 parser 错误 |
 | `environment` | Suspension，保留 resume_stage | 设备、端口、外部系统不可用 |
 | `policy` | Suspension/Operator | Protected path、许可、安全策略 |
-| `infrastructure` | 有预算重试后 Suspension | Runner、磁盘、网络临时失败 |
+| `infrastructure` | 仅 `retryability=transient` 可在预算内重试，随后 Suspension | Runner、磁盘、网络临时失败 |
 | `unknown` | 一次诊断 Attempt 后 Suspension | 无法稳定复现 |
+
+`product` 与 `project_test` 都可能回到 Implementing，但 Context Compiler 必须根据 `repair_scope` 生成不同上下文和写路径。Pack/parser 问题不得通过修改业务代码重试；Runner/环境问题不得消耗产品修复 Attempt。
 
 每次重试必须提供新的 failure delta：
 

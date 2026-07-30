@@ -44,6 +44,31 @@ M0 FileStateStore 必须满足：
 - 写事件后、写 snapshot 前崩溃可恢复；
 - 启动时输出唯一 RecoveryReport。
 
+### B.2.1 Task 事务协议
+
+`StateStorePort` 保持 `load / transact / recover` 三个方法。文件锁、framing、flush、rename、failpoint 和 journal 都是 FileStateStore 内部实现，不能扩散到 Application 调用者。
+
+每次 `transact` 使用以下持久化阶段：
+
+| 阶段 | 必须持久化的内容 | 崩溃恢复 |
+|---|---|---|
+| `Prepared` | transaction ID、expected version、action、request hash、idempotency key | 尚无完整事件时删除准备记录，不改变 Task |
+| `EventDurable` | 带 sequence、transaction ID、request hash、结果和 checksum 的完整事件记录 | 事件完整则确定性 roll-forward；尾部记录不完整则按 framing/checksum 丢弃 |
+| `Committed` | commit marker 与可重建的 idempotency result | Task 结果已成立；补建 snapshot 和索引 |
+| `Completed` | snapshot version/checksum 与清理结果 | 正常返回或幂等重放 |
+
+约束：
+
+- 事务先获取 project/task 锁，再检查 CAS 和 idempotency；
+- 事件记录必须可检测 torn write；不能把“最后一行能被 JSON parser 读取”当作完整性证明；
+- idempotency request hash 和原始结果必须进入可从事件恢复的持久记录，不能只保存在 snapshot；
+- snapshot 是投影，不是提交点；必须先写临时文件、校验 version/checksum，再原子替换；
+- `transact` 只在 `Committed` 可证明后返回成功；
+- `recover(project_ref)` 必须在任何 `load/transact` 暴露项目状态前完成；
+- 无法证明 roll-forward 或 rollback 的事务创建 Storage Suspension，并拒绝后续写入。
+
+M0 使用真实临时 NTFS 目录和可注入的 FileOps/Clock/CrashPoint 内部 seam 测试该模块，不用内存 StateStore 替代文件崩溃语义。故障注入至少覆盖每次阶段写入、flush、rename、事件追加和 snapshot 替换之前/之后。
+
 本地 checksum/hash chain 只能检测一致性或修改迹象，不证明 Operator 身份，也不能抵抗拥有相同文件写权限的攻击者。
 
 ## B.3 FactChangeSet
@@ -69,20 +94,34 @@ Agent 执行时，Context Compiler 同时提供当前 ProjectFacts 和已批准�
 
 ```text
 重检 Revision Vector 和 Delivery Approval
-  → 写 FinalizationStarted 事务意图
-  → 在临时目录应用并校验全部 FactChangeSet
-  → 原子替换可提交文件并记录结果 manifest
-  → 写 Delivery / Finalized 事件和 Receipt
-  → 刷新 snapshot
+  → FactsPrepared：写 before/after manifest、staging 和 rollback material
+  → Publishing：持有 ProjectFacts 独占租约并逐路径替换
+  → FactsVerified：校验完整 after manifest
+  → DomainCommitted：写 Delivery / Finalized 事件和 Receipt
+  → Completed：刷新 snapshot 并清理 transaction material
 ```
 
-冲突或校验失败不产生 Finalized。崩溃恢复必须能判断：
+普通文件系统不能把多个权威文件在物理上一次性原子替换。1.0 承诺的是恢复原子性：
+
+- Publishing 期间不向 Context Compiler、Task Open 或其他读者暴露 ProjectFacts；
+- 每次目标替换后记录 applied-path ledger；
+- 启动时先恢复未完成 Finalization，再开放读取和写入；
+- staging 和 after manifest 完整时优先 roll-forward 到新事实；
+- staging 不完整但 rollback material 和 before manifest 完整时 rollback 到旧事实；
+- 两侧都无法完整证明时创建 Storage Suspension，禁止生成新 `facts_revision`；
+- 每个阶段和每个目标文件替换前后都必须存在故障注入点。
+
+这里的 transaction journal 是 FileStateStore 内部轻量 WAL，不引入数据库，也不把 journal 细节加入 `StateStorePort` Interface。
+
+冲突或校验失败不产生 Finalized。恢复必须能判断：
 
 ```text
 尚未发布
-已全部发布但事件未补写
+部分发布但可安全 roll-forward
+部分发布但只能 rollback
+已全部发布但领域事件未补写
 已完成
-需要人工处理的异常状态
+无法证明新旧任一完整版本，需要 Suspension
 ```
 
 下一 Task 只以完整 Finalization 后的新 `facts_revision` 为基线。

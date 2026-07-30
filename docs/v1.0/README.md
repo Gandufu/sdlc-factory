@@ -75,6 +75,8 @@ ProjectFacts
   → Failure Router
       ├─ product → Implementing
       ├─ spec → Draft + Spec Approval stale
+      ├─ test_contract → 按 fault_origin 修测试或挂起 Pack/parser
+      ├─ infrastructure → 有限重试后 Suspension
       └─ environment/policy/revision/budget → Suspension
   → Operator Accept Review
   → mandatory gates
@@ -208,7 +210,7 @@ Runner 安全等级为 `local_constrained`：clean environment、canonical path�
 - 一个 CSCI/接口追溯或 SBOM canary 通过；
 - Delivery 仍不自动 push。
 
-实施切片、timebox、25 个黑盒场景和停止条件见 [附录 E](appendices/E-delivery-and-acceptance.md)。
+实施切片、timebox、26 个黑盒场景和停止条件见 [附录 E](appendices/E-delivery-and-acceptance.md)。
 
 ## 8. 开工前必须确认
 
