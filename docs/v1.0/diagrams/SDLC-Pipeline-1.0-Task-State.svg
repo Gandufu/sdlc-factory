@@ -72,5 +72,5 @@
   <text x="900" y="898" class="head" text-anchor="middle">领域矩阵是不变量</text>
   <text x="900" y="930" class="sub" text-anchor="middle">Event → Guard → TaskStage · Event → Gate/Approval Invalidation · Suspension → Resume</text>
   <text x="900" y="955" class="small">模型只能提交 observation 和候选内容；不能传入目标阶段、伪造人工 Receipt 或覆盖失效计算。</text>
-  <text x="50" y="1055" class="sub">可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 3 页</text>
+  <text x="50" y="1055" class="sub">可编辑源文件：SDLC-Pipeline-1.0-Architecture.drawio · 第 3 页</text>
 </svg>

@@ -51,5 +51,5 @@
   <rect x="70" y="650" width="1480" height="90" rx="14" fill="#f4f5f7" stroke="#7a869a" stroke-width="2"/>
   <text x="810" y="687" class="label">下一次尝试的准入条件</text>
   <text x="810" y="717" class="sub" text-anchor="middle">新失败、新堆栈、新定位、新环境状态或新假设验证；相同指纹重复且无新证据时停止。</text>
-  <text x="50" y="855" class="sub">可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 4 页</text>
+  <text x="50" y="855" class="sub">可编辑源文件：SDLC-Pipeline-1.0-Architecture.drawio · 第 4 页</text>
 </svg>

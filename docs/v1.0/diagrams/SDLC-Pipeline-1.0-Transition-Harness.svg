@@ -56,7 +56,7 @@
   <text x="1265" y="508" class="label"><tspan x="1265">工作区 / Runner</tspan><tspan x="1265" dy="20">端口</tspan></text><text x="1485" y="508" class="label"><tspan x="1485">Framework Pack</tspan><tspan x="1485" dy="20">端口</tspan></text>
 
   <rect x="360" y="700" width="610" height="84" class="box" fill="#ffebe6" stroke="#de350b"/>
-  <text x="665" y="735" class="label" fill="#bf2600"><tspan x="665">P0 只选择一个最短宿主适配器；删除适配器后，</tspan><tspan x="665" dy="24">内核、契约测试、动作结构仍必须独立通过。</tspan></text>
+  <text x="665" y="735" class="label" fill="#bf2600"><tspan x="665">M0 只选择一个最短宿主适配器；删除适配器后，</tspan><tspan x="665" dy="24">内核、契约测试、动作结构仍必须独立通过。</tspan></text>
   <rect x="1030" y="670" width="320" height="100" class="box" fill="#e6fcff" stroke="#00a3bf"/>
   <text x="1190" y="709" class="label">Project Profile / Packs</text><text x="1190" y="738" class="small">Electron · Policy · fake TCK</text>
   <rect x="1410" y="670" width="320" height="100" class="box" fill="#deebff" stroke="#0052cc"/>
@@ -79,5 +79,5 @@
     <text x="30" y="70" class="sub">适配器只翻译身份、工作区、调用和显示；Task/Operation、事实事务、门禁、证据和审批收据全部留在内核。</text>
     <text x="30" y="98" class="sub">Framework Pack 只生成声明式计划；受限 Runner 执行。最终软件工厂拥有第一方运行时后，外部宿主与 MCP 退化为可选入口。</text>
   </g>
-  <text x="50" y="1055" class="sub">可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 1 页</text>
+  <text x="50" y="1055" class="sub">可编辑源文件：SDLC-Pipeline-1.0-Architecture.drawio · 第 1 页</text>
 </svg>

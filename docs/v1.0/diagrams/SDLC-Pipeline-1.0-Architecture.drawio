@@ -36,7 +36,7 @@
 
         <mxCell id="t-packs" value="Project Profile / Packs&lt;br&gt;Electron · Policy · fake TCK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6FCFF;strokeColor=#00A3BF;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="1030" y="670" width="320" height="100" as="geometry"/></mxCell>
         <mxCell id="t-project" value="项目边界&lt;br&gt;Git · 工作树 · 接口 / 环境绑定" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DEEBFF;strokeColor=#0052CC;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="1410" y="670" width="320" height="100" as="geometry"/></mxCell>
-        <mxCell id="t-note" value="P0 只选择一个最短宿主适配器；删除适配器后，内核、契约测试、动作结构仍必须独立通过。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBE6;strokeColor=#DE350B;fontColor=#BF2600;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="360" y="700" width="610" height="84" as="geometry"/></mxCell>
+        <mxCell id="t-note" value="M0 只选择一个最短宿主适配器；删除适配器后，内核、契约测试、动作结构仍必须独立通过。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBE6;strokeColor=#DE350B;fontColor=#BF2600;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="360" y="700" width="610" height="84" as="geometry"/></mxCell>
 
         <mxCell id="te1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#7A869A;endArrow=block;" edge="1" parent="1" source="t-oc" target="t-plugin"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="te2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#7A869A;endArrow=block;dashed=1;" edge="1" parent="1" source="t-cc" target="t-mcp"><mxGeometry relative="1" as="geometry"/></mxCell>
@@ -49,7 +49,7 @@
         <mxCell id="te9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A3BF;endArrow=block;" edge="1" parent="1" source="t-template" target="t-packs"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="te10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#0052CC;endArrow=block;" edge="1" parent="1" source="t-workspace" target="t-project"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="te11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#0052CC;endArrow=block;" edge="1" parent="1" source="t-packs" target="t-project"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="t-footer" value="可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 1 页" style="text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#5E6C84;align=left;" vertex="1" parent="1"><mxGeometry x="50" y="1030" width="700" height="24" as="geometry"/></mxCell>
+        <mxCell id="t-footer" value="可编辑源文件：SDLC-Pipeline-1.0-Architecture.drawio · 第 1 页" style="text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#5E6C84;align=left;" vertex="1" parent="1"><mxGeometry x="50" y="1030" width="700" height="24" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>
   </diagram>
@@ -111,7 +111,7 @@
         <mxCell id="fe8" value="执行" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A3BF;endArrow=block;fontColor=#00A3BF;" edge="1" parent="f1" source="f-workspace" target="f-runner"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="fe9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A3BF;endArrow=block;" edge="1" parent="f1" source="f-release" target="f-artifact"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="fe10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A3BF;endArrow=block;" edge="1" parent="f1" source="f-template" target="f-packs"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="f-footer" value="可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 2 页" style="text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#5E6C84;align=left;" vertex="1" parent="f1"><mxGeometry x="50" y="1130" width="700" height="24" as="geometry"/></mxCell>
+        <mxCell id="f-footer" value="可编辑源文件：SDLC-Pipeline-1.0-Architecture.drawio · 第 2 页" style="text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#5E6C84;align=left;" vertex="1" parent="f1"><mxGeometry x="50" y="1130" width="700" height="24" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>
   </diagram>
@@ -144,7 +144,7 @@
         <mxCell id="s-gate-group" value="GateStatus：确定性输入与 Evidence 新鲜度" style="swimlane;html=1;rounded=1;startSize=42;fillColor=#E6FCFF;strokeColor=#00A3BF;fontColor=#172B4D;fontStyle=1;" vertex="1" parent="s1"><mxGeometry x="925" y="560" width="825" height="250" as="geometry"/></mxCell>
         <mxCell id="s-gate-values" value="Pending　→　Running　→　Passed / Failed / Stale / Cancelled&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#5E6C84&quot;&gt;只有 input_digest 相同且 Evidence 完整的 Passed GateRun 可以复用。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#00A3BF;fontStyle=1;" vertex="1" parent="s-gate-group"><mxGeometry x="35" y="80" width="755" height="115" as="geometry"/></mxCell>
         <mxCell id="s-rule" value="&lt;b&gt;领域矩阵是不变量&lt;/b&gt;&lt;br&gt;Event → Guard → TaskStage · Event → Gate/Approval Invalidation · Suspension → Resume&lt;br&gt;&lt;font color=&quot;#5E6C84&quot;&gt;模型不能传入目标阶段、伪造人工 Receipt 或覆盖失效计算。&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4F5F7;strokeColor=#7A869A;fontColor=#172B4D;" vertex="1" parent="s1"><mxGeometry x="180" y="860" width="1440" height="105" as="geometry"/></mxCell>
-        <mxCell id="s-footer" value="可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 3 页" style="text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#5E6C84;align=left;" vertex="1" parent="s1"><mxGeometry x="50" y="1030" width="700" height="24" as="geometry"/></mxCell>
+        <mxCell id="s-footer" value="可编辑源文件：SDLC-Pipeline-1.0-Architecture.drawio · 第 3 页" style="text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#5E6C84;align=left;" vertex="1" parent="s1"><mxGeometry x="50" y="1030" width="700" height="24" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>
   </diagram>
@@ -179,7 +179,7 @@
         <mxCell id="he10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#DE350B;endArrow=block;" edge="1" parent="h1" source="h-router" target="h-block"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="930" y="610"/><mxPoint x="650" y="610"/><mxPoint x="650" y="538"/></Array></mxGeometry></mxCell>
         <mxCell id="he11" value="新的失败增量" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#FF991F;endArrow=block;fontColor=#FF991F;dashed=1;" edge="1" parent="h1" source="h-product" target="h-agent"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="he12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#FF991F;endArrow=block;dashed=1;" edge="1" parent="h1" source="h-spec" target="h-context"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="h-footer" value="可编辑源文件：SDLC-Pipeline-2.0-Architecture.drawio · 第 4 页" style="text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#5E6C84;align=left;" vertex="1" parent="h1"><mxGeometry x="50" y="830" width="700" height="24" as="geometry"/></mxCell>
+        <mxCell id="h-footer" value="可编辑源文件：SDLC-Pipeline-1.0-Architecture.drawio · 第 4 页" style="text;html=1;strokeColor=none;fillColor=none;fontSize=12;fontColor=#5E6C84;align=left;" vertex="1" parent="h1"><mxGeometry x="50" y="830" width="700" height="24" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>
   </diagram>

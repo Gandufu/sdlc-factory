@@ -1,29 +1,76 @@
 # SDLC Factory
 
-面向 AI Agent 的项目软件工厂设计仓库。
+面向 AI Agent 的可恢复、可验证 SDLC Harness。
 
-本仓库当前处于架构验证阶段，采用 **Core-first、协议可插拔** 的方向：
+当前只完善 **1.0**：先在单项目、单活动写 Task 下跑通从增量需求到 Delivery Ready 的闭环。**2.0** 是后续软件工厂演进方向，不进入当前实现范围。
 
-- 先验证单项目快速迭代和证据闭环；
-- OpenCode Plugin、MCP、CLI、SDK 都只是可替换适配器；
-- 最终演进为拥有控制面、第一方 Agent Runtime 和执行面的项目软件工厂；
-- 框架模板通过版本化 Framework Pack 接口接入，不与某个宿主绑定。
+## 1.0 主流程
 
-## 设计文档
+```text
+恢复 ProjectFacts
+  → 创建或恢复 Task
+  → 按 Requirement / AC 拆分 Execution Slice
+  → 编辑并校验 Proposal + FactChangeSet
+  → Operator 批准 Spec
+  → Agent 分 Slice 实现
+  → Harness 运行 mandatory gates
+  → 失败路由、定向返工或 Suspension
+  → Operator 人工验收
+  → 生成 Delivery Preview
+  → Operator 批准 Delivery
+  → 发布 ProjectFacts 并 Finalized
+```
 
-- [SDLC Pipeline 2.0 与项目软件工厂演进方案](docs/v2.0/SDLC-Pipeline-2.0-Core-First-Agent-Harness-and-Software-Factory.md)
-- [两轮架构评审意见处置](docs/v2.0/Review-Disposition-2026-07-30.md)
-- [ADR-001：SDLC Pipeline 2.0 Core 切换策略](docs/v2.0/ADR-001-SDLC-Pipeline-2.0-Core-Cutover.md)
-- [Agent Harness 与项目软件工厂技术调研](docs/research/agent-harness-landscape-2026-07-30.md)
-- [可编辑 Draw.io 架构图](docs/v2.0/SDLC-Pipeline-2.0-Architecture.drawio)
+完成不能由 Agent 自述。每个 Gate 必须绑定当前 Revision Vector 和可复验 Evidence；人工审批只能通过独立 Operator Interface 产生。
 
-`docs/v2.0` 同时提供四张中文 SVG：
+## 1.0 具体方案
 
-1. 过渡期协议中立的本地智能体执行框架；
-2. 项目软件工厂终局架构；
-3. Task/Operation/Gate 正交状态模型；
-4. 验证反馈闭环。
+1.0 由协议中立 Core、可替换 Adapter、Framework Pack 和受限 Runner 组成：
 
-## 当前边界
+| 模块 | 责任 | 详细设计 |
+|---|---|---|
+| Domain Kernel | Task、Slice、Operation、Gate、Suspension 和失效规则 | [领域与生命周期](docs/v1.0/appendices/A-domain-and-lifecycle.md) |
+| Application | Use Case、幂等、审批绑定、事实发布和恢复 | [状态、证据与恢复](docs/v1.0/appendices/B-state-evidence-and-recovery.md) |
+| Framework Pack | 把框架差异编译为声明式 ExecutionPlan | [Framework Pack 与 Runner](docs/v1.0/appendices/C-framework-pack-and-runner.md) |
+| Harness Runtime | 进程树、readiness、测试、清理、脱敏和 Evidence | [Framework Pack 与 Runner](docs/v1.0/appendices/C-framework-pack-and-runner.md) |
+| Agent Interface | 最多 7 个稳定动作；不暴露审批、发布和原始模板命令 | [1.0 主方案](docs/v1.0/README.md) |
+| Operator Interface | Spec/Review/Delivery 审批、挂起、协调、取消和诊断 | [1.0 主方案](docs/v1.0/README.md) |
 
-当前仓库只保存设计、调研、ADR 候选和架构图，不代表已经批准具体存储、MCP SDK、宿主插件、Core 切换或平台实现。进入实现前，应先确认 P0 验证切片、Task/Operation/Revision 契约、StateStore 与事实发布事务、环境与 Runner 边界、人工审批边界和验收指标，并将 ADR-001 转为 Accepted。
+1.0 的当前限制：
+
+- 单 Project、单活动可写 Task；
+- Execution Slice 串行，Gate 通过 Operation 长运行；
+- 文件 StateStore，不引入 SQLite 或远程控制面；
+- 一个真实 Electron Pack、一个 fake Pack、一个最短 Host Adapter；
+- Runner 安全等级为 `local_constrained`，不宣称敌对代码隔离；
+- commit、push、release、deploy 都需要独立 Operator 授权。
+
+完整 1.0 范围、接口和交付条件见 [SDLC Pipeline 1.0 主方案](docs/v1.0/README.md)。
+
+## 设计图
+
+- [1.0 过渡 Harness](docs/v1.0/diagrams/SDLC-Pipeline-1.0-Transition-Harness.svg)
+- [Task / Operation / Gate 正交状态](docs/v1.0/diagrams/SDLC-Pipeline-1.0-Task-State.svg)
+- [验证反馈闭环](docs/v1.0/diagrams/SDLC-Pipeline-1.0-Harness-Loop.svg)
+- [可编辑 Draw.io](docs/v1.0/diagrams/SDLC-Pipeline-1.0-Architecture.drawio)
+
+## 附录与决策
+
+- [A：领域与生命周期](docs/v1.0/appendices/A-domain-and-lifecycle.md)
+- [B：状态、证据与恢复](docs/v1.0/appendices/B-state-evidence-and-recovery.md)
+- [C：Framework Pack 与 Runner](docs/v1.0/appendices/C-framework-pack-and-runner.md)
+- [D：项目文档与目录规范](docs/v1.0/appendices/D-project-document-layout.md)
+- [E：实施切片与验收](docs/v1.0/appendices/E-delivery-and-acceptance.md)
+- [F：评审意见处置](docs/v1.0/appendices/F-review-disposition.md)
+- [ADR-001：Core 切换策略](docs/v1.0/adr/ADR-001-Core-Cutover.md)
+
+## 2.0 演进
+
+1.0 在两个真实项目上稳定后，再演进控制面、第一方 Agent Runtime、隔离执行面和多项目治理。这里只保留路线，不把 2.0 平台设计混入 1.0：
+
+- [SDLC Factory 2.0 演进路线](docs/v2.0/README.md)
+- [Agent Harness 与软件工厂技术调研](docs/research/agent-harness-landscape-2026-07-30.md)
+
+## 当前状态
+
+仓库仍处于架构验证阶段。1.0 的 Schema、状态/失效矩阵、TCK 和 canary 尚未实现；确认主方案和 ADR 不等同于实施、切换或发布授权。
