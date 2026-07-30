@@ -1,26 +1,10 @@
 # 附录 A：领域与生命周期
 
-本附录定义 1.0 的领域词汇、状态轴、Task 粒度、revision 协调和失败路由。主流程见 [1.0 主方案](../README.md)。
+本附录定义 1.0 的状态轴、Task 粒度、revision 协调和失败路由。权威领域词汇见仓库根目录 [CONTEXT.md](../../../CONTEXT.md)，主流程见 [1.0 主方案](../README.md)。
 
 ## A.1 领域词汇
 
-| 概念 | 语义 |
-|---|---|
-| Project | 产品、仓库和权限作用域 |
-| ProjectFacts | 已完成 Task 形成的当前有效需求、架构、接口和验证事实 |
-| Feature | 稳定产品能力，用于组织 Requirement 和依赖 |
-| Requirement / AC | 当前有效产品行为及验收条件 |
-| Task | 一次可独立批准、交付和回滚的增量 |
-| Execution Slice | Task 内按 Requirement/AC 划分的可恢复纵向结果 |
-| Attempt | 某 Slice 某阶段的一次有预算执行 |
-| Operation | 长运行的租约、心跳、取消和恢复记录 |
-| GateRun | 一次确定性门禁运行 |
-| Evidence | 日志、测试结果、截图、差异和运行收据的引用 |
-| FactChangeSet | Proposal 对 ProjectFacts 的确定性补丁 |
-| Revision Vector | Gate、Approval 和 Delivery 的完整输入版本 |
-| Suspension | 阻塞原因、恢复阶段、所需决定和证据 |
-| Delivery | Task 达到可交付状态的收据，不等于部署 |
-| Session | Host 的临时交互入口，只作为 metadata |
+[CONTEXT.md](../../../CONTEXT.md) 是唯一词汇表。本附录只补充生命周期约束：M0 Task 是独立批准与交付边界，必须记录 rollback strategy，但不承诺自动撤销普通工作区；M1 Workspace Provider 才使其成为可执行的工作区回滚边界。
 
 1.0 不引入独立 `Change` 聚合。若未来需要把多个 Task 打包发布，新增 Release/Delivery Group，不复制 Task 生命周期。
 
@@ -65,6 +49,18 @@ Cancelled
 
 `Skipped` 和 `Waived` 只为未来 Policy/Operator 能力预留，不进入 1.0 正常路径。
 
+### SliceStatus
+
+```text
+Planned
+Active
+Candidate
+Accepted
+Cancelled
+```
+
+Slice 由 Core 从 Slice Plan、handoff 和 GateSet 推进，不由 Agent 直接声明状态。`Candidate` 表示已产生有效 handoff 且 slice gates 通过；Operator 接受 Human Review 后，全部 Candidate Slice 才变为 Accepted。
+
 原来的 `Blocked` 不再是 TaskStage。阻塞使用 Suspension 覆盖当前阶段：
 
 ```json
@@ -84,18 +80,17 @@ Cancelled
 - Operation 失败不自动等于 TaskStage 回退；
 - Failure Router 生成领域事件，矩阵决定回退、挂起或保持；
 - Suspension 解除后只能回到 `resume_stage`；
+- 同一 Task 同时最多一个 active Suspension，替换前必须先解除或取消；历史 Suspension 只追加不覆盖；
 - Operator 可以取消任一非终态 Task；
 - Finalized 和 Cancelled 不能互相转换；
 - Finalized 后的新问题创建 `related_to` 原 Task 的新 Task；
 - 历史 Evidence 不删除，只改变新鲜度。
 
-Slice 0 必须把以下规则交付成可执行矩阵：
+权威规则必须来自机器可解析合同，而不是实现内重复抄写：
 
-```text
-Event → Guard → TaskStage
-Event → Gate / Approval Invalidation
-Suspension → Resume
-```
+- [Command / Guard / Event / Transition](../contracts/domain-transitions.yaml)；
+- [Approval Invalidation](../contracts/approval-invalidation.yaml)；
+- [Failure Routing](../contracts/failure-routing.yaml)。
 
 ## A.3 Task 粒度
 
@@ -103,13 +98,13 @@ Task 必须同时满足：
 
 - 一个可清晰表达的业务交付目标；
 - 一个闭合的 Requirement/AC 集合；
-- 一个一致的审批范围、Delivery Preview 和回滚策略；
+- 一个一致的审批范围、Delivery Preview 和 rollback strategy；
 - 有限且可声明的影响范围；
 - mandatory gates 可以枚举。
 
 出现以下任一情况时拆成多个 Task：
 
-- 多个结果可以独立批准、交付或回滚；
+- 多个结果可以独立批准、交付或处置；
 - Feature 之间没有必须同时成立的不变量；
 - 需要不同环境、不同责任人或不同交付时间；
 - 无法为整个变更给出有限、可复验的 Gate 集合。
@@ -148,6 +143,8 @@ Attempt 绑定 `slice_id + phase`。超过预算时缩小 Slice 或请求人工�
 
 `workspace_revision` 是受控路径 content manifest 的哈希，必须覆盖 tracked、staged、unstaged 和 untracked 文件，不能只使用 Git commit。
 
+具体路径、Unicode、大小写、link、LFS、排除目录和原始字节算法见 [WorkspaceManifest v1](../contracts/workspace-manifest.schema.json) 与[合同索引](../contracts/README.md#m0-路径与-digest-算法)。
+
 检查点：
 
 ```text
@@ -168,9 +165,11 @@ delivery finalize
 | 已批准 subject 受影响 | Approval stale，重新批准 |
 | 文本或语义冲突 | 保持 Suspension，由 Operator 合并、拆分或取消 |
 
+Spec、Review 和 Delivery 的不同失效范围见 [Approval Invalidation Matrix](../contracts/approval-invalidation.yaml)。批准过的 Task 内实现变化不会无条件使 Spec Approval stale；外部漂移和批准 subject 变化必须失效。
+
 Core 不直接执行 Git rebase。Workspace Provider 只在隔离 worktree 中应用 Operator 选择，Core 随后重算 revision 和 Evidence。
 
-M0 是单 Project、单活动可写 Task，但仍必须检测外部编辑导致的漂移。M1 才增加多 worktree Task 协调。
+M0 是单 Project、单活动可写 Task，仍必须检测外部编辑导致的漂移。canary、故障注入和 Shadow Replay 必须在可丢弃隔离 clone/worktree 中运行，但 M0 不提供通用 Task 自动回滚；M1 才增加正式 Workspace Provider 和多 worktree Task 协调。
 
 ## A.5 Failure Router
 
@@ -215,6 +214,8 @@ Failure Router 不能只返回阶段，必须返回结构化 Failure Diagnostic�
 | `unknown` | 一次诊断 Attempt 后 Suspension | 无法稳定复现 |
 
 `product` 与 `project_test` 都可能回到 Implementing，但 Context Compiler 必须根据 `repair_scope` 生成不同上下文和写路径。Pack/parser 问题不得通过修改业务代码重试；Runner/环境问题不得消耗产品修复 Attempt。
+
+机器可执行的 category、origin、重试预算和责任人以 [Failure Routing Matrix](../contracts/failure-routing.yaml) 为准。
 
 每次重试必须提供新的 failure delta：
 

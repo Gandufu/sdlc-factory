@@ -1,0 +1,411 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc.dev/contracts/v1alpha1/operator-action-request.schema.json",
+  "title": "OperatorActionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "api_version",
+    "action_id",
+    "action",
+    "project_ref",
+    "task_id",
+    "expected_task_version",
+    "idempotency_key",
+    "correlation_id",
+    "operator_context",
+    "subject",
+    "payload"
+  ],
+  "properties": {
+    "api_version": {
+      "const": "sdlc.dev/operator-action/v1alpha1"
+    },
+    "action_id": {
+      "type": "string",
+      "pattern": "^ACT-[A-Za-z0-9._-]+$"
+    },
+    "action": {
+      "enum": [
+        "approve_spec",
+        "accept_review",
+        "approve_delivery",
+        "suspend_task",
+        "resume_task",
+        "reconcile_revision",
+        "cancel_task",
+        "cancel_operation",
+        "diagnose_show",
+        "diagnose_export",
+        "environment_bind",
+        "framework_pack_bind",
+        "policy_bind"
+      ]
+    },
+    "project_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^TASK-[A-Za-z0-9._-]+$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "expected_task_version": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 200
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "operator_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "actor_roles", "authn_level", "nonce"],
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actor_roles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "authn_level": {
+          "const": "local_unverified"
+        },
+        "nonce": {
+          "type": "string",
+          "minLength": 16
+        }
+      }
+    },
+    "subject": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/subject"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "approve_spec",
+              "accept_review",
+              "approve_delivery",
+              "resume_task"
+            ]
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "$ref": "#/$defs/subject"
+          },
+          "payload": {
+            "$ref": "#/$defs/decisionPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "suspend_task"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/suspendPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "reconcile_revision"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "$ref": "#/$defs/subject"
+          },
+          "payload": {
+            "$ref": "#/$defs/reconcilePayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": ["cancel_task", "cancel_operation"]
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/cancelPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": ["diagnose_show", "diagnose_export"]
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/diagnosePayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "environment_bind",
+              "framework_pack_bind",
+              "policy_bind"
+            ]
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "$ref": "#/$defs/subject"
+          },
+          "payload": {
+            "$ref": "#/$defs/bindingPayload"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sdlcRef": {
+      "type": "string",
+      "pattern": "^sdlc://"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject_type", "subject_ref", "subject_hash"],
+      "properties": {
+        "subject_type": {
+          "enum": [
+            "task_proposal",
+            "review_candidate",
+            "delivery_manifest_draft",
+            "suspension",
+            "revision_reconciliation",
+            "environment_binding",
+            "framework_pack_binding",
+            "policy_binding"
+          ]
+        },
+        "subject_ref": {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        "subject_hash": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "decisionPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "comment_ref"],
+      "properties": {
+        "decision": {
+          "const": "approve"
+        },
+        "comment_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sdlcRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "suspendPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "resume_stage", "decision_required", "evidence_refs"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]+$"
+        },
+        "resume_stage": {
+          "enum": [
+            "Draft",
+            "AwaitingSpecApproval",
+            "Implementing",
+            "AwaitingHumanReview",
+            "Accepting",
+            "AwaitingDeliveryApproval"
+          ]
+        },
+        "decision_required": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sdlcRef"
+          }
+        }
+      }
+    },
+    "reconcilePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "target_revision_ref", "conflict_resolution_ref"],
+      "properties": {
+        "decision": {
+          "enum": ["adopt_non_intersecting", "refresh", "merge", "split", "cancel"]
+        },
+        "target_revision_ref": {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        "conflict_resolution_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sdlcRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "cancelPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "operation_id"],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "operation_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^OP-[A-Za-z0-9._-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "diagnosePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "operation_id"],
+      "properties": {
+        "scope": {
+          "enum": ["task", "operation", "project"]
+        },
+        "operation_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^OP-[A-Za-z0-9._-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "bindingPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding_ref", "binding_hash"],
+      "properties": {
+        "binding_ref": {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        "binding_hash": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

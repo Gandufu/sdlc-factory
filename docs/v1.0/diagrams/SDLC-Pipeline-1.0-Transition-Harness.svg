@@ -12,8 +12,8 @@
     </style>
   </defs>
   <rect width="1800" height="1100" fill="#fff"/>
-  <text x="50" y="62" class="title">过渡期：协议中立的本地智能体执行框架</text>
-  <text x="50" y="94" class="sub">目标是验证快速迭代闭环；插件、MCP、CLI/SDK 只选最短路径，不进入领域内核</text>
+  <text x="50" y="62" class="title">过渡期：每项目本地 Core Supervisor</text>
+  <text x="50" y="94" class="sub">Host 只连接版本化接口；Application 编排 pure Domain、StateStore、Pack 与 Runner Ports</text>
 
   <rect x="50" y="130" width="260" height="470" class="group" fill="#f4f5f7" stroke="#7a869a"/>
   <text x="180" y="166" class="head" text-anchor="middle">外部智能体宿主</text>
@@ -43,17 +43,17 @@
   <text x="835" y="431" class="label">人工控制接口</text><text x="835" y="456" class="small">审批 / 取消 / 接管</text>
 
   <rect x="1030" y="130" width="700" height="470" class="group" fill="#e3fcef" stroke="#00875a"/>
-  <text x="1380" y="168" class="head" text-anchor="middle">协议中立的 SDLC 内核</text>
+  <text x="1380" y="168" class="head" text-anchor="middle">每项目 Core Supervisor</text>
   <rect x="1060" y="195" width="300" height="64" class="box" fill="#e3fcef" stroke="#00875a"/>
-  <text x="1210" y="234" class="label">应用用例</text>
+  <text x="1210" y="224" class="label">Application Use Cases</text><text x="1210" y="246" class="small">唯一编排者</text>
   <g fill="#fff" stroke="#00875a">
     <rect x="1060" y="290" width="190" height="62" class="box"/><rect x="1280" y="290" width="190" height="62" class="box"/><rect x="1500" y="290" width="190" height="62" class="box"/>
     <rect x="1060" y="385" width="190" height="62" class="box"/><rect x="1280" y="385" width="190" height="62" class="box"/><rect x="1500" y="385" width="190" height="62" class="box"/>
     <rect x="1170" y="480" width="190" height="62" class="box"/><rect x="1390" y="480" width="190" height="62" class="box"/>
   </g>
-  <text x="1155" y="318" class="label"><tspan x="1155">Task / Slice</tspan><tspan x="1155" dy="20">Operation</tspan></text><text x="1375" y="328" class="label">上下文编译器</text><text x="1595" y="318" class="label"><tspan x="1595">策略 / 门禁</tspan><tspan x="1595" dy="20">失效引擎</tspan></text>
-  <text x="1155" y="423" class="label">失败路由器</text><text x="1375" y="413" class="label"><tspan x="1375">StateStore</tspan><tspan x="1375" dy="20">事实发布</tspan></text><text x="1595" y="413" class="label"><tspan x="1595">Evidence</tspan><tspan x="1595" dy="20">诊断 / 观测</tspan></text>
-  <text x="1265" y="508" class="label"><tspan x="1265">工作区 / Runner</tspan><tspan x="1265" dy="20">端口</tspan></text><text x="1485" y="508" class="label"><tspan x="1485">Framework Pack</tspan><tspan x="1485" dy="20">端口</tspan></text>
+  <text x="1155" y="312" class="label"><tspan x="1155">pure Domain Kernel</tspan><tspan x="1155" dy="20">Task / Slice / Guard</tspan></text><text x="1375" y="318" class="label"><tspan x="1375">ContextBundle</tspan><tspan x="1375" dy="20">编译器</tspan></text><text x="1595" y="312" class="label"><tspan x="1595">GateSet / Approval</tspan><tspan x="1595" dy="20">失效矩阵</tspan></text>
+  <text x="1155" y="423" class="label">失败路由器</text><text x="1375" y="413" class="label"><tspan x="1375">StateStore / Facts</tspan><tspan x="1375" dy="20">Publisher Ports</tspan></text><text x="1595" y="413" class="label"><tspan x="1595">Evidence /</tspan><tspan x="1595" dy="20">Diagnostic Port</tspan></text>
+  <text x="1265" y="508" class="label"><tspan x="1265">HarnessRuntimePort</tspan><tspan x="1265" dy="20">Runner Worker</tspan></text><text x="1485" y="508" class="label"><tspan x="1485">FrameworkPackPort</tspan><tspan x="1485" dy="20">ExecutionPlan</tspan></text>
 
   <rect x="360" y="700" width="610" height="84" class="box" fill="#ffebe6" stroke="#de350b"/>
   <text x="665" y="735" class="label" fill="#bf2600"><tspan x="665">M0 只选择一个最短宿主适配器；删除适配器后，</tspan><tspan x="665" dy="24">内核、契约测试、动作结构仍必须独立通过。</tspan></text>

@@ -18,7 +18,8 @@
   → Operator 人工验收
   → 生成 Delivery Preview
   → Operator 批准 Delivery
-  → 发布 ProjectFacts 并 Finalized
+  → Core 执行 facts_finalize
+  → 发布 ProjectFacts 与 DeliveryManifest 并 Finalized
 ```
 
 完成不能由 Agent 自述。每个 Gate 必须绑定当前 Revision Vector 和可复验 Evidence；人工审批只能通过独立 Operator Interface 产生。
@@ -30,7 +31,7 @@
 | 模块 | 责任 | 详细设计 |
 |---|---|---|
 | Domain Kernel | Task、Slice、Operation、Gate、Suspension 和失效规则 | [领域与生命周期](docs/v1.0/appendices/A-domain-and-lifecycle.md) |
-| Application | Use Case、幂等、审批绑定、事实发布和恢复 | [状态、证据与恢复](docs/v1.0/appendices/B-state-evidence-and-recovery.md) |
+| Application | Use Case、审批绑定、Port 编排、事实发布和恢复 | [状态、证据与恢复](docs/v1.0/appendices/B-state-evidence-and-recovery.md) |
 | Framework Pack | 把框架差异编译为声明式 ExecutionPlan | [Framework Pack 与 Runner](docs/v1.0/appendices/C-framework-pack-and-runner.md) |
 | Harness Runtime | 进程树、readiness、测试、清理、脱敏和 Evidence | [Framework Pack 与 Runner](docs/v1.0/appendices/C-framework-pack-and-runner.md) |
 | Agent Interface | 最多 7 个稳定动作；不暴露审批、发布和原始模板命令 | [1.0 主方案](docs/v1.0/README.md) |
@@ -39,10 +40,12 @@
 1.0 的当前限制：
 
 - 单 Project、单活动可写 Task；
+- 每项目本地 Core Supervisor；Host 断开不取消 Operation；
 - Execution Slice 串行，Gate 通过 Operation 长运行；
 - 文件 StateStore，不引入 SQLite 或远程控制面；
 - 一个真实 Electron Pack、一个 fake Pack、一个最短 Host Adapter；
 - Runner 安全等级为 `local_constrained`，不宣称敌对代码隔离；
+- M0 Task 不承诺普通工作区自动回滚，canary 使用可丢弃隔离目录；
 - commit、push、release、deploy 都需要独立 Operator 授权。
 
 完整 1.0 范围、接口和交付条件见 [SDLC Pipeline 1.0 主方案](docs/v1.0/README.md)。
@@ -62,7 +65,10 @@
 - [D：项目文档与目录规范](docs/v1.0/appendices/D-project-document-layout.md)
 - [E：实施切片与验收](docs/v1.0/appendices/E-delivery-and-acceptance.md)
 - [F：评审意见处置](docs/v1.0/appendices/F-review-disposition.md)
+- [领域词汇表](CONTEXT.md)
+- [1.0 机器可解析合同](docs/v1.0/contracts/README.md)
 - [ADR-001：Core 切换策略](docs/v1.0/adr/ADR-001-Core-Cutover.md)
+- [ADR-002：本地 Core/Runner 运行拓扑](docs/v1.0/adr/ADR-002-Local-Core-Runner-Topology.md)
 
 ## 2.0 演进
 
@@ -73,4 +79,4 @@
 
 ## 当前状态
 
-仓库仍处于架构验证阶段。1.0 的 Schema、状态/失效矩阵、TCK 和 canary 尚未实现；确认主方案和 ADR 不等同于实施、切换或发布授权。
+仓库仍处于架构验证阶段。1.0 Gate 0 的核心 Schema、矩阵和两项 ADR 已形成规范草案，但 26 个场景尚未成为失败测试，也没有实现、TCK 或 canary Evidence；接受主方案和 ADR 不等同于实施、切换或发布授权。

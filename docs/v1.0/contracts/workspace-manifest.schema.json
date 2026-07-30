@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc.dev/contracts/v1alpha1/workspace-manifest.schema.json",
+  "title": "WorkspaceManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "algorithm",
+    "project_root_identity",
+    "base_revision",
+    "excluded_paths_digest",
+    "entries",
+    "manifest_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "algorithm": {
+      "const": "workspace-manifest-v1"
+    },
+    "project_root_identity": {
+      "type": "string",
+      "minLength": 1
+    },
+    "base_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "excluded_paths_digest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "manifest_digest": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\\\u0000]+$"
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_path",
+        "comparison_key",
+        "file_type",
+        "size",
+        "content_sha256",
+        "executable",
+        "worktree_states"
+      ],
+      "properties": {
+        "canonical_path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "comparison_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "file_type": {
+          "enum": ["file", "symlink", "junction", "lfs"]
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "executable": {
+          "type": "boolean"
+        },
+        "worktree_states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["tracked", "staged", "unstaged", "untracked"]
+          }
+        },
+        "link_target": {
+          "type": ["string", "null"]
+        },
+        "lfs_oid": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

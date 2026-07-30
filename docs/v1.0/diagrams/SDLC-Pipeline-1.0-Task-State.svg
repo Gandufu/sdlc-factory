@@ -14,7 +14,7 @@
   <text x="50" y="94" class="sub">Suspension 覆盖当前业务阶段并记录 resume_stage；Operation/Gate 失败由领域矩阵决定返工、挂起或保持阶段</text>
 
   <rect x="50" y="135" width="1700" height="210" rx="16" fill="#f4f5f7" stroke="#7a869a" stroke-width="2"/>
-  <text x="80" y="170" class="head">TaskStage：批准、交付与回滚边界</text>
+  <text x="80" y="170" class="head">TaskStage：批准与交付边界</text>
   <g>
     <rect x="75" y="210" width="180" height="80" class="box" fill="#deebff" stroke="#0052cc"/>
     <rect x="285" y="210" width="180" height="80" class="box" fill="#fffae6" stroke="#ff991f"/>

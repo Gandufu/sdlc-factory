@@ -1,0 +1,431 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc.dev/contracts/v1alpha1/agent-action-request.schema.json",
+  "title": "AgentActionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "api_version",
+    "action_id",
+    "action",
+    "project_ref",
+    "task_id",
+    "expected_task_version",
+    "idempotency_key",
+    "correlation_id",
+    "payload"
+  ],
+  "properties": {
+    "api_version": {
+      "const": "sdlc.dev/agent-action/v1alpha1"
+    },
+    "action_id": {
+      "type": "string",
+      "pattern": "^ACT-[A-Za-z0-9._-]+$"
+    },
+    "action": {
+      "enum": [
+        "sdlc_status",
+        "sdlc_task_open",
+        "sdlc_context_get",
+        "sdlc_spec_validate",
+        "sdlc_gate_run",
+        "sdlc_observation_record",
+        "sdlc_delivery_prepare"
+      ]
+    },
+    "project_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^TASK-[A-Za-z0-9._-]+$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "expected_task_version": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 200
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "sdlc_status"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/statusPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "sdlc_task_open"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/taskOpenPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "sdlc_context_get"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/contextGetPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "sdlc_spec_validate"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/specValidatePayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "sdlc_gate_run"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/gateRunPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "sdlc_observation_record"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/observationPayload"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "const": "sdlc_delivery_prepare"
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/deliveryPreparePayload"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sdlcRef": {
+      "type": "string",
+      "pattern": "^sdlc://"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^TASK-[A-Za-z0-9._-]+$"
+    },
+    "sliceIdOrNull": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^SLICE-[A-Za-z0-9._-]+$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "statusPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_id", "include_history"],
+      "properties": {
+        "operation_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^OP-[A-Za-z0-9._-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "include_history": {
+          "type": "boolean"
+        }
+      }
+    },
+    "taskOpenPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "objective_ref", "scope_refs", "rollback_strategy"],
+      "properties": {
+        "mode": {
+          "enum": ["create", "resume"]
+        },
+        "objective_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sdlcRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sdlcRef"
+          }
+        },
+        "rollback_strategy": {
+          "enum": [
+            "record_residual_changes",
+            "discard_isolated_workspace",
+            "operator_managed"
+          ]
+        }
+      }
+    },
+    "contextGetPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["purpose", "slice_id", "max_tokens"],
+      "properties": {
+        "purpose": {
+          "enum": [
+            "spec",
+            "implement",
+            "review_repair",
+            "acceptance_repair",
+            "delivery"
+          ]
+        },
+        "slice_id": {
+          "$ref": "#/$defs/sliceIdOrNull"
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 65536
+        }
+      }
+    },
+    "specValidatePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal_ref",
+        "slice_plan_ref",
+        "fact_change_set_ref"
+      ],
+      "properties": {
+        "proposal_ref": {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        "slice_plan_ref": {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        "fact_change_set_ref": {
+          "$ref": "#/$defs/sdlcRef"
+        }
+      }
+    },
+    "gateRunPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_set",
+        "gate_ids",
+        "slice_id",
+        "environment_binding_ref"
+      ],
+      "properties": {
+        "gate_set": {
+          "enum": ["slice", "review_entry", "acceptance", "delivery"]
+        },
+        "gate_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "slice_id": {
+          "$ref": "#/$defs/sliceIdOrNull"
+        },
+        "environment_binding_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sdlcRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "observationPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "category",
+        "summary",
+        "operation_id",
+        "evidence_refs"
+      ],
+      "properties": {
+        "source": {
+          "enum": ["agent", "test", "parser"]
+        },
+        "category": {
+          "enum": [
+            "product",
+            "spec",
+            "test_contract",
+            "environment",
+            "infrastructure",
+            "policy",
+            "revision",
+            "budget"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "operation_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^OP-[A-Za-z0-9._-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sdlcRef"
+          }
+        }
+      }
+    },
+    "deliveryPreparePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fact_change_set_ref",
+        "source_bundle_policy",
+        "delivery_gate_ids"
+      ],
+      "properties": {
+        "fact_change_set_ref": {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        "source_bundle_policy": {
+          "enum": ["required", "prohibited"]
+        },
+        "delivery_gate_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

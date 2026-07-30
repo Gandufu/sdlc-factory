@@ -1,6 +1,6 @@
 # SDLC Pipeline 1.0 主方案
 
-状态：架构提案，待确认
+状态：Conditional Go；仅允许 Gate 0 固化与技术探针，尚无实现验证
 
 日期：2026-07-30
 
@@ -50,17 +50,19 @@
 | Framework Pack | 项目识别、Capability 和声明式 ExecutionPlan |
 | Adapters | reference CLI/SDK 与一个 Host Adapter；只做输入输出翻译 |
 
-调用方向固定：
+每个活动 Project 由本地 Core Supervisor 承载 Application、恢复和 Operation；项目命令进入独立 Runner Worker。调用与依赖方向固定：
 
 ```text
 Host / Reference Adapter
   → Agent Interface 或 Operator Interface
-  → Application
-  → Domain Kernel
-  → StateStore / Framework Pack / Harness Runtime
+  → Application Use Case
+      → pure Domain Kernel
+      → StateStorePort
+      → FrameworkPackPort
+      → HarnessRuntimePort
 ```
 
-Adapter、Framework Pack 和 Host hook 都不能拥有 Task 生命周期真相。
+Application 编排 Port；Domain 不依赖基础设施。Adapter、Framework Pack、Runner 和 Host hook 都不能拥有 Task 生命周期真相。进程拓扑见 [ADR-002](adr/ADR-002-Local-Core-Runner-Topology.md)。
 
 ## 3. 主流程
 
@@ -71,7 +73,7 @@ ProjectFacts
   → Spec Validate
   → Operator Approve Spec
   → Implement Slice
-  → Gate Operation
+  → slice / review-entry Gate Operation
   → Failure Router
       ├─ product → Implementing
       ├─ spec → Draft + Spec Approval stale
@@ -79,16 +81,16 @@ ProjectFacts
       ├─ infrastructure → 有限重试后 Suspension
       └─ environment/policy/revision/budget → Suspension
   → Operator Accept Review
-  → mandatory gates
+  → acceptance / delivery gates
   → Delivery Preview
   → Operator Approve Delivery
-  → FactChangeSet Finalization
+  → internal facts_finalize Operation
   → Finalized
 ```
 
 核心规则：
 
-- Task 是批准、交付和回滚边界，不是无限大的执行容器；
+- Task 是批准与交付边界，不是无限大的执行容器；M0 记录 rollback strategy，但不承诺普通工作区自动回滚；
 - Execution Slice 是 Task 内按 Requirement/AC 划分的纵向结果；
 - Attempt 绑定 `slice_id + phase`；
 - 长 Gate 由 Operation 表达，Host 断开不等于取消；
@@ -117,6 +119,8 @@ M0 最多暴露 7 个动作：
 
 Agent Interface 不暴露审批、豁免、Git、发布、状态跳转或原始模板命令。
 
+权威请求见 [AgentActionRequest](contracts/agent-action-request.schema.json)，统一结果见 [ActionResult](contracts/action-result.schema.json)。`sdlc_task_open(create)` 必须使用空 `task_id/expected_task_version`；resume 和其余 Task 动作必须显式绑定 Task 版本。长操作只返回 `accepted + operation_id`。
+
 ### 4.2 Operator Interface
 
 Operator 负责：
@@ -133,12 +137,14 @@ diagnose show / export
 
 M0 Receipt 使用 `local_unverified`，但请求仍必须来自 Agent/Runner 权限域之外的 Operator channel。远程身份与签名不在 1.0 范围。
 
+权威请求见 [OperatorActionRequest](contracts/operator-action-request.schema.json)，可信决定见 [OperatorReceipt](contracts/operator-receipt.schema.json)。Environment、Pack 和 Policy binding 使用独立 Operator Action 与 revision，不能混入普通 FactChangeSet。
+
 ### 4.3 三个核心 Port
 
 ```text
 StateStorePort
   load(project_ref, task_id)
-  transact(command, expected_version, idempotency)
+  commit(task_commit)
   recover(project_ref)
 
 FrameworkPackPort
@@ -151,7 +157,7 @@ HarnessRuntimePort
   inspect(operation_ref)
 ```
 
-这些接口保持小而深；文件、进程、Parser、Probe、Clock 等实现细节留在 Adapter/Runtime 内部。
+这些接口保持小而深；Domain 先完成裁决，Application 再提交 [TaskCommit](contracts/task-commit.schema.json)。文件、进程、Parser、Probe、Clock 等实现细节留在 Adapter/Runtime 内部。
 
 ## 5. 数据与事实
 
@@ -168,6 +174,8 @@ Delivery
 ```
 
 Spec Approval 冻结增量但不立即改写 ProjectFacts。Delivery Finalization 重新检查 revision 和 Evidence，事务性应用 FactChangeSet，成功后才生成新的 `facts_revision` 和 Finalized。
+
+Delivery Approval 只产生 Receipt；Core 随后执行不可由 Agent 调用的 `facts_finalize` Operation。Finalized 必须生成不可变 [DeliveryManifest](contracts/delivery-manifest.schema.json) 与 source bundle，使当时源码状态可审计和重建。
 
 JSON 只保存索引、状态、ID、哈希和引用；可阅读的需求、决策、计划和交付摘要使用 Markdown。目录及写入者规范见 [附录 D](appendices/D-project-document-layout.md)。
 
@@ -188,14 +196,16 @@ Runner 安全等级为 `local_constrained`：clean environment、canonical path�
 
 ### M0：Contract & Canary
 
-固化领域词汇、状态/失效/恢复矩阵、Schema、FileStateStore、fake TCK、Electron canary 和 reference adapter。
+固化领域词汇、机器可解析矩阵、Manifest/Action Schema、Core Supervisor、FileStateStore、Windows Runner 探针、fake TCK、Electron canary 和 reference adapter。canary、CrashPoint 和 Shadow Replay 只在可丢弃隔离 clone/worktree 内运行。
 
 退出条件：
 
 - 故障注入下状态可恢复；
+- Host 断开后 Supervisor 仍拥有 Operation；
 - Gate 失效可由 input digest 重算；
 - 真实 Electron 流程完成 start/readiness/functional/cleanup；
-- Agent 不能伪造 Operator Approval；
+- Agent Interface 及正常工具权限不能产生 Operator Approval；同一 OS 用户完全失陷不在 M0 保证内；
+- 每个 Finalized Task 均可导出 DeliveryManifest 和 source bundle；
 - Adapter 删除后 Core/TCK 仍通过。
 
 ### M1：Local Project Harness
@@ -219,8 +229,10 @@ Runner 安全等级为 `local_constrained`：clean environment、canonical path�
 3. FactChangeSet 与 FileStateStore 恢复事务；
 4. Agent/Operator 信任域；
 5. Interface Catalog、Environment Binding 和 Secret Ref；
-6. Framework Pack / Runner 的 M0 安全边界；
-7. [ADR-001 Core 切换策略](adr/ADR-001-Core-Cutover.md)转为 Accepted。
+6. ContextBundle、WorkspaceManifest、FactChangeSet、DeliveryManifest 和 Error Envelope；
+7. Framework Pack / Runner enforcement matrix；
+8. 遵循已接受的 [ADR-002 本地运行拓扑](adr/ADR-002-Local-Core-Runner-Topology.md)；
+9. 遵循已接受的 [ADR-001 Core 切换策略](adr/ADR-001-Core-Cutover.md)。
 
 ## 9. 详细文档
 
@@ -230,5 +242,7 @@ Runner 安全等级为 `local_constrained`：clean environment、canonical path�
 - [D：项目文档与目录规范](appendices/D-project-document-layout.md)
 - [E：实施切片与验收](appendices/E-delivery-and-acceptance.md)
 - [F：评审意见处置](appendices/F-review-disposition.md)
+- [1.0 机器可解析合同](contracts/README.md)
 - [ADR-001：Core 切换策略](adr/ADR-001-Core-Cutover.md)
+- [ADR-002：本地 Core/Runner 运行拓扑](adr/ADR-002-Local-Core-Runner-Topology.md)
 - [可编辑架构图](diagrams/SDLC-Pipeline-1.0-Architecture.drawio)

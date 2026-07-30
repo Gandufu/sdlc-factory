@@ -1,0 +1,86 @@
+apiVersion: sdlc.dev/runner-enforcement/v1alpha1
+kind: RunnerEnforcementMatrix
+
+platform:
+  os: windows
+  arch: x64
+  trustLevel: local_constrained
+
+levels:
+  - enforced
+  - observed
+  - not_enforced
+
+controls:
+  - control: executable_resolution
+    level: enforced
+    requirement: Resolve an absolute executable through the pinned toolchain before process creation.
+    failureAction: reject
+
+  - control: indirect_shell
+    level: observed
+    requirement: Record cmd, bat, PowerShell, npm or pnpm script indirection and bind it to toolchain digest.
+    failureAction: receipt
+
+  - control: process_tree
+    level: enforced
+    requirement: Create suspended, assign to Job Object, then resume; kill the entire Job on cleanup.
+    failureAction: reject
+
+  - control: timeout_and_cancel
+    level: enforced
+    requirement: Persist cancellation request and produce a Cleanup Receipt after graceful then forced termination.
+    failureAction: suspend
+
+  - control: stdout_stderr_limit
+    level: enforced
+    requirement: Bound captured bytes and emit truncation metadata plus full artifact refs when retained.
+    failureAction: terminate
+
+  - control: environment_allowlist
+    level: enforced
+    requirement: Build a clean environment from declared names and Secret refs.
+    failureAction: reject
+
+  - control: cwd_and_declared_paths
+    level: enforced
+    requirement: Canonicalize cwd and declared inputs/outputs; reject root escape and link traversal.
+    failureAction: reject
+
+  - control: protected_path_mutation
+    level: observed
+    requirement: Compare pre/post WorkspaceManifest and fail the Gate if a protected path changed.
+    limitation: Same-user trusted process is not sandboxed from writing the path.
+    failureAction: fail_gate
+
+  - control: cpu_memory_process_count
+    level: enforced
+    requirement: Apply supported Windows Job Object limits before resuming the process.
+    failureAction: reject
+
+  - control: temporary_disk_usage
+    level: observed
+    requirement: Confine known outputs to temporary roots and measure usage before and after.
+    limitation: M0 does not provide a filesystem quota for arbitrary same-user writes.
+    failureAction: suspend_on_policy_limit
+
+  - control: network_allowlist
+    level: not_enforced
+    requirement: Record requested policy and effective lack of enforcement in ExecutionReceipt.
+    failureAction: suspend_if_gate_requires_enforcement
+
+  - control: hostile_code_isolation
+    level: not_enforced
+    requirement: Reject Project Profiles that require hostile-code isolation.
+    failureAction: reject
+
+receiptRequirements:
+  - enforcement_report.<control>.requested
+  - enforcement_report.<control>.effective
+  - enforcement_report.<control>.detail
+  - enforcement_report.<control>.not_enforced_reason
+  - resolved_executable.path
+  - resolved_executable.type
+  - resolved_executable.digest
+  - resolved_executable.toolchain_id
+  - resolved_executable.toolchain_digest

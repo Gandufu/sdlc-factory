@@ -1,6 +1,6 @@
 # ADR-001：SDLC Pipeline 1.0 Core 切换策略
 
-状态：Proposed，进入实现前必须转为 Accepted
+状态：Accepted
 
 日期：2026-07-30
 
@@ -111,7 +111,9 @@ Live Agent 只在后续 canary 中验证交互可用性和恢复体验；其结�
 - **原地迁移进行中 Task**：无法证明事务边界和审批等价性；
 - **长期双轨**：shadow/canary 必须有退出条件，不能形成两套持续演进的正式 Core。
 
-## 待确认
+## 切换前输入
+
+以下参数由 Operator 在具体切换计划中填写，不改变本 ADR 的决策：
 
 - 首个 Shadow Replay 项目和输入 revision；
 - legacy Core maintenance-only 的起始版本；

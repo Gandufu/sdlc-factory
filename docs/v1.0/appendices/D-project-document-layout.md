@@ -5,6 +5,7 @@
 ## D.1 本设计仓库
 
 ```text
+CONTEXT.md                                # 唯一领域词汇表
 README.md                                 # 当前目标、1.0 主流程、导航
 docs/
   v1.0/
@@ -18,6 +19,14 @@ docs/
       F-review-disposition.md
     adr/
       ADR-001-Core-Cutover.md
+      ADR-002-Local-Core-Runner-Topology.md
+    contracts/
+      README.md
+      domain-transitions.yaml
+      approval-invalidation.yaml
+      failure-routing.yaml
+      runner-enforcement.yaml
+      *.schema.json
     diagrams/
       SDLC-Pipeline-1.0-Architecture.drawio
       SDLC-Pipeline-1.0-Transition-Harness.svg
@@ -34,10 +43,12 @@ docs/
 
 1. 根 [README](../../../README.md)；
 2. [1.0 主方案](../README.md)；
-3. 只读取当前问题涉及的附录；
-4. 架构决定读取 ADR；
-5. 需要了解后续方向时才读取 [2.0 路线](../../v2.0/README.md)；
-6. 需要外部事实依据时再读取 research。
+3. 领域术语读取 [CONTEXT](../../../CONTEXT.md)；
+4. 只读取当前问题涉及的附录；
+5. 实现和测试读取 [机器可解析合同](../contracts/README.md)；
+6. 架构决定读取 ADR；
+7. 需要了解后续方向时才读取 [2.0 路线](../../v2.0/README.md)；
+8. 需要外部事实依据时再读取 research。
 
 不再维护一篇同时包含主流程、协议调研、Schema、Runner、安全、路线和评审记录的总文档。
 
@@ -48,6 +59,7 @@ docs/
 | 根 README | 当前做什么、主流程、从哪里继续读 | 完整 Schema、评审原文、2.0 平台细节 |
 | 1.0 README | 范围、架构、接口、交付条件 | 大型 Manifest、26 个场景全文、研究综述 |
 | 附录 | 某一主题的完整契约 | 重复主流程和路线宣传 |
+| contracts | 可解析 Schema、矩阵、digest 和所有权规则 | 背景论证和研究综述 |
 | ADR | 单一架构决定、替代方案和后果 | 整套方案说明 |
 | 2.0 README | 从 1.0 到软件工厂的演进阶段 | 1.0 具体实现和 M0 契约 |
 | research | 外部事实、来源、推断 | 当前已批准的领域真相 |
@@ -75,6 +87,7 @@ docs/sdlc/
     completed/
       TASK-0000/
         delivery.md                     # 完成摘要和 Evidence 引用
+        delivery-manifest.json          # 不可变源码/事实/Gate/Receipt 索引
 ```
 
 ProjectFacts 只表示已完成 Task 形成的当前有效事实。已批准但未 Delivery 的增量仍保存在 active Task 中。
@@ -84,6 +97,10 @@ ProjectFacts 只表示已完成 Task 形成的当前有效事实。已批准但�
 ```text
 .sdlc/
   project.json                          # project_id、Pack binding、facts_revision
+  supervisor/
+    instance.json                       # pid、protocol、project identity、ready/recovery
+    agent-endpoint.json                 # 非秘密 IPC metadata
+    operator-endpoint.json              # 非秘密 IPC metadata
   tasks/
     TASK-0001/
       state.json                        # 紧凑 snapshot
@@ -102,6 +119,9 @@ ProjectFacts 只表示已完成 Task 形成的当前有效事实。已批准但�
         result.json
         stdout.log
         stderr.log
+      DELIVERY-0001/
+        source-bundle.zip               # tracked/untracked/binary 交付内容
+        workspace-manifest.json
   logs/
     core.jsonl
 ```
@@ -116,7 +136,9 @@ ProjectFacts 只表示已完成 Task 形成的当前有效事实。已批准但�
 | `docs/sdlc/tasks/active/**` | Agent 在 Workspace Policy 允许下编辑；Core 校验和冻结 | 仅当前 Task |
 | `docs/sdlc/project.md` 等权威事实 | Core Fact Publisher | 只能应用批准的 FactChangeSet |
 | `docs/sdlc/interfaces/**` | Core Fact Publisher | 作为 ProjectFacts |
-| `docs/sdlc/environments/**` | Core Environment Publisher | 只接受 Operator 批准的绑定 |
+| `docs/sdlc/environments/**` | Core Environment Publisher | 独立 revision，只接受 Operator Binding Receipt，不属于普通 FactChangeSet |
+| Framework Pack binding | Core Pack Binding Publisher | Operator/Core Maintainer Receipt |
+| Policy revision | Core Policy Publisher | Operator/Policy Maintainer Receipt |
 | `src/**`、`tests/**`、批准的迁移目录 | Agent | 受 Task scope 和 Pack policy 约束 |
 | `coverage/**`、`test-results/**`、临时运行目录 | Harness Runtime | 受配额和 cleanup 约束 |
 
@@ -141,6 +163,7 @@ ProjectFacts 只表示已完成 Task 形成的当前有效事实。已批准但�
 - ID、状态和版本；
 - 哈希和 digest；
 - Artifact/Evidence 指针；
+- WorkspaceManifest、FactChangeSet、DeliveryManifest 和 ContextBundle；
 - 紧凑诊断；
 - 领域事件；
 - 幂等、租约和恢复索引。
@@ -183,6 +206,8 @@ ProjectFacts 只表示已完成 Task 形成的当前有效事实。已批准但�
 Markdown 相对链接
 代码围栏平衡
 JSON/YAML 示例可解析
+JSON Schema Draft 2020-12 meta-schema
+YAML 矩阵语义与引用完整性
 Draw.io 根节点 = mxfile
 SVG 根节点 = svg
 Draw.io ID 无重复

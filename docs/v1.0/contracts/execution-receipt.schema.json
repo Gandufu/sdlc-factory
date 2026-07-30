@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc.dev/contracts/v1alpha1/execution-receipt.schema.json",
+  "title": "ExecutionReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "api_version",
+    "receipt_id",
+    "plan_id",
+    "operation_id",
+    "capability",
+    "plan_hash",
+    "revision_vector_hash",
+    "gate_input_digest",
+    "started_at",
+    "finished_at",
+    "outcome",
+    "exit_code",
+    "resolved_executable",
+    "indirect_shell",
+    "enforcement_report",
+    "readiness",
+    "cleanup",
+    "stdout_ref",
+    "stderr_ref",
+    "evidence_refs",
+    "diagnostic_ref"
+  ],
+  "properties": {
+    "api_version": {
+      "const": "sdlc.dev/execution-receipt/v1alpha1"
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^EXEC-[A-Za-z0-9._-]+$"
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^PLAN-[A-Za-z0-9._-]+$"
+    },
+    "operation_id": {
+      "type": "string",
+      "pattern": "^OP-[A-Za-z0-9._-]+$"
+    },
+    "capability": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "revision_vector_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "gate_input_digest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "outcome": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "cancelled",
+        "timed_out",
+        "suspended_before_start",
+        "infrastructure_unknown"
+      ]
+    },
+    "exit_code": {
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "resolved_executable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "type", "digest", "toolchain_id", "toolchain_digest"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": ["native", "cmd", "bat", "powershell", "script", "other"]
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "toolchain_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolchain_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "indirect_shell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["used", "kind"],
+      "properties": {
+        "used": {
+          "type": "boolean"
+        },
+        "kind": {
+          "oneOf": [
+            {
+              "enum": ["cmd", "bat", "powershell", "npm_shim", "pnpm_shim", "other"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "enforcement_report": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/runnerControl"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requested",
+          "effective",
+          "detail",
+          "not_enforced_reason"
+        ],
+        "properties": {
+          "requested": {
+            "enum": ["enforced", "observed", "not_enforced"]
+          },
+          "effective": {
+            "enum": ["enforced", "observed", "not_enforced"]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          },
+          "not_enforced_reason": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "readiness": {
+      "$ref": "#/$defs/stepReceipt"
+    },
+    "cleanup": {
+      "$ref": "#/$defs/stepReceipt"
+    },
+    "stdout_ref": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stderr_ref": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidence_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/sdlcRef"
+      }
+    },
+    "diagnostic_ref": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sdlcRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sdlcRef": {
+      "type": "string",
+      "pattern": "^sdlc://"
+    },
+    "runnerControl": {
+      "enum": [
+        "executable_resolution",
+        "indirect_shell",
+        "process_tree",
+        "timeout_and_cancel",
+        "stdout_stderr_limit",
+        "environment_allowlist",
+        "cwd_and_declared_paths",
+        "protected_path_mutation",
+        "cpu_memory_process_count",
+        "temporary_disk_usage",
+        "network_allowlist",
+        "hostile_code_isolation"
+      ]
+    },
+    "stepReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "outcome", "evidence_ref"],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "enum": ["not_required", "succeeded", "failed", "unknown"]
+        },
+        "evidence_ref": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sdlcRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
