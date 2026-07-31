@@ -1,8 +1,25 @@
 # SDLC Factory
 
-SDLC Factory 1.0 是一个面向 AI Agent 的本地 SDLC Core。它用统一能力调用不同框架模板，向 Skill/Agent 暴露项目级工具，并记录需求、实现、人工审核和聚合测试状态。
+SDLC Factory 是一个面向 AI Agent 的本地软件交付体系。1.0 定义工作项、测试批次、
+框架适配包和执行器；1.1 方案在此基础上补齐专业 Agent、Skill、Hook、领域规则、
+OpenCode 运行分析和最终产物符合性检查。
 
-当前只设计和实现 **1.0**，不保留 2.0 软件工厂方案。
+当前不保留 2.0 软件工厂方案。1.0 是基础合同，1.1 目前是待评审的升级方案。
+
+## 1.1 方案草案
+
+1.1 重点解决当前仍依赖 Codex 手工监督的问题：
+
+- 专业角色如何分层委派，同时不把角色职责误做成目录权限；
+- 如何独立分析 OpenCode 的公开运行事件、工具调用、阶段耗时、Token 和成本；
+- 如何识别无进展重复调用和重试放大，而不使用固定次数门禁；
+- 如何检查最终产物是否真正满足需求、协议、UI 原型和必测项；
+- 如何用结构化交接替代从 Agent 聊天尾部解析 JSON；
+- 如何分离产品交付证据与研发过程遥测。
+
+系统不读取或保存模型私有思维链，只分析宿主和模型提供方明确公开的可观测运行行为。
+
+详见 [SDLC Factory 1.1 主方案](docs/v1.1/README.md)。
 
 ## 主要流程
 
@@ -46,6 +63,13 @@ flowchart LR
 
 ## 文档
 
+- [1.1 主方案草案](docs/v1.1/README.md)
+- [1.1 专业协作与职责](docs/v1.1/appendices/A-professional-collaboration.md)
+- [1.1 运行观察与成本分析](docs/v1.1/appendices/B-runtime-observability.md)
+- [1.1 最终产物与需求符合性](docs/v1.1/appendices/C-artifact-conformance.md)
+- [1.1 实施与验收](docs/v1.1/appendices/D-implementation-and-acceptance.md)
+- [1.1 中文词汇与英文编码名](docs/v1.1/appendices/E-terminology-for-code.md)
+- [OpenCode 可观测性调研](docs/research/opencode-observability-2026-07-31.md)
 - [1.0 主方案](docs/v1.0/README.md)
 - [附录 A：领域与生命周期](docs/v1.0/appendices/A-domain-and-lifecycle.md)
 - [附录 B：状态与证据](docs/v1.0/appendices/B-state-and-evidence.md)
@@ -57,4 +81,5 @@ flowchart LR
 
 ## 当前状态
 
-仓库处于 1.0 设计阶段，尚无 Core、Framework Pack、Runner 或真实项目验收 Evidence。文档接受不等同于实现完成。
+仓库处于方案设计阶段，尚无 Core、框架适配包、执行器或真实项目验收证据。
+1.0 是基础方案，1.1 是升级草案；文档接受不等同于实现完成。
