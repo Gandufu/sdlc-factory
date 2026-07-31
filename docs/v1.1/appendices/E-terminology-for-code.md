@@ -16,6 +16,8 @@
 | 项目 | Project | `Project` |
 | 项目配置 | Project Profile | `ProjectProfile` |
 | 项目模块 | Project Module | `ProjectModule` |
+| 交付计划 | Delivery Plan | `DeliveryPlan` |
+| 项目地图 | Project Map | `ProjectMap` |
 | 工作项 | Work Item | `WorkItem` |
 | 需求版本 | Requirement Version | `RequirementVersion` |
 | 源码修订 | Source Revision | `SourceRevision` |
@@ -27,6 +29,7 @@
 | 交付预览 | Delivery Preview | `DeliveryPreview` |
 | 交付清单 | Delivery Manifest | `DeliveryManifest` |
 | 操作者 | Operator | `Operator` |
+| 工作项关系 | Work Item Link | `WorkItemLink` |
 
 ## 3. 专业协作
 
@@ -54,6 +57,8 @@
 |---|---|---|
 | 宿主适配器 | Host Adapter | `HostAdapter` |
 | 宿主观察适配器 | Host Observation Adapter | `HostObservationAdapter` |
+| Factory 应用接口 | Factory Application Interface | `FactoryApplicationInterface` |
+| 项目查询投影 | Project Query Projection | `ProjectQueryProjection` |
 | 运行记录 | Run Record | `RunRecord` |
 | 运行轨迹 | Run Trace | `RunTrace` |
 | 运行遥测 | Runtime Telemetry | `RuntimeTelemetry` |
@@ -70,6 +75,9 @@
 | OpenCode 估算成本 | OpenCode Estimated Cost | `opencode_estimated_cost` |
 | 提供方结算成本 | Provider Billed Cost | `provider_billed_cost` |
 | 实际结算未知 | Billing Unknown | `billing_status=unknown` |
+| 分析提供方 | Analysis Provider | `AnalysisProvider` |
+| 分析任务 | Analysis Job | `AnalysisJob` |
+| 改进候选 | Improvement Candidate | `ImprovementCandidate` |
 
 “思维链分析”在对外文档中统一改为“可观测推理行为分析”。代码使用
 `ReasoningTelemetry`，不使用 `ChainOfThought`、`CoTLog` 或暗示能够读取私有推理的命名。
@@ -94,6 +102,8 @@
 |---|---|---|
 | 产物检查 | Artifact Inspection | `ArtifactInspection` |
 | 产物检查器 | Artifact Inspector | `ArtifactInspector` |
+| 项目控制台 | Project Console | `ProjectConsole` |
+| 观测 CLI | Observation CLI | `ObservationCli` |
 | 需求覆盖矩阵 | Requirement Coverage Matrix | `RequirementCoverageMatrix` |
 | 符合性报告 | Conformance Report | `ConformanceReport` |
 | 观察结论 | Observation | `Observation` |
@@ -108,6 +118,9 @@
 | 跳过 | Skipped | `skipped` |
 | 阻塞 | Blocked | `blocked` |
 
+规划模式（Plan Mode）是执行模式；交付计划（`DeliveryPlan`）是批准后的正式项目事实。两者不能
+混用。框架执行计划仍使用 `ExecutionPlan`，不能用它表示需求拆分。
+
 ## 7. 工具命名
 
 对 Agent 公开的工具保留统一前缀：
@@ -120,6 +133,7 @@
 | 查询运行操作 | `sdlc_operation_get` |
 | 提交结构化交接 | `sdlc_handoff_submit` |
 | 查询运行或产物分析 | `sdlc_analysis_get` |
+| 提交交付计划草案 | `sdlc_plan_submit` |
 
 内部端口使用清晰动词，不暴露成通用 Agent 工具：
 

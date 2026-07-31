@@ -7,11 +7,13 @@
 ## 1. 定位
 
 SDLC Factory 1.1 是一个面向 AI 研发协作的本地软件交付体系。它在 1.0 的工作项、
-测试批次、框架适配包和执行器基础上，补齐三类当前仍依赖 Codex 人工监督的能力：
+测试批次、框架适配包和执行器基础上，补齐五类当前仍依赖 Codex 人工监督的能力：
 
 1. 专业 Agent、Skills、Hooks、分层委派和领域规则；
 2. OpenCode 运行过程的独立观察、工具调用审计、耗时与 Token/成本分析；
 3. 最终产物与需求、设计、测试及运行证据的一致性检查。
+4. 面向大需求的规划、提问、拆分和计划批准；
+5. 项目级地图、观测 CLI、分析提供方和本地项目控制台。
 
 1.1 的目标不是读取或保存模型私有思维链。系统只分析 OpenCode 和模型提供方明确暴露的
 事件、时间戳、Token、工具调用、错误、文件访问和阶段结果，统一称为
@@ -34,12 +36,14 @@ SDLC Factory 1.1 是一个面向 AI 研发协作的本地软件交付体系。�
 
 - 获取、展示或持久化模型私有思维链正文；
 - 多项目远程控制面、云端调度和组织级权限；
-- 第一方通用 Agent Runtime；
-- hostile-code sandbox；
+- 第一方通用 Agent 运行时；
+- 源码编辑器、通用 Jira 或云端项目协作平台；
+- 面向恶意代码的强隔离沙箱；
 - 向量数据库、会话记忆或自动知识库；
-- 自动 commit、push、release 和 deploy；
+- 自动提交、推送、发布和部署；
 - 根据固定 Token 或工具次数直接阻止正常研发；
-- 让分析 Agent 代替 Operator 作出需求、审核或交付批准。
+- 让分析 Agent 代替 Operator 作出需求、审核或交付批准；
+- 让观测器根据一次运行自动修改、提交或发布 Factory。
 
 ## 2. 1.0 到 1.1 的变化
 
@@ -61,6 +65,10 @@ SDLC Factory 1.1 是一个面向 AI 研发协作的本地软件交付体系。�
 | 专业验收 Agent | 对 UI、协议、架构和业务语义作独立审查 |
 | 结构化交接工具 | 取代从聊天尾部提取 JSON 的脆弱协议 |
 | 分析报告 | 区分实际总成本、成功路径成本和返工成本 |
+| 交付计划 | 大需求先形成可批准的工作项拆分和依赖 |
+| 观测 CLI | 脚本化启动、观察、导入、对账和生成报告 |
+| 分析提供方 | 允许 Codex 等 Agent 通过稳定 Schema 分析运行 |
+| 项目控制台 | 展示项目地图、工作项、时间线、成本和产物检查 |
 
 1.1 不改变 1.0 的基本事实：Core 仍是状态和门禁的唯一裁决者，OpenCode 只是首个宿主。
 
@@ -87,12 +95,17 @@ SDLC Factory 1.1 是一个面向 AI 研发协作的本地软件交付体系。�
 
 ```mermaid
 flowchart TD
-    U["Operator / 用户"] --> H["OpenCode 宿主适配器"]
-    H --> O["专业编排包"]
+    U["Operator / 用户"] --> UI["本地项目控制台"]
+    U --> CLI["观测与管理 CLI"]
+    UI --> AP["Factory 应用接口"]
+    CLI --> AP
+    H["OpenCode / Codex 宿主适配器"] --> AP
+    AP --> PL["规划模块"]
+    AP --> O["专业编排包"]
+    AP --> C["Core 工具接口"]
     O --> A["专业 Agent"]
     O --> S["专业 Skill"]
     O --> R["领域规则"]
-    H --> C["Core 工具接口"]
     A --> C
     C --> W["工作流领域与状态"]
     C --> P["项目动作编排器"]
@@ -103,19 +116,28 @@ flowchart TD
     H --> B["宿主观察适配器"]
     B --> M["运行分析器"]
     M --> Q["运行分析报告"]
+    Q --> AI["分析提供方"]
+    AI --> AQ["解释报告与改进候选"]
     V --> I["产物检查器"]
     W --> I
     I --> G["专业验收 Agent"]
     G --> D["验收报告"]
     Q --> C
+    AQ --> C
     D --> C
+    W --> RV["项目查询投影"]
+    Q --> RV
+    AQ --> RV
+    D --> RV
+    RV --> UI
 ```
 
 ### 3.1 依赖方向
 
 ```text
 OpenCode / CLI
-  → 宿主适配器
+  → Factory 应用接口
+      → 规划模块
       → 专业编排包
       → Core 工具接口
       → 宿主观察适配器
@@ -131,13 +153,22 @@ Core
   ← 宿主事件与模型用量
   → 分析报告
 
+分析提供方
+  ← 脱敏指标、报告和正式证据
+  → 解释报告与改进候选
+
 产物检查器
   ← 正式需求、源码修订、测试批次和交付证据
   → 验收检查结果
+
+项目控制台 / CLI
+  → Factory 应用接口
+  ← 项目查询投影
 ```
 
-宿主观察适配器和专业编排包不能修改工作流状态。它们通过 Core 工具接口提交结构化动作或
-观察结论。Core 不解析 OpenCode 私有事件，也不理解某个模型的聊天包装格式。
+宿主观察适配器、分析提供方、专业编排包和项目控制台不能直接修改工作流状态。它们通过
+Factory 应用接口提交结构化动作或观察结论。Core 不解析 OpenCode/Codex 私有事件，也不理解
+某个模型的聊天包装格式。
 
 ## 4. 职责边界
 
@@ -145,6 +176,7 @@ Core
 |---|---|---|
 | Operator | 发布需求、审核实现、批准交付、取消和协调 | 伪造 Agent 或 Runner 证据 |
 | 宿主适配器 | 原始输入捕获、会话关联、工具翻译、审批回执 | 工作项真相、门禁判定 |
+| 规划模块 | 项目检查、问题收集、计划版本和 WorkItem 拆分 | 需求发布、代码修改、交付批准 |
 | 专业编排包 | 角色选择、Skill 路由、分层委派、反馈分类建议 | 执行权威测试、直接发布状态 |
 | Agent | 需求分析、设计、实现、测试设计、专业审查 | 批准需求、审核或交付 |
 | Skill | 专业工作方法、步骤和检查表 | 状态机、审批和项目事实 |
@@ -156,6 +188,9 @@ Core
 | 运行分析器 | 工具、Token、耗时、重试和异常模式分析 | 判断产品是否通过 |
 | 产物检查器 | 覆盖关系、文件、哈希、证据和结构检查 | 代替人作业务决定 |
 | 专业验收 Agent | UI、协议、架构和业务语义审查 | 直接将工作项标记完成 |
+| 分析提供方 | 使用 Codex 等模型解释指标、归类问题和提出改进候选 | 修改状态、代码、Git 或审批 |
+| 项目查询层 | 从 Core、报告和项目事实构建只读投影 | 保存第二份可写状态 |
+| 项目控制台 | 展示项目、计划、运行、成本、产物和审批入口 | 解析状态文件、绕过应用接口 |
 
 详细边界见[附录 A：专业协作与职责](appendices/A-professional-collaboration.md)。
 
@@ -193,7 +228,44 @@ Core
 - 跨领域修改必须在结构化交接中声明并由负责人协调；
 - Agent 最终聊天文本不是机器交付协议。
 
-## 6. 结构化交接
+## 6. 大需求规划模式
+
+复杂、模糊或跨多个独立验收结果的目标，先进入规划模式：
+
+```mermaid
+flowchart LR
+    I["原始目标"] --> P["规划与提问"]
+    P --> DP["交付计划草案"]
+    DP --> PA["等待计划批准"]
+    PA -->|修改| P
+    PA -->|批准| W["创建关联 WorkItem"]
+    W --> S["各 WorkItem 进入需求阶段"]
+```
+
+规划模式：
+
+- 可以读取项目、协议、原型、历史工作项和项目地图；
+- 可以提问、识别冲突、划分范围、依赖、风险和验收轮廓；
+- 只生成交付计划，不修改产品源码；
+- 不发布需求、不批准审核、不开始全部实现；
+- 计划提交时由 Core 确认源码修订没有变化；
+- 小而清晰的需求可以跳过规划，直接创建 WorkItem。
+
+1.1 新增交付计划（`DeliveryPlan`），但不照搬每个产品的多文件 Spec：
+
+```text
+docs/sdlc/plans/<delivery-plan-id>/plan.md
+```
+
+批准后的 `plan.md` 保存目标、范围、待确认项、工作项拆分、依赖、风险和验收轮廓。每个
+WorkItem 仍维护自己的 Requirement Version，避免计划、需求、设计和任务清单重复保存同一正文。
+
+一次会话不等于一个工作项。一个交付计划可以关联多个 WorkItem，一个 WorkItem 可以关联多个
+主会话、子代理和重试运行。最终交付后发现问题时创建 `follow_up_of` 工作项，不改写已完成历史。
+
+详细设计见[附录 G：规划模式、观测 CLI 与项目控制台](appendices/G-planning-cli-and-console.md)。
+
+## 7. 结构化交接
 
 新增 `sdlc_handoff_submit`，用于替代 `<task_result>` 尾部 JSON：
 
@@ -220,9 +292,9 @@ Core 独立派生：
 
 `requested_follow_up` 只是 Agent 建议，不能直接修改工作流状态。
 
-## 7. OpenCode 运行观察与分析
+## 8. OpenCode 运行观察与分析
 
-### 7.1 分析对象
+### 8.1 分析对象
 
 每次 OpenCode 主会话或子代理执行形成一个可关联的运行记录：
 
@@ -246,7 +318,7 @@ Core 独立派生：
 6. 插件/Agent/环境错误分类；
 7. 与历史基线的变化。
 
-### 7.2 可观测推理行为
+### 8.2 可观测推理行为
 
 允许分析：
 
@@ -264,7 +336,7 @@ Core 独立派生：
 - 根据推理文字判断用户或模型隐私；
 - 仅因 Token 较高直接判定交付失败。
 
-### 7.3 工具调用分析
+### 8.3 工具调用分析
 
 至少分析：
 
@@ -281,7 +353,7 @@ Core 独立派生：
 “工具调用爆炸”不是固定次数，而是相对同类工作项基线出现显著放大，并且没有产生新的
 进展或失败增量。
 
-### 7.4 耗时分析
+### 8.4 耗时分析
 
 分别记录：
 
@@ -301,7 +373,7 @@ Core 独立派生：
 - 返工耗时；
 - 人工等待耗时。
 
-### 7.5 Token 与成本
+### 8.5 Token 与成本
 
 记录：
 
@@ -331,7 +403,7 @@ pricing_version
 OpenCode 记录 `cost=0` 时，应报告“OpenCode 估算为 0，实际结算未知”，不能把 0 写成真实
 零成本。缺少价格或用量元数据时还要标明估算数据不完整。所有估算必须绑定价格来源和版本。
 
-### 7.6 独立运行方式
+### 8.6 独立运行方式
 
 运行分析不再由 Codex 手工读取日志：
 
@@ -349,11 +421,11 @@ OpenCode 插件 Hook 只镜像轻量事件和关联 ID。重型统计、模型�
 详细设计见[附录 B：运行观察与成本分析](appendices/B-runtime-observability.md)和
 [OpenCode 可观测性调研](../research/opencode-observability-2026-07-31.md)。
 
-## 8. 最终产物分析
+## 9. 最终产物分析
 
 产物分析分为三层：
 
-### 8.1 确定性检查
+### 9.1 确定性检查
 
 由产物检查器执行：
 
@@ -367,7 +439,7 @@ OpenCode 插件 Hook 只镜像轻量事件和关联 ID。重型统计、模型�
 - Secret 没有进入源码、日志、状态或报告；
 - 最终报告没有引用已失效证据。
 
-### 8.2 专业语义审查
+### 9.2 专业语义审查
 
 由专业验收 Agent 按需执行：
 
@@ -389,7 +461,7 @@ OpenCode 插件 Hook 只镜像轻量事件和关联 ID。重型统计、模型�
 
 每个结论必须有证据引用。`不确定` 进入 Operator 审核，不能静默转换为通过。
 
-### 8.3 Operator 决定
+### 9.3 Operator 决定
 
 Operator 查看：
 
@@ -405,11 +477,11 @@ Operator 查看：
 
 详细设计见[附录 C：最终产物与需求符合性](appendices/C-artifact-conformance.md)。
 
-## 9. 两类证据
+## 10. 两类证据
 
 1.1 明确分离：
 
-### 9.1 交付证据
+### 10.1 交付证据
 
 用于证明产品是否满足当前需求：
 
@@ -423,7 +495,7 @@ Operator 查看：
 
 交付证据可以参与权威门禁。
 
-### 9.2 运行遥测
+### 10.2 运行遥测
 
 用于分析研发过程是否高效、稳定：
 
@@ -437,15 +509,19 @@ Operator 查看：
 
 运行遥测默认不参与产品门禁，只用于性能预算、插件回归和架构改进。
 
-## 10. 数据布局
+## 11. 数据布局
 
 ```text
 project/
 ├─ docs/
 │  └─ sdlc/
 │     ├─ project.md
+│     ├─ plans/
+│     │  └─ <delivery-plan-id>/
+│     │     └─ plan.md
 │     ├─ requirements/
 │     ├─ test-batches/
+│     ├─ reports/
 │     └─ deliveries/
 │        └─ <delivery-id>/
 │           ├─ summary.md
@@ -464,22 +540,30 @@ project/
    │     ├─ trace.json
    │     ├─ metrics.json
    │     └─ analysis.md
-   └─ inspections/
-      └─ <inspection-id>/
-         ├─ index.json
+   ├─ inspections/
+   │  └─ <inspection-id>/
+   │     ├─ index.json
+   │     └─ report.md
+   └─ analysis-jobs/
+      └─ <analysis-job-id>/
+         ├─ request.json
+         ├─ result.json
          └─ report.md
 ```
 
 规则：
 
 - OpenCode 对话正文不进入工作流索引；
+- 未批准计划草案属于短生命周期待批准文件，不进入项目文档；
+- 项目地图由正式事实和状态投影，导出的 `project-map.md` 只是快照；
 - 原始事件属于受限运行证据，默认不进入 Git；
 - `trace.json` 和 `metrics.json` 只保存标准字段；
 - Markdown 报告不得包含 Secret 或完整模型提示词；
 - 发布目录只保存 Operator 决定保留的最终报告；
+- 分析提供方请求和结果只保存 Schema 字段、哈希和引用；
 - 运行遥测删除不能改变已经成立的交付状态，但会降低诊断完整度。
 
-## 11. 对外工具
+## 12. 对外工具与 CLI
 
 Agent 可见工具建议收敛为：
 
@@ -489,6 +573,7 @@ Agent 可见工具建议收敛为：
 | `sdlc_transition` | 请求 Agent 权限域内的工作流动作 |
 | `sdlc_execute` | 请求项目检查、构建、启动、测试和打包 |
 | `sdlc_operation_get` | 查询运行操作和证据 |
+| `sdlc_plan_submit` | 提交交付计划草案，不执行批准 |
 | `sdlc_handoff_submit` | 提交结构化阶段交接 |
 | `sdlc_analysis_get` | 查询运行和产物分析，不触发审批 |
 
@@ -503,7 +588,71 @@ delivery_preview_build
 
 这些不是通用 Agent 工具，避免模型随意重复触发昂贵分析。
 
-## 12. 升级顺序
+观测器同时提供 `sdlc-factory` CLI：
+
+```powershell
+sdlc-factory observe run --host opencode --work-item WI-001 --stage implementation -- <command>
+sdlc-factory observe watch --run RUN-001
+sdlc-factory analyze build --run RUN-001
+sdlc-factory analyze review --provider codex --run RUN-001
+sdlc-factory analyze compare --baseline RUN-BASE --candidate RUN-001
+sdlc-factory report export --report RPT-001 --format markdown
+```
+
+CLI 直接等待进程、事件或会话终态，不使用固定 `sleep`。人类输出默认为中文；自动化使用
+JSON/JSONL 和确定退出码。
+
+## 13. 项目管理与控制台
+
+1.1 的项目管理范围是软件交付事实，不建设通用 Jira：
+
+- Project 保存项目范围、模块和项目级事实；
+- DeliveryPlan 管理大目标拆分；
+- WorkItem 管理独立需求、实现和人工审核；
+- TestBatch 管理跨工作项验证；
+- Operation 和 RunRecord 管理执行与观测；
+- Report 管理运行分析和产物符合性；
+- 工作项关系表达依赖、关联、后续和替代。
+
+推荐提供仅监听本机的 Web 控制台：
+
+```powershell
+sdlc-factory console serve --listen 127.0.0.1:7331
+```
+
+控制台至少展示项目总览、项目地图、交付计划、工作项看板、运行时间线、Token/成本、工具错误、
+产物符合性、基线对比和插件健康。控制台通过应用接口读写，不直接解析或修改
+`.sdlc/index/workflow.json`。
+
+Codex 后续可以作为独立分析提供方：
+
+```text
+确定性指标 → Codex 结构化分析 → 改进候选 → Operator 确认
+→ Factory 维护 WorkItem → 回归和基线对比
+```
+
+Codex 只能提出改进候选，不能由观测器直接修改 Factory、提交、推送或发布。
+
+详细接口和页面见
+[附录 G：规划模式、观测 CLI 与项目控制台](appendices/G-planning-cli-and-console.md)。
+
+## 14. 主流 Agent 产品借鉴
+
+Factory 借鉴的是稳定模式，不复制某个产品的私有存储或界面：
+
+- 复杂需求先规划、批准后实施；
+- 需求、设计、任务、规则和运行记录各有明确用途；
+- 项目级规则与会话上下文分离；
+- Agent、Skill、Hook、MCP 等扩展按职责分层；
+- CLI/Headless 输出机器可读事件；
+- 项目、任务、运行、变更和报告可在界面中检查；
+- 长任务使用可验证目标、暂停、恢复和明确预算；
+- Agent 运行成功不等于产物符合需求。
+
+产品事实、采用项和拒绝项见
+[附录 F：主流 Agent 产品模式与借鉴](appendices/F-agent-product-patterns.md)。
+
+## 15. 升级顺序
 
 ### 第 0 步：冻结边界
 
@@ -520,23 +669,35 @@ delivery_preview_build
 - 结构化交接工具；
 - 删除角色目录 ACL，保留全局保护策略和 diff 审计。
 
-### 第 2 步：建立观察链
+### 第 2 步：建立规划与项目地图
+
+- DeliveryPlan 及批准合同；
+- 小需求直达 WorkItem；
+- 大需求提问、拆分和依赖；
+- 工作项关系；
+- 项目地图查询投影；
+- 规划模式只读与源码修订检查。
+
+### 第 3 步：建立观察链与 CLI
 
 - OpenCode 事件采集；
 - 会话、子代理、阶段和运行操作关联；
 - 工具调用、Token 和耗时规范化；
 - 脱敏和原始事件保留策略；
 - fake event stream 测试。
+- `sdlc-factory observe run/watch/import/reconcile`。
 
-### 第 3 步：建立独立运行分析
+### 第 4 步：建立独立运行分析
 
 - 阶段指标；
 - 成功路径与返工成本；
 - 重复读取和错误放大；
 - 历史基线比较；
 - 生成中文运行分析报告。
+- Codex CLI 分析适配器；
+- 分析结果 Schema 和改进候选。
 
-### 第 4 步：建立产物检查
+### 第 5 步：建立产物检查
 
 - 需求覆盖矩阵；
 - diff、测试和证据绑定；
@@ -544,7 +705,7 @@ delivery_preview_build
 - 专业验收 Agent；
 - 生成中文产物验收报告。
 
-### 第 5 步：接入专业编排包
+### 第 6 步：接入专业编排包
 
 - Agent Registry；
 - Skill Registry；
@@ -553,7 +714,16 @@ delivery_preview_build
 - 按需专家和两层委派；
 - 失败诊断到责任角色的路由。
 
-### 第 6 步：真实项目验收
+### 第 7 步：建立项目控制台
+
+- Factory 应用接口；
+- 项目和工作项查询投影；
+- 计划、运行、成本和产物页面；
+- 基线对比和插件健康；
+- 本机监听、权限和脱敏；
+- CLI 与控制台一致性测试。
+
+### 第 8 步：真实项目验收
 
 - 一个单模块项目；
 - 一个多模块项目；
@@ -563,15 +733,20 @@ delivery_preview_build
 - 一次测试契约问题返工；
 - 一次环境阻塞；
 - 一次插件错误；
-- 运行分析和产物验收不依赖 Codex 人工整理。
+- 一个大需求拆分为多个关联工作项；
+- 一次 Codex 独立分析和 Factory 改进候选；
+- 运行分析和产物验收不依赖 Codex 人工拼接日志。
 
 实施与退出条件见[附录 D：实施与验收](appendices/D-implementation-and-acceptance.md)。
 
-## 13. 文档
+## 16. 文档
 
 - [附录 A：专业协作与职责](appendices/A-professional-collaboration.md)
 - [附录 B：运行观察与成本分析](appendices/B-runtime-observability.md)
 - [附录 C：最终产物与需求符合性](appendices/C-artifact-conformance.md)
 - [附录 D：实施与验收](appendices/D-implementation-and-acceptance.md)
 - [附录 E：中文词汇与英文编码名](appendices/E-terminology-for-code.md)
+- [附录 F：主流 Agent 产品模式与借鉴](appendices/F-agent-product-patterns.md)
+- [附录 G：规划模式、观测 CLI 与项目控制台](appendices/G-planning-cli-and-console.md)
 - [OpenCode 可观测性调研](../research/opencode-observability-2026-07-31.md)
+- [主流 Agent 产品模式调研](../research/agent-product-patterns-2026-07-31.md)

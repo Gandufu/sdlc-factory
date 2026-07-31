@@ -15,7 +15,10 @@ OpenCode 运行分析和最终产物符合性检查。
 - 如何识别无进展重复调用和重试放大，而不使用固定次数门禁；
 - 如何检查最终产物是否真正满足需求、协议、UI 原型和必测项；
 - 如何用结构化交接替代从 Agent 聊天尾部解析 JSON；
-- 如何分离产品交付证据与研发过程遥测。
+- 如何分离产品交付证据与研发过程遥测；
+- 大需求如何先规划、批准并拆成多个关联工作项；
+- 如何通过观测 CLI 和 Codex 适配器独立分析会话执行；
+- 如何在本地控制台呈现项目地图、运行、成本和产物报告。
 
 系统不读取或保存模型私有思维链，只分析宿主和模型提供方明确公开的可观测运行行为。
 
@@ -24,7 +27,9 @@ OpenCode 运行分析和最终产物符合性检查。
 ## 主要流程
 
 ```text
-创建多个 WorkItem
+创建 Project
+  → 大需求可选：创建并批准 DeliveryPlan
+  → 创建一个或多个 WorkItem
   → Operator 分别发布 Requirement Version
   → Agent 分别实现并绑定 Source Revision
   → Agent 提交人工审核
@@ -69,7 +74,10 @@ flowchart LR
 - [1.1 最终产物与需求符合性](docs/v1.1/appendices/C-artifact-conformance.md)
 - [1.1 实施与验收](docs/v1.1/appendices/D-implementation-and-acceptance.md)
 - [1.1 中文词汇与英文编码名](docs/v1.1/appendices/E-terminology-for-code.md)
+- [1.1 主流 Agent 产品模式与借鉴](docs/v1.1/appendices/F-agent-product-patterns.md)
+- [1.1 规划模式、观测 CLI 与项目控制台](docs/v1.1/appendices/G-planning-cli-and-console.md)
 - [OpenCode 可观测性调研](docs/research/opencode-observability-2026-07-31.md)
+- [主流 Agent 产品模式调研](docs/research/agent-product-patterns-2026-07-31.md)
 - [1.0 主方案](docs/v1.0/README.md)
 - [附录 A：领域与生命周期](docs/v1.0/appendices/A-domain-and-lifecycle.md)
 - [附录 B：状态与证据](docs/v1.0/appendices/B-state-and-evidence.md)
