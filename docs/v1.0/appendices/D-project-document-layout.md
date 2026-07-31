@@ -1,218 +1,100 @@
-# 附录 D：项目文档与目录规范
+# 附录 D：项目目录规范
 
-本附录只定义文档和目录编排，不承载 1.0 主流程。主方案见 [docs/v1.0/README.md](../README.md)。
+本附录规定使用 SDLC Factory 1.0 的目标项目目录，不规定本设计仓库的内部布局。
 
-## D.1 本设计仓库
-
-```text
-CONTEXT.md                                # 唯一领域词汇表
-README.md                                 # 当前目标、1.0 主流程、导航
-docs/
-  v1.0/
-    README.md                             # 1.0 主方案
-    appendices/
-      A-domain-and-lifecycle.md
-      B-state-evidence-and-recovery.md
-      C-framework-pack-and-runner.md
-      D-project-document-layout.md
-      E-delivery-and-acceptance.md
-      F-review-disposition.md
-    adr/
-      ADR-001-Core-Cutover.md
-      ADR-002-Local-Core-Runner-Topology.md
-    contracts/
-      README.md
-      domain-transitions.yaml
-      approval-invalidation.yaml
-      failure-routing.yaml
-      runner-enforcement.yaml
-      *.schema.json
-    diagrams/
-      SDLC-Pipeline-1.0-Architecture.drawio
-      SDLC-Pipeline-1.0-Transition-Harness.svg
-      SDLC-Pipeline-1.0-Task-State.svg
-      SDLC-Pipeline-1.0-Harness-Loop.svg
-  v2.0/
-    README.md                             # 只保留演进路线
-    SDLC-Pipeline-2.0-Project-Software-Factory.svg
-  research/
-    agent-harness-landscape-2026-07-30.md
-```
-
-阅读顺序：
-
-1. 根 [README](../../../README.md)；
-2. [1.0 主方案](../README.md)；
-3. 领域术语读取 [CONTEXT](../../../CONTEXT.md)；
-4. 只读取当前问题涉及的附录；
-5. 实现和测试读取 [机器可解析合同](../contracts/README.md)；
-6. 架构决定读取 ADR；
-7. 需要了解后续方向时才读取 [2.0 路线](../../v2.0/README.md)；
-8. 需要外部事实依据时再读取 research。
-
-不再维护一篇同时包含主流程、协议调研、Schema、Runner、安全、路线和评审记录的总文档。
-
-## D.2 文档职责
-
-| 文档 | 必须回答 | 不应包含 |
-|---|---|---|
-| 根 README | 当前做什么、主流程、从哪里继续读 | 完整 Schema、评审原文、2.0 平台细节 |
-| 1.0 README | 范围、架构、接口、交付条件 | 大型 Manifest、26 个场景全文、研究综述 |
-| 附录 | 某一主题的完整契约 | 重复主流程和路线宣传 |
-| contracts | 可解析 Schema、矩阵、digest 和所有权规则 | 背景论证和研究综述 |
-| ADR | 单一架构决定、替代方案和后果 | 整套方案说明 |
-| 2.0 README | 从 1.0 到软件工厂的演进阶段 | 1.0 具体实现和 M0 契约 |
-| research | 外部事实、来源、推断 | 当前已批准的领域真相 |
-
-## D.3 目标项目 ProjectFacts
-
-安装 1.0 后，目标项目使用：
+## D.1 推荐目录
 
 ```text
-docs/sdlc/
-  project.md                            # 产品目标、Feature 地图、依赖和索引
-  requirements.md                       # 当前有效 Requirement / AC
-  architecture.md                       # 模块、接口、数据流和 ADR 引用
-  verification.md                       # Requirement/AC → Gate/Test 追溯
-  interfaces/
-    catalog.yaml                        # 内部/外部接口与 contractRef
-  environments/
-    SIT-001.yaml                        # 非秘密环境绑定和 Secret Ref
-  tasks/
-    active/
-      TASK-0001/
-        proposal.md                     # 待批准增量
-        plan.md                         # Execution Slice 和 handoff
-        fact-change-set.json            # 确定性补丁索引
-    completed/
-      TASK-0000/
-        delivery.md                     # 完成摘要和 Evidence 引用
-        delivery-manifest.json          # 不可变源码/事实/Gate/Receipt 索引
+project/
+├─ sdlc/
+│  └─ project-profile.yaml
+├─ docs/
+│  └─ sdlc/
+│     ├─ project.md
+│     ├─ requirements/
+│     │  ├─ WI-001.md
+│     │  └─ WI-002.md
+│     └─ test-batches/
+│        └─ TB-001.md
+└─ .sdlc/
+   ├─ index/
+   │  └─ workflow.json
+   └─ evidence/
+      └─ OP-001/
 ```
 
-ProjectFacts 只表示已完成 Task 形成的当前有效事实。已批准但未 Delivery 的增量仍保存在 active Task 中。
+## D.2 路径职责
 
-## D.4 目标项目运行态
+| 路径 | 是否进入 Git | 写入者 | 内容 |
+|---|---:|---|---|
+| `sdlc/project-profile.yaml` | 是 | 项目维护者 | 模块、Pack 和 Project Action 路由 |
+| `docs/sdlc/project.md` | 是 | Agent / Operator | 项目目标和约束 |
+| `docs/sdlc/requirements/*.md` | 是 | Agent 提案，Operator 发布 | WorkItem 需求正文 |
+| `docs/sdlc/test-batches/*.md` | 是 | Agent / Operator | 测试范围和人工说明 |
+| `.sdlc/index/workflow.json` | 否 | Core | 当前流程状态索引 |
+| `.sdlc/evidence/**` | 否 | Runner / Core | 日志、报告、诊断和产物 |
+
+是否归档 Evidence 到制品库由项目决定；不要把大日志直接提交到 Project Facts。
+
+## D.3 Markdown
+
+每份 WorkItem Markdown 至少包含：
+
+```markdown
+---
+work_item_id: WI-001
+requirement_version: 1
+---
+
+# 标题
+
+## 目标
+
+## 验收条件
+```
+
+Workflow Index 保存文件相对路径和内容 SHA-256。发布后的版本不可直接改写；修改时增加 `requirement_version`，状态回到 `draft`。
+
+TestBatch Markdown 描述测试目标、范围和人工观察，不保存运行状态。运行状态和 Verification Subject 位于 Workflow Index。
+
+## D.4 JSON
+
+JSON 只保存：
+
+- 稳定 ID；
+- 当前状态；
+- 乐观并发版本；
+- Requirement Version、哈希和 Source Revision；
+- Review Decision 与 Evidence 引用；
+- TestBatch Subject；
+- Operation 摘要。
+
+JSON 不保存：
+
+- 完整需求正文；
+- Agent 对话；
+- stdout/stderr 全文；
+- 二进制产物；
+- 自动生成的百科或长期记忆。
+
+## D.5 YAML
+
+Project Profile 使用 YAML，必须：
+
+- 禁止自定义 tag 和可执行表达式；
+- 路径使用 Project root 相对路径；
+- 不保存 Secret 明文；
+- Pack 引用包含稳定 ID 和版本；
+- Project Action 步骤顺序具有语义。
+
+## D.6 所有权
 
 ```text
-.sdlc/
-  project.json                          # project_id、Pack binding、facts_revision
-  supervisor/
-    instance.json                       # pid、protocol、project identity、ready/recovery
-    agent-endpoint.json                 # 非秘密 IPC metadata
-    operator-endpoint.json              # 非秘密 IPC metadata
-  tasks/
-    TASK-0001/
-      state.json                        # 紧凑 snapshot
-      events.jsonl                      # 只追加领域事件
-      attempts/
-        ATTEMPT-0001.json
-  operations/
-    OP-0001.json
-  transactions/
-    TXN-0001.json
-  leases/
-    WORKSPACE-0001.json
-  evidence/
-    TASK-0001/
-      GATE-0001/
-        result.json
-        stdout.log
-        stderr.log
-      DELIVERY-0001/
-        source-bundle.zip               # tracked/untracked/binary 交付内容
-        workspace-manifest.json
-  logs/
-    core.jsonl
+Agent / Operator → Markdown facts
+Project Maintainer → Project Profile
+Core → Workflow Index
+Framework Pack → Execution Plan / parsed result
+Runner → raw Evidence
 ```
 
-`.sdlc/**` 是 Core 运行态，不是项目事实，也不是 Agent 工作区。
-
-## D.5 路径所有权
-
-| 路径 | 写入者 | 规则 |
-|---|---|---|
-| `.sdlc/**` | Core/StateStore Adapter | Agent、Pack、Harness 均不可写 |
-| `docs/sdlc/tasks/active/**` | Agent 在 Workspace Policy 允许下编辑；Core 校验和冻结 | 仅当前 Task |
-| `docs/sdlc/project.md` 等权威事实 | Core Fact Publisher | 只能应用批准的 FactChangeSet |
-| `docs/sdlc/interfaces/**` | Core Fact Publisher | 作为 ProjectFacts |
-| `docs/sdlc/environments/**` | Core Environment Publisher | 独立 revision，只接受 Operator Binding Receipt，不属于普通 FactChangeSet |
-| Framework Pack binding | Core Pack Binding Publisher | Operator/Core Maintainer Receipt |
-| Policy revision | Core Policy Publisher | Operator/Policy Maintainer Receipt |
-| `src/**`、`tests/**`、批准的迁移目录 | Agent | 受 Task scope 和 Pack policy 约束 |
-| `coverage/**`、`test-results/**`、临时运行目录 | Harness Runtime | 受配额和 cleanup 约束 |
-
-不能用一个 `docs/sdlc/**` protected glob 同时禁止合法 proposal 编辑。Pack 必须显式区分 authoring、authority 和 runtime 路径。
-
-## D.6 内容格式
-
-### Markdown
-
-用于：
-
-- 用户目标和需求正文；
-- 架构解释和 ADR；
-- Execution Slice 计划和 handoff；
-- Delivery 摘要；
-- 人工可读诊断说明。
-
-### JSON/JSONL
-
-只用于：
-
-- ID、状态和版本；
-- 哈希和 digest；
-- Artifact/Evidence 指针；
-- WorkspaceManifest、FactChangeSet、DeliveryManifest 和 ContextBundle；
-- 紧凑诊断；
-- 领域事件；
-- 幂等、租约和恢复索引。
-
-禁止把 transcript、完整需求、长日志或大段模型输出塞入 JSON。
-
-### YAML
-
-用于：
-
-- Framework Pack Manifest；
-- Interface Catalog；
-- Environment Binding；
-- Policy/Project Profile。
-
-### SVG/Draw.io
-
-- SVG 是可直接阅读和渲染的交付图；
-- Draw.io 是唯一可编辑源；
-- SVG 页脚必须指回 Draw.io 文件和页码；
-- 修改图示时同时更新 SVG 和 Draw.io；
-- 提交前解析 XML，并用浏览器实际渲染 SVG。
-
-## D.7 命名与链接
-
-- 版本目录使用 `docs/v1.0`、`docs/v2.0`；
-- 主入口统一为该版本的 `README.md`；
-- 附录使用稳定字母前缀；
-- ADR 使用 `ADR-<number>-<slug>.md`；
-- 文档之间使用相对链接；
-- research 可以带日期，契约文档不在文件名中追加日期；
-- 删除被替代的总文档，不保留“final-v2-new”之类兼容副本；
-- 当前决定只保留一个权威落点，评审记录只说明为何选择。
-
-## D.8 变更检查
-
-文档提交前至少检查：
-
-```text
-Markdown 相对链接
-代码围栏平衡
-JSON/YAML 示例可解析
-JSON Schema Draft 2020-12 meta-schema
-YAML 矩阵语义与引用完整性
-Draw.io 根节点 = mxfile
-SVG 根节点 = svg
-Draw.io ID 无重复
-SVG 浏览器渲染
-git diff --check
-```
-
-只提交当前任务相关文件；不要把临时渲染 PNG、外部评审原文或无关工作区变化加入仓库。
+任何越权写入都应由 Core 拒绝或在下一次读取时报告不一致。
