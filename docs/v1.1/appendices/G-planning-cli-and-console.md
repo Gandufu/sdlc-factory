@@ -436,6 +436,9 @@ Operator 确认后，在 SDLC Factory 项目中创建正常 WorkItem。修改 Fa
 | Codex 手工拼接日志才能分析 | 观测 CLI、分析提供方和控制台独立生成报告 |
 | 一次会话割裂一个项目 | Project、DeliveryPlan、WorkItem 和 RunRecord 分层关联 |
 
+这些合同的完整问题背景、实际运行数据和当前残留风险见
+[SDLC Pipeline 插件模式问题复盘](../../research/sdlc-pipeline-plugin-mode-lessons-2026-08-03.md)。
+
 ## 9. 验收
 
 至少验证：

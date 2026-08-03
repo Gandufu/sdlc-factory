@@ -78,6 +78,7 @@ flowchart LR
 - [1.1 规划模式、观测 CLI 与项目控制台](docs/v1.1/appendices/G-planning-cli-and-console.md)
 - [OpenCode 可观测性调研](docs/research/opencode-observability-2026-07-31.md)
 - [主流 Agent 产品模式调研](docs/research/agent-product-patterns-2026-07-31.md)
+- [SDLC Pipeline 插件模式问题复盘](docs/research/sdlc-pipeline-plugin-mode-lessons-2026-08-03.md)
 - [1.0 主方案](docs/v1.0/README.md)
 - [附录 A：领域与生命周期](docs/v1.0/appendices/A-domain-and-lifecycle.md)
 - [附录 B：状态与证据](docs/v1.0/appendices/B-state-and-evidence.md)

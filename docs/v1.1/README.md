@@ -750,3 +750,4 @@ Factory 借鉴的是稳定模式，不复制某个产品的私有存储或界面
 - [附录 G：规划模式、观测 CLI 与项目控制台](appendices/G-planning-cli-and-console.md)
 - [OpenCode 可观测性调研](../research/opencode-observability-2026-07-31.md)
 - [主流 Agent 产品模式调研](../research/agent-product-patterns-2026-07-31.md)
+- [SDLC Pipeline 插件模式问题复盘](../research/sdlc-pipeline-plugin-mode-lessons-2026-08-03.md)
