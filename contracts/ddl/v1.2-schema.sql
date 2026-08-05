@@ -227,7 +227,7 @@ CREATE TABLE prompt_template (
 CREATE TABLE agent_definition (
     agent_id TEXT NOT NULL,
     version TEXT NOT NULL CHECK (version ~ '^\d+\.\d+\.\d+$'),
-    role TEXT NOT NULL CHECK (role IN ('REQUIREMENT','DESIGN','CODER','TESTER','REVIEWER_ASSISTANT')),
+    role TEXT NOT NULL CHECK (role IN ('REQUIREMENT','DESIGN','CODER','TESTER','REVIEWER_ASSISTANT','SCRUTINY_VALIDATOR','USER_TESTING_VALIDATOR')),
     model_binding_ref TEXT NOT NULL,
     prompt_id TEXT NOT NULL,
     prompt_version TEXT NOT NULL,
@@ -322,6 +322,172 @@ CREATE TABLE environment_requirement (
     )
 );
 
+CREATE TABLE validation_contract (
+    validation_contract_id TEXT NOT NULL,
+    version INTEGER NOT NULL CHECK (version > 0),
+    project_id TEXT NOT NULL REFERENCES project(project_id),
+    derived_from_requirement_baseline_id TEXT NOT NULL REFERENCES baseline(baseline_id),
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    status TEXT NOT NULL CHECK (status IN ('DRAFT','FROZEN','STALE')),
+    frozen_by TEXT,
+    frozen_at TIMESTAMPTZ,
+    invalidated_at TIMESTAMPTZ,
+    invalidation_reason TEXT,
+    invalidation_trigger_ref TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (validation_contract_id, version),
+    CONSTRAINT chk_validation_contract_frozen CHECK (status <> 'FROZEN' OR (frozen_by IS NOT NULL AND frozen_at IS NOT NULL)),
+    CONSTRAINT chk_validation_contract_stale CHECK (status <> 'STALE' OR (invalidated_at IS NOT NULL AND invalidation_reason IS NOT NULL AND invalidation_trigger_ref IS NOT NULL))
+);
+
+CREATE TABLE validation_assertion (
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
+    assertion_id TEXT NOT NULL,
+    scope_type TEXT NOT NULL CHECK (scope_type IN ('PROJECT','CAPABILITY_UNIT','CROSS_CU')),
+    scope_ref TEXT NOT NULL,
+    given_text TEXT NOT NULL,
+    when_text TEXT NOT NULL,
+    then_text TEXT NOT NULL,
+    verification_method TEXT NOT NULL CHECK (verification_method IN ('INSPECTION','ANALYSIS','DEMONSTRATION','TEST')),
+    verifier_capability_ref TEXT NOT NULL,
+    severity TEXT NOT NULL CHECK (severity IN ('BLOCKING','NON_BLOCKING')),
+    PRIMARY KEY (validation_contract_id, validation_contract_version, assertion_id),
+    FOREIGN KEY (validation_contract_id, validation_contract_version)
+        REFERENCES validation_contract(validation_contract_id, version)
+);
+
+CREATE TABLE validation_assertion_requirement_ref (
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
+    assertion_id TEXT NOT NULL,
+    requirement_ref TEXT NOT NULL,
+    PRIMARY KEY (validation_contract_id, validation_contract_version, assertion_id, requirement_ref),
+    FOREIGN KEY (validation_contract_id, validation_contract_version, assertion_id)
+        REFERENCES validation_assertion(validation_contract_id, validation_contract_version, assertion_id)
+);
+
+CREATE TABLE validation_assertion_evidence_type (
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
+    assertion_id TEXT NOT NULL,
+    evidence_type TEXT NOT NULL CHECK (evidence_type IN ('COMMAND_RESULT','TEST_REPORT','SCREENSHOT','NETWORK_TRACE','INSPECTION_RECORD','ANALYSIS_REPORT','DEMONSTRATION_RECORD')),
+    PRIMARY KEY (validation_contract_id, validation_contract_version, assertion_id, evidence_type),
+    FOREIGN KEY (validation_contract_id, validation_contract_version, assertion_id)
+        REFERENCES validation_assertion(validation_contract_id, validation_contract_version, assertion_id)
+);
+
+CREATE TABLE validation_assertion_environment_requirement (
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
+    assertion_id TEXT NOT NULL,
+    environment_requirement_id TEXT NOT NULL REFERENCES environment_requirement(environment_requirement_id),
+    PRIMARY KEY (validation_contract_id, validation_contract_version, assertion_id, environment_requirement_id),
+    FOREIGN KEY (validation_contract_id, validation_contract_version, assertion_id)
+        REFERENCES validation_assertion(validation_contract_id, validation_contract_version, assertion_id)
+);
+
+CREATE TABLE validation_assertion_cu (
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
+    assertion_id TEXT NOT NULL,
+    cu_id TEXT NOT NULL REFERENCES capability_unit(cu_id),
+    PRIMARY KEY (validation_contract_id, validation_contract_version, assertion_id, cu_id),
+    FOREIGN KEY (validation_contract_id, validation_contract_version, assertion_id)
+        REFERENCES validation_assertion(validation_contract_id, validation_contract_version, assertion_id)
+);
+
+CREATE TABLE capability_index (
+    capability_index_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES project(project_id),
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    stage TEXT NOT NULL CHECK (stage IN ('REQUIREMENT','DESIGN','CODING','TESTING','SYSTEM_ACCEPTANCE')),
+    generated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE capability_index_entry (
+    capability_index_id TEXT NOT NULL REFERENCES capability_index(capability_index_id),
+    entry_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('INTERNAL_TOOL','MCP_TOOL','SKILL','PLUGIN','REFERENCE_SOURCE','AUTHORITY_SOURCE')),
+    name TEXT NOT NULL,
+    short_description TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    version TEXT NOT NULL,
+    input_hint TEXT,
+    authority_class TEXT NOT NULL CHECK (authority_class IN ('APPROVED_BASELINE','REGISTERED_ASSET','REFERENCE','EXECUTION_CAPABILITY')),
+    load_policy TEXT NOT NULL CHECK (load_policy IN ('EAGER','DEFERRED')),
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    PRIMARY KEY (capability_index_id, entry_id)
+);
+
+CREATE TABLE context_expansion_request (
+    request_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES project(project_id),
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    capability_index_id TEXT NOT NULL,
+    entry_id TEXT NOT NULL,
+    requested_by_agent_id TEXT NOT NULL,
+    requested_by_agent_version TEXT NOT NULL,
+    requested_by_agent_content_hash TEXT NOT NULL CHECK (requested_by_agent_content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('REQUESTED','APPROVED','DENIED','LOADED')),
+    decision_reason TEXT,
+    decided_at TIMESTAMPTZ,
+    resolved_ref TEXT,
+    resolved_version TEXT,
+    loaded_content_hash TEXT CHECK (loaded_content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    context_manifest_ref TEXT,
+    loaded_at TIMESTAMPTZ,
+    requested_at TIMESTAMPTZ NOT NULL,
+    FOREIGN KEY (capability_index_id, entry_id)
+        REFERENCES capability_index_entry(capability_index_id, entry_id),
+    FOREIGN KEY (requested_by_agent_id, requested_by_agent_version, requested_by_agent_content_hash)
+        REFERENCES agent_definition(agent_id, version, content_hash),
+    CONSTRAINT chk_context_expansion_decision CHECK (
+        status = 'REQUESTED' OR (decision_reason IS NOT NULL AND decided_at IS NOT NULL)
+    ),
+    CONSTRAINT chk_context_expansion_loaded CHECK (
+        status <> 'LOADED' OR (resolved_ref IS NOT NULL AND resolved_version IS NOT NULL AND loaded_content_hash IS NOT NULL AND context_manifest_ref IS NOT NULL AND loaded_at IS NOT NULL)
+    )
+);
+
+CREATE TABLE validation_finding (
+    finding_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES project(project_id),
+    cu_id TEXT REFERENCES capability_unit(cu_id),
+    implementation_run_id TEXT NOT NULL REFERENCES run(run_id),
+    validator_run_id TEXT NOT NULL REFERENCES run(run_id),
+    validation_type TEXT NOT NULL CHECK (validation_type IN ('SCRUTINY','USER_TESTING')),
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
+    assertion_id TEXT NOT NULL,
+    validator_agent_id TEXT NOT NULL,
+    validator_agent_version TEXT NOT NULL,
+    validator_agent_content_hash TEXT NOT NULL CHECK (validator_agent_content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    context_isolation TEXT NOT NULL CHECK (context_isolation = 'FRESH_SESSION'),
+    severity TEXT NOT NULL CHECK (severity IN ('BLOCKING','NON_BLOCKING','SUGGESTION')),
+    summary TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('OPEN','ACKNOWLEDGED','RESOLVED','DISMISSED')),
+    resolved_by_run_id TEXT REFERENCES run(run_id),
+    disposition_reason TEXT,
+    code_mutation_allowed BOOLEAN NOT NULL DEFAULT FALSE CHECK (NOT code_mutation_allowed),
+    gate_authority BOOLEAN NOT NULL DEFAULT FALSE CHECK (NOT gate_authority),
+    created_at TIMESTAMPTZ NOT NULL,
+    FOREIGN KEY (validation_contract_id, validation_contract_version, assertion_id)
+        REFERENCES validation_assertion(validation_contract_id, validation_contract_version, assertion_id),
+    FOREIGN KEY (validator_agent_id, validator_agent_version, validator_agent_content_hash)
+        REFERENCES agent_definition(agent_id, version, content_hash),
+    CONSTRAINT chk_validation_finding_fresh_run CHECK (implementation_run_id <> validator_run_id),
+    CONSTRAINT chk_validation_finding_resolution CHECK (status <> 'RESOLVED' OR resolved_by_run_id IS NOT NULL),
+    CONSTRAINT chk_validation_finding_dismissal CHECK (status <> 'DISMISSED' OR disposition_reason IS NOT NULL)
+);
+
+CREATE TABLE validation_finding_evidence (
+    finding_id TEXT NOT NULL REFERENCES validation_finding(finding_id),
+    evidence_ref TEXT NOT NULL,
+    PRIMARY KEY (finding_id, evidence_ref)
+);
+
 CREATE TABLE factory_run_budget (
     singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
     max_concurrent_runs INTEGER NOT NULL DEFAULT 1 CHECK (max_concurrent_runs = 1),
@@ -347,6 +513,8 @@ CREATE TABLE system_acceptance (
     project_id TEXT NOT NULL,
     release_scope_id TEXT NOT NULL,
     execution_plan_version INTEGER NOT NULL,
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
     system_integration_run_id TEXT REFERENCES run(run_id),
     environment_binding_ref TEXT REFERENCES environment_binding_snapshot(environment_binding_id),
     review_record_id TEXT REFERENCES review_record(review_id),
@@ -355,8 +523,11 @@ CREATE TABLE system_acceptance (
     invalidation_reason TEXT,
     invalidation_trigger_ref TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (system_acceptance_id, validation_contract_id, validation_contract_version),
     FOREIGN KEY (project_id, execution_plan_version)
         REFERENCES execution_plan(project_id, version),
+    FOREIGN KEY (validation_contract_id, validation_contract_version)
+        REFERENCES validation_contract(validation_contract_id, version),
     CONSTRAINT chk_system_acceptance_run_binding CHECK (status = 'DRAFT' OR status = 'STALE' OR (system_integration_run_id IS NOT NULL AND environment_binding_ref IS NOT NULL)),
     CONSTRAINT chk_system_acceptance_review CHECK (status <> 'APPROVED' OR review_record_id IS NOT NULL),
     CONSTRAINT chk_system_acceptance_stale CHECK (status <> 'STALE' OR (invalidated_at IS NOT NULL AND invalidation_reason IS NOT NULL AND invalidation_trigger_ref IS NOT NULL))
@@ -371,9 +542,15 @@ CREATE TABLE system_acceptance_cu_baseline (
 );
 
 CREATE TABLE system_acceptance_scenario (
-    system_acceptance_id TEXT NOT NULL REFERENCES system_acceptance(system_acceptance_id),
-    scenario_ref TEXT NOT NULL,
-    PRIMARY KEY (system_acceptance_id, scenario_ref)
+    system_acceptance_id TEXT NOT NULL,
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
+    assertion_id TEXT NOT NULL,
+    PRIMARY KEY (system_acceptance_id, assertion_id),
+    FOREIGN KEY (system_acceptance_id, validation_contract_id, validation_contract_version)
+        REFERENCES system_acceptance(system_acceptance_id, validation_contract_id, validation_contract_version),
+    FOREIGN KEY (validation_contract_id, validation_contract_version, assertion_id)
+        REFERENCES validation_assertion(validation_contract_id, validation_contract_version, assertion_id)
 );
 
 CREATE TABLE system_acceptance_baseline (
@@ -382,9 +559,13 @@ CREATE TABLE system_acceptance_baseline (
     project_id TEXT NOT NULL,
     release_scope_id TEXT NOT NULL,
     execution_plan_version INTEGER NOT NULL,
+    validation_contract_id TEXT NOT NULL,
+    validation_contract_version INTEGER NOT NULL,
     environment_binding_ref TEXT NOT NULL REFERENCES environment_binding_snapshot(environment_binding_id),
     FOREIGN KEY (project_id, execution_plan_version)
-        REFERENCES execution_plan(project_id, version)
+        REFERENCES execution_plan(project_id, version),
+    FOREIGN KEY (validation_contract_id, validation_contract_version)
+        REFERENCES validation_contract(validation_contract_id, version)
 );
 
 CREATE TABLE system_acceptance_baseline_cu (

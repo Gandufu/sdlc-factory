@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc-factory.local/schemas/v1.2/validation-finding.schema.json",
+  "title": "ValidationFinding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["finding_id", "project_id", "implementation_run_id", "validator_run_id", "validation_type", "assertion_ref", "validator_agent_ref", "context_isolation", "severity", "summary", "evidence_refs", "status", "code_mutation_allowed", "gate_authority", "created_at"],
+  "properties": {
+    "finding_id": { "type": "string", "pattern": "^VF-[A-Z0-9][A-Z0-9-]*$" },
+    "project_id": { "type": "string", "minLength": 1 },
+    "cu_id": { "type": ["string", "null"] },
+    "implementation_run_id": { "type": "string", "minLength": 1 },
+    "validator_run_id": { "type": "string", "minLength": 1 },
+    "validation_type": { "enum": ["SCRUTINY", "USER_TESTING"] },
+    "assertion_ref": { "$ref": "#/$defs/assertionRef" },
+    "validator_agent_ref": { "$ref": "#/$defs/versionedRef" },
+    "context_isolation": { "const": "FRESH_SESSION" },
+    "severity": { "enum": ["BLOCKING", "NON_BLOCKING", "SUGGESTION"] },
+    "summary": { "type": "string", "minLength": 1 },
+    "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "status": { "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"] },
+    "resolved_by_run_id": { "type": "string", "minLength": 1 },
+    "disposition_reason": { "type": "string", "minLength": 1 },
+    "code_mutation_allowed": { "const": false },
+    "gate_authority": { "const": false },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "const": "RESOLVED" } }, "required": ["status"] }, "then": { "required": ["resolved_by_run_id"] } },
+    { "if": { "properties": { "status": { "const": "DISMISSED" } }, "required": ["status"] }, "then": { "required": ["disposition_reason"] } }
+  ],
+  "$defs": {
+    "contentHash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "versionedRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "content_hash"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }, "content_hash": { "$ref": "#/$defs/contentHash" } }
+    },
+    "assertionRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["validation_contract_id", "version", "assertion_id"],
+      "properties": { "validation_contract_id": { "type": "string", "minLength": 1 }, "version": { "type": "integer", "minimum": 1 }, "assertion_id": { "type": "string", "minLength": 1 } }
+    }
+  }
+}

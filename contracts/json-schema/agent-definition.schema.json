@@ -8,7 +8,7 @@
   "properties": {
     "agent_id": { "type": "string", "pattern": "^AGT-[A-Z0-9][A-Z0-9-]*$" },
     "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-    "role": { "enum": ["REQUIREMENT", "DESIGN", "CODER", "TESTER", "REVIEWER_ASSISTANT"] },
+    "role": { "enum": ["REQUIREMENT", "DESIGN", "CODER", "TESTER", "REVIEWER_ASSISTANT", "SCRUTINY_VALIDATOR", "USER_TESTING_VALIDATOR"] },
     "model_binding_ref": { "type": "string", "minLength": 1 },
     "prompt_template_ref": { "$ref": "#/$defs/versionedRef" },
     "capability_tags": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },

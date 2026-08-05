@@ -34,6 +34,14 @@ await db.query("insert into prompt_template(prompt_id,version,applicable_stage,c
 await db.query("insert into agent_definition(agent_id,version,role,model_binding_ref,prompt_id,prompt_version,prompt_content_hash,content_hash,status) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)", ["AGT-CODER", "1.0.0", "CODER", "MODEL-1", "PRM-CODER", "1.0.0", hashA, hashB, "DRAFT"]);
 await db.query("insert into rule_set(ruleset_id,version,applicable_stage,content_ref,content_hash,status) values ($1,$2,$3,$4,$5,$6)", ["RS-CODER", "1.0.0", "CODING", "rules/coder.md", hashC, "DRAFT"]);
 await db.query("insert into factory_trajectory_event(event_id,occurred_at,project_id,run_id,attempt_id,trace_id,agent_id,agent_version,agent_content_hash,prompt_id,prompt_version,prompt_content_hash,ruleset_id,ruleset_version,ruleset_content_hash,model_ref,tool_schema_version,context_bundle_hash,outcome,event_type) values ($1,now(),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)", ["TE-1", "PROJECT-1", "RUN-1", "ATTEMPT-1", "TRACE-1", "AGT-CODER", "1.0.0", hashB, "PRM-CODER", "1.0.0", hashA, "RS-CODER", "1.0.0", hashC, "MODEL-1", "1.0.0", hashF, "PASSED", "RUN_COMPLETED"]);
+await db.query("insert into review_record(review_id,scope_type,scope_id,stage_type,baseline_candidate_ref,reviewer_identity,reviewer_role,separation_policy,decision,comments,reviewed_at,idempotency_key) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),$11)", ["REVIEW-REQ-1", "PROJECT", "PROJECT-1", "REQUIREMENT", "ART-REQ-1", "reviewer-1", "REVIEWER", "ENFORCED", "APPROVED", "approved", "IDEMP-REQ-1"]);
+await db.query("insert into baseline(baseline_id,scope_type,scope_id,baseline_type,artifact_version,content_hash,review_record_id,validity_status) values ($1,$2,$3,$4,$5,$6,$7,$8)", ["BL-REQ-1", "PROJECT", "PROJECT-1", "REQUIREMENT", 1, hashA, "REVIEW-REQ-1", "VALID"]);
+await db.query("insert into capability_unit(cu_id,project_id,name) values ($1,$2,$3)", ["CU-1", "PROJECT-1", "Capability"]);
+await db.query("insert into validation_contract(validation_contract_id,version,project_id,derived_from_requirement_baseline_id,content_hash,status) values ($1,$2,$3,$4,$5,$6)", ["VC-1", 1, "PROJECT-1", "BL-REQ-1", hashA, "DRAFT"]);
+await db.query("insert into validation_assertion(validation_contract_id,validation_contract_version,assertion_id,scope_type,scope_ref,given_text,when_text,then_text,verification_method,verifier_capability_ref,severity) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", ["VC-1", 1, "VAL-1", "CAPABILITY_UNIT", "CU-1", "given", "when", "then", "TEST", "runtime:test", "BLOCKING"]);
+await db.query("insert into run(run_id,project_id,cu_id,attempt_id,status) values ($1,$2,$3,$4,$5)", ["RUN-2", "PROJECT-1", "CU-1", "ATTEMPT-2", "SUCCEEDED"]);
+await db.query("insert into capability_index(capability_index_id,project_id,run_id,stage,generated_at) values ($1,$2,$3,$4,now())", ["CI-1", "PROJECT-1", "RUN-1", "CODING"]);
+await db.query("insert into capability_index_entry(capability_index_id,entry_id,kind,name,short_description,source_ref,version,authority_class,load_policy,content_hash) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", ["CI-1", "CAP-1", "INTERNAL_TOOL", "source-query", "query source", "registry:source-query", "1.0.0", "EXECUTION_CAPABILITY", "DEFERRED", hashC]);
 
 let budgetGuard = false;
 try { await db.exec("update factory_run_budget set max_concurrent_runs = 2"); } catch { budgetGuard = true; }
@@ -41,12 +49,18 @@ try { await db.exec("update factory_run_budget set max_concurrent_runs = 2"); } 
 let trajectoryGuard = false;
 try { await db.exec("update factory_trajectory_event set outcome = 'FAILED' where event_id = 'TE-1'"); } catch { trajectoryGuard = true; }
 
+let validatorGuard = false;
+try { await db.query("insert into validation_finding(finding_id,project_id,cu_id,implementation_run_id,validator_run_id,validation_type,validation_contract_id,validation_contract_version,assertion_id,validator_agent_id,validator_agent_version,validator_agent_content_hash,context_isolation,severity,summary,status,code_mutation_allowed,gate_authority,created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,now())", ["VF-1", "PROJECT-1", "CU-1", "RUN-1", "RUN-2", "SCRUTINY", "VC-1", 1, "VAL-1", "AGT-CODER", "1.0.0", hashB, "FRESH_SESSION", "BLOCKING", "finding", "OPEN", false, true]); } catch { validatorGuard = true; }
+
+let contextGuard = false;
+try { await db.query("insert into context_expansion_request(request_id,project_id,run_id,capability_index_id,entry_id,requested_by_agent_id,requested_by_agent_version,requested_by_agent_content_hash,reason,status,decision_reason,decided_at,requested_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())", ["CER-1", "PROJECT-1", "RUN-1", "CI-1", "CAP-1", "AGT-CODER", "1.0.0", hashB, "need source", "LOADED", "approved"]); } catch { contextGuard = true; }
+
 const tables = await db.query("select count(*)::int as count from pg_tables where schemaname = 'public' and tablename not like 'pglite_%'");
-if (tables.rows[0].count !== 38 || !budgetGuard || !trajectoryGuard) {
-  throw new Error(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard }));
+if (tables.rows[0].count !== 49 || !budgetGuard || !trajectoryGuard || !validatorGuard || !contextGuard) {
+  throw new Error(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard, validatorGuard, contextGuard }));
 }
 
-console.log(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard }));
+console.log(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard, validatorGuard, contextGuard }));
 '@ | node --input-type=module 2>$null
     $nodeExitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'

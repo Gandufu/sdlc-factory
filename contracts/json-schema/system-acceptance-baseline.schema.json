@@ -4,13 +4,15 @@
   "title": "SystemAcceptanceBaseline",
   "type": "object",
   "additionalProperties": false,
-  "required": ["baseline_id", "system_acceptance_id", "project_id", "release_scope_id", "execution_plan_version", "participating_cu_baselines", "interface_version_bindings", "environment_binding_ref", "evidence_refs", "review_record_id", "content_hash", "validity_status", "created_at"],
+  "required": ["baseline_id", "system_acceptance_id", "project_id", "release_scope_id", "execution_plan_version", "validation_contract_ref", "validation_assertion_refs", "participating_cu_baselines", "interface_version_bindings", "environment_binding_ref", "evidence_refs", "review_record_id", "content_hash", "validity_status", "created_at"],
   "properties": {
     "baseline_id": { "type": "string", "minLength": 1 },
     "system_acceptance_id": { "type": "string", "pattern": "^SA-[A-Z0-9][A-Z0-9-]*$" },
     "project_id": { "type": "string", "minLength": 1 },
     "release_scope_id": { "type": "string", "minLength": 1 },
     "execution_plan_version": { "type": "integer", "minimum": 1 },
+    "validation_contract_ref": { "$ref": "#/$defs/validationContractRef" },
+    "validation_assertion_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "participating_cu_baselines": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/cuBaselineBinding" } },
     "interface_version_bindings": { "type": "array", "items": { "$ref": "#/$defs/versionBinding" }, "uniqueItems": true },
     "environment_binding_ref": { "type": "string", "minLength": 1 },
@@ -22,6 +24,11 @@
     "created_at": { "type": "string", "format": "date-time" }
   },
   "$defs": {
+    "validationContractRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "content_hash"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "integer", "minimum": 1 }, "content_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" } }
+    },
     "cuBaselineBinding": {
       "type": "object", "additionalProperties": false,
       "required": ["cu_id", "code_baseline_id", "test_baseline_id"],

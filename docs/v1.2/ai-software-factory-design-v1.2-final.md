@@ -18,7 +18,8 @@
 ```text
 项目初始化
 → 项目级需求分析 → Project RequirementBaseline
-→ 项目级总体设计与 CU 最终拆分 → Project DesignBaseline
+→ ValidationContract（验证合同）草案
+→ 项目级总体设计、CU 最终拆分与验证覆盖分配 → Project DesignBaseline + Frozen ValidationContract
 → DesignSliceManifest + ExecutionPlan
 → CU 独立 Coding → CodeBaseline
 → CU 独立 Testing → TestBaseline
@@ -70,6 +71,10 @@
 20. 单实例默认 `max_concurrent_runs = 1`；容量不足的请求进入 `QUEUED_FOR_CAPACITY`（等待容量），不记为失败，也不消耗重试预算。
 21. 执行人与审核人使用稳定身份标识。默认禁止同一人在同一作用域阶段同时担任主要执行人和审核人；本机单用户项目必须显式启用可审计的 `single_operator`（单操作员）豁免。
 22. FactoryTrajectoryEvent（工厂轨迹事件）只追加、只读且异步派生；它可以支持诊断和未来评估，但不能修改 Gate、Baseline、Run 或生命周期状态。
+23. ValidationContract 在正式 CU 拆分前先定义项目行为断言，完成 CU 覆盖分配后随 Project DesignBaseline 一起冻结；它是设计基线产物，不新增 LifecycleStage 或人工 Gate。
+24. MVP-A 使用 CapabilityIndex（能力索引）暴露紧凑发现元数据；Agent 只能提交 ContextExpansionRequest（上下文扩展请求），由 Context Assembler 决定是否加载完整 Schema、技能或资料并更新 ContextManifest。
+25. MVP-B 的 Validator Agent（验证智能体）必须使用独立新会话，只产生 ValidationFinding（验证发现），不得修改代码、批准 Gate、创建 Baseline 或直接启动修复。
+26. ValidationFinding 的修复由 Orchestrator 创建新 ExecutionSlice 并交给后续实现 Run；达到验证轮次、预算或重复错误阈值时停止并交还操作人员。
 
 ---
 
@@ -143,10 +148,12 @@ flowchart TD
 | Project Runner（项目执行器） | 命令、进程树、超时、输出、就绪、清理和证据 | 判断需求是否正确 |
 | Gate Service（门禁服务） | 校验产物、证据和审核前置条件，提交领域事务 | 从聊天文本猜测结论 |
 | Interface Registry（接口登记表） | 内外部接口、版本、兼容性、依赖和影响候选 | 自动批准接口变化 |
+| Validation Contract（验证合同） | 需求行为断言、验证方法、所需证据、环境义务和 CU 覆盖关系；随设计基线冻结 | 建立新生命周期或自行批准 Gate |
 | Production Asset Registry（生产资料登记表） | Agent、Prompt、Rule 与 Template 的不可变版本、发布状态、内容 Hash 和历史反查 | 在 Run 中解析可变的 `latest` |
 | Environment Registry（环境登记表） | 环境、外部系统、设备和 SecretRef（机密引用）绑定 | 保存凭据明文 |
 | System Acceptance（系统验收） | 跨 CU 场景、系统集成运行、人工审核和系统验收基线 | 取代 CU 自身 Code/Test Gate |
 | Observer（观察器） | Event（事件）、Span（跨度）、Token（令牌）、成本和诊断包 | 修改业务状态 |
+| Validator Agent（验证智能体） | 在独立新会话中执行 Scrutiny（审查）或 User-testing（用户测试），提交 ValidationFinding | 修改代码、批准 Gate、创建 Baseline 或直接返工 |
 | Artifact Inspector（产物检查器） | 结构、覆盖、Diff（差异）、Hash（哈希）和追溯检查 | 代替操作人员审批 |
 | Reconciler（对账器） | 发现孤立文件、遗留进程、过期 RuntimeLease 和引用损坏 | 静默伪造成功结果 |
 
@@ -192,6 +199,7 @@ Console / CLI / Agent Tool
 
 以下项目只吸收设计原则，不作为 MVP 依赖：
 
+- Factory.ai：采用“先验证合同、后任务拆分”、实现与验证新会话隔离、外部化共享状态和 Deferred Context（延迟上下文）；不采用其大规模并行 Missions、持久云机器或 Agent 自主 Gate 作为 MVP 基础。
 - OpenHands：采用控制台、Agent Server 和执行环境分离的思路；不采用其 Beta 平台作为 Factory Core，也不允许无提示的宿主文件系统全权限运行。
 - mini-SWE-agent 与 Aider：采用最小 Agent Loop（智能体循环）、有预算的失败反馈、Repo Map（仓库映射）和修改后确定性验证；不采用 Agent 自评成功或自动 Git 提交作为业务 Gate。
 - Backstage：采用版本化模板描述、参数 Schema、顺序 Action 和资产 Owner；不引入完整开发者门户，也不直接引用可变的上游示例模板。
@@ -217,6 +225,9 @@ erDiagram
     CAPABILITY_MAP ||--o{ CAPABILITY_UNIT : confirms
     CAPABILITY_UNIT }o--o{ CSCI : allocated_to
     PROJECT ||--o{ EXECUTION_PLAN : projects
+    PROJECT ||--o{ VALIDATION_CONTRACT : defines
+    VALIDATION_CONTRACT ||--o{ VALIDATION_ASSERTION : contains
+    VALIDATION_ASSERTION }o--o{ CAPABILITY_UNIT : covered_by
     EXECUTION_PLAN }o--o{ CAPABILITY_UNIT : schedules
     PROJECT ||--o{ SYSTEM_ACCEPTANCE : accepts
     SYSTEM_ACCEPTANCE }o--o{ CAPABILITY_UNIT : binds
@@ -238,6 +249,10 @@ erDiagram
     RUN }o--|| RULE_SET : uses
     TEMPLATE_BINDING }o--|| TEMPLATE_REGISTRATION : uses
     RUN ||--o{ EVIDENCE : produces
+    RUN ||--|| CAPABILITY_INDEX : discovers
+    CAPABILITY_INDEX ||--o{ CONTEXT_EXPANSION_REQUEST : expands
+    RUN ||--o{ VALIDATION_FINDING : reports
+    VALIDATION_ASSERTION ||--o{ VALIDATION_FINDING : evaluates
     RUN ||--o{ TELEMETRY_EVENT : emits
 ```
 
@@ -250,6 +265,10 @@ erDiagram
 | CapabilityUnit（能力单元） | 用户可理解的完整业务能力，也是最小业务审核与交付单元 |
 | CapabilityCandidate（能力候选） | 需求阶段识别的候选业务模块，尚未获得独立实现与交付资格 |
 | RequirementItem（需求项） | 项目 SRS 内带稳定 ID（标识）的具体需求；设计确认后可关联一个或多个 CU |
+| ValidationContract（验证合同） | 在 CU 拆分前形成、在设计基线中冻结的有限行为断言集合；固定验证方法、所需 Evidence、环境义务和 CU 覆盖关系 |
+| ValidationFinding（验证发现） | 独立 Validator 针对固定断言产生的结构化问题；不拥有代码修改权或 Gate 权威 |
+| CapabilityIndex（能力索引） | 当前 Run 可发现的工具、技能、插件与资料的紧凑元数据，不等于完整 Prompt 内容 |
+| ContextExpansionRequest（上下文扩展请求） | Agent 对索引条目提出的按需加载申请；解析、授权和 ContextManifest 更新由 Context Assembler 执行 |
 | CapabilityAllocation（能力分配） | 能力单元与一个或多个 CSCI 的多对多分配关系 |
 | LifecycleStage（生命周期阶段） | 带 `scope_type`/`scope_id` 的统一阶段；Requirement/Design 属于 Project，Coding/Testing 属于 CU |
 | DesignSliceManifest（设计切片清单） | CU 对项目需求与总体设计章节、数据归属、接口、依赖、验收标准和集成场景的引用清单 |
@@ -312,11 +331,12 @@ system_acceptance_id
 project_id
 release_scope_id
 execution_plan_version
+validation_contract_ref: { id, version, content_hash }
 participating_cu_baselines[]
   cu_id
   code_baseline_id
   test_baseline_id
-integration_scenarios[]
+validation_assertion_refs[]
 system_integration_run_id?
 environment_binding_ref?
 review_record_id?
@@ -336,8 +356,9 @@ flowchart LR
     I["Initialization（初始化）"] --> IG["初始化人工审核"]
     IG --> R["Project Requirement（项目需求）"]
     R --> RG["需求人工审核 / Project RequirementBaseline"]
-    RG --> D["Project Design（总体设计 + CU 最终拆分）"]
-    D --> DG["设计人工审核 / Project DesignBaseline"]
+    RG --> VC["ValidationContract 草案（先定义行为正确性）"]
+    VC --> D["Project Design（总体设计 + CU 最终拆分 + 断言覆盖分配）"]
+    D --> DG["设计人工审核 / Project DesignBaseline + Frozen ValidationContract"]
     DG --> PLAN["DesignSliceManifest + ExecutionPlan"]
     PLAN --> C["CU Coding（编码）"]
     C --> CG["代码人工审核 / CU CodeBaseline"]
@@ -435,18 +456,20 @@ stateDiagram-v2
 **Project Design（项目总体设计）**
 
 1. 只能读取已批准的 Project RequirementBaseline。
-2. 在同一次总体设计中完成系统与技术架构、全局数据模型、外部接口、CU 间接口、数据归属、跨 CU 流程、事务边界、异常处理和安全设计。
-3. 依据内聚性、独立编码、独立验证和独立交付能力确认最终 CU；菜单、按钮、单接口和单表不能成为 CU。
-4. Interface Registry（接口登记表）校验接口所有权、覆盖、兼容性和候选影响范围。
-5. 为每个正式 CU 生成 DesignSliceManifest，引用项目需求和总体设计章节，并记录数据归属、提供/消费接口、依赖、验收标准和集成场景。
-6. 信息不足时创建 ClarificationRequest（澄清请求）并进入 `OnHold`（挂起）状态。
-7. 操作人员审核总体设计、正式 CU 与依赖关系后形成唯一的 Project DesignBaseline；随后才能生成 ExecutionPlan 并启动 CU 生命周期。
+2. 在正式拆分 CU 前，根据 RequirementItem 建立 ValidationContract 草案，以有限行为断言明确 Given/When/Then、验证方法、验证能力、所需 Evidence、环境义务和阻塞级别。
+3. 在同一次总体设计中完成系统与技术架构、全局数据模型、外部接口、CU 间接口、数据归属、跨 CU 流程、事务边界、异常处理和安全设计。
+4. 依据内聚性、独立编码、独立验证和独立交付能力确认最终 CU；菜单、按钮、单接口和单表不能成为 CU。
+5. 将每条 Validation Assertion（验证断言）分配给一个或多个正式 CU；跨 CU 断言必须声明 `CROSS_CU`，不能降级为单 CU 自测。
+6. Interface Registry（接口登记表）校验接口所有权、覆盖、兼容性和候选影响范围。
+7. 为每个正式 CU 生成 DesignSliceManifest，引用项目需求、总体设计和 Validation Assertion，并记录数据归属、提供/消费接口、依赖和集成场景。
+8. 信息不足时创建 ClarificationRequest（澄清请求）并进入 `OnHold`（挂起）状态。
+9. 操作人员同时审核总体设计、正式 CU、依赖、ValidationContract 和断言覆盖关系；批准后形成唯一 Project DesignBaseline，并把对应 ValidationContract 版本冻结为该基线的不可变条目。随后才能生成 ExecutionPlan 并启动 CU 生命周期。
 
 ### 4.5 CU 级 Coding 与 Testing
 
 **Coding（编码）**
 
-1. Implementation Planner（实现规划器）只根据当前 CU 的 DesignSliceManifest 把实现拆为可独立验证的执行切片。
+1. Implementation Planner（实现规划器）只根据当前 CU 的 DesignSliceManifest 及其覆盖的 Validation Assertion，把实现拆为可独立验证的执行切片；每个切片声明它支持哪些断言，但不能修改断言内容。
 2. 所有切片在项目唯一工作目录中严格顺序执行；后一个切片承接前一个切片的已验证修改。
 3. 智能体只接收当前切片的目标、版本化提示词和已装配的上下文包。
 4. 智能体通过 `handoff_submit`（提交交接单）报告变更、验证和问题。
@@ -456,7 +479,7 @@ stateDiagram-v2
 
 **Testing（测试）**
 
-1. Test Agent（测试智能体）根据 Project RequirementBaseline、Project DesignBaseline、当前 DesignSliceManifest 和 CU CodeBaseline 生成 TestObligation（测试义务）与测试用例。
+1. Test Agent（测试智能体）根据冻结的 ValidationContract、当前 DesignSliceManifest 和 CU CodeBaseline 生成 TestObligation（测试义务）与测试用例；TestObligation 必须引用稳定 assertion ID，不能在实现后重写成功标准。
 2. 执行器执行完整单元、集成、接口、E2E（端到端）、设备或其他必测项。
 3. EnvironmentBindingSnapshot（环境绑定快照）固定代码、接口、环境、配置和设备资源。
 4. Mock（模拟）、Simulator（仿真器）、Sandbox（沙箱）、真实外部系统和真实设备的证据必须区分。
@@ -465,11 +488,13 @@ stateDiagram-v2
 
 跨 CU 业务场景可以放入 VerificationBatch，共享一次环境启动、接口联调、数据库测试、E2E 或设备测试。批次 Evidence 可以关联多个 CU 和场景，但每个 CU 仍分别进入 `AwaitingReview`、`OnHold`、`ChangesRequested` 或 `Approved`，并分别形成 TestBaseline。
 
+MVP-B 在 CU 累计实现完成和系统集成运行后增加独立 Validator Run。Scrutiny Validator 只审查固定基线、实际 Diff、实现轨迹和 Evidence；User-testing Validator 只依据 ValidationContract 从外部执行黑盒场景。两者必须使用 `FRESH_SESSION`（全新会话），只提交 ValidationFinding，不修改工作目录，也不拥有 Gate 权威。Orchestrator 把阻塞 Finding 转成新的修复 ExecutionSlice，由后续实现 Run 处理；每轮修复后必须重新执行确定性检查和独立验证。达到最大验证轮次、预算或重复 Finding 指纹时进入 `NeedsIntervention`。
+
 ### 4.6 系统集成与验收
 
 1. 只有发布范围内全部 CU 都具有当前有效的 CodeBaseline 与 TestBaseline，才能创建 System Integration Run；
-2. 系统集成运行执行已批准总体设计中的跨 CU 真实业务场景；架构只冻结场景、执行、证据和结果合同，由 Project Runtime Adapter 负责实际启动、就绪和清理。Playwright 可作为首个用户可见 E2E（端到端）场景实现候选，但不是系统验收的强制依赖；
-3. 运行通过后进入项目级 `SYSTEM_ACCEPTANCE` 审核，操作人员必须同时看到参与 CU 基线、接口版本、环境快照、场景结果、未解决问题和完整 Evidence；
+2. 系统集成运行执行冻结 ValidationContract 中 `CROSS_CU` 和 Project 级真实业务断言；架构只冻结断言、执行能力、证据和结果合同，由 Project Runtime Adapter 负责实际启动、就绪和清理。Playwright 可作为首个用户可见 E2E（端到端）实现候选，但不是系统验收的强制依赖；
+3. 确定性运行通过且独立 User-testing Validator 没有未处置的阻塞 Finding 后，才能进入项目级 `SYSTEM_ACCEPTANCE` 审核。操作人员必须同时看到 ValidationContract、参与 CU 基线、接口版本、环境快照、断言结果、ValidationFinding、未解决问题和完整 Evidence；
 4. 审核批准后形成 SystemAcceptanceBaseline，精确绑定参与 CU 的 Code/Test Baseline ID、接口版本、环境快照和系统集成 Evidence；
 5. 任一绑定的 CU 基线、接口版本或系统场景变更时，SystemAcceptanceBaseline 自动标记 `STALE`，系统发布验收随之失效；
 6. 验收失败只对有证据关联的 CU 创建返工或 ChangeProposal；其他 CU 的已批准基线继续有效，但系统必须重新完成受影响范围的集成运行与项目级验收。
@@ -480,6 +505,7 @@ stateDiagram-v2
 - 需求遗漏、数据归属错误、接口契约错误或 CU 拆分错误必须发起 ChangeProposal，不能伪装成代码修复。
 - Project RequirementBaseline 变化后，Project DesignBaseline 标记 `STALE`。
 - Project DesignBaseline 变化后，根据 DesignSliceManifest、Interface Registry 和 CU 依赖图计算影响，只使受影响 CU 的 CodeBaseline/TestBaseline 失效。
+- 冻结 ValidationContract 的断言、覆盖 CU、验证方法、证据类型或环境义务变化时，必须创建新版本并按需求、CU、接口和系统场景计算影响；不得原地修改旧合同。
 - 任一 SystemAcceptanceBaseline 所绑定的 CU Code/Test Baseline、接口版本或系统验收场景发生变化后，该系统验收基线标记 `STALE`；未受影响 CU 的自身基线不因此失效。
 
 ---
@@ -507,7 +533,45 @@ stateDiagram-v2
 INSPECTION | ANALYSIS | DEMONSTRATION | TEST
 ```
 
-### 5.2 Interface Registry（接口登记表）
+### 5.2 ValidationContract（验证合同）
+
+ValidationContract 是 Project DesignBaseline 的不可变组成产物，不是新的生命周期阶段。它在正式拆分 CU 前先形成行为断言草案，在总体设计完成 CU 边界和覆盖分配后冻结：
+
+```text
+validation_contract_id
+project_id
+version
+derived_from_requirement_baseline_id
+content_hash
+status: DRAFT | FROZEN | STALE
+assertions[]
+  assertion_id
+  scope_type: PROJECT | CAPABILITY_UNIT | CROSS_CU
+  scope_ref
+  requirement_refs[]
+  given
+  when
+  then
+  verification_method
+  verifier_capability_ref
+  required_evidence_types[]
+  environment_requirement_refs[]
+  covered_by_cu_ids[]
+  severity: BLOCKING | NON_BLOCKING
+frozen_by?
+frozen_at?
+invalidation?
+```
+
+规则：
+
+1. `FROZEN` 版本必须绑定具名冻结人和时间，并作为 Project DesignBaseline 的 `VALIDATION_CONTRACT` 条目保存内容 Hash；
+2. 每条断言至少引用一个 RequirementItem、一个验证能力、一类 Evidence 和一个覆盖 CU；
+3. `CROSS_CU` 断言至少由两个 CU 共同覆盖，并只能在系统集成或显式跨 CU VerificationBatch 中声明通过；
+4. 实现计划、测试义务和系统验收只能引用断言，不得为适配已有实现而重写断言；
+5. 断言变化创建新合同版本并触发影响分析，旧版本继续支持历史 Run 和审计回放。
+
+### 5.3 Interface Registry（接口登记表）
 
 InterfaceDefinition（接口定义）至少包含以下机器字段：
 
@@ -543,7 +607,7 @@ superseded_by?
 4. 接口变更通过提供者、消费者、CapabilityAllocation 和追溯图自动计算 `affected_cu_ids[]` 候选集，定位受影响的能力单元、CSCI、需求项、测试义务和环境绑定；
 5. 候选影响集不能被调用者静默缩小。确定性规则给出应失效范围，操作人员只能批准、扩大范围，或带理由 Override（覆盖）并留下审计记录。
 
-### 5.3 Environment（环境）与 ExternalDependency（外部依赖）
+### 5.4 Environment（环境）与 ExternalDependency（外部依赖）
 
 EnvironmentProfile（环境配置）至少包含以下机器字段：
 
@@ -625,6 +689,8 @@ created_at
 
 合法作用域为：Initialization/Requirement/Design/SystemAcceptance 使用 `PROJECT`，Code/Test 使用 `CAPABILITY_UNIT`。批准后不得原地修改；任何新内容都产生新的 Artifact Version（产物版本）和基线。ArtifactVersion、ReviewRecord 和 Gate 使用相同作用域字段，不能再把 `cu_id` 设为所有基线的必填字段。`signature_ref` 只预留不可变签名或外部存证引用，本版不冻结签名算法，也不把它作为通过前置条件。
 
+Project DesignBaseline 必须包含唯一冻结的 ValidationContract 版本及内容 Hash。ValidationContract 不单独产生 Baseline；它与总体设计、Capability Map、DesignSliceManifest 和接口版本共同接受同一次设计审核。
+
 ### 6.2 ChangeProposal（变更提案）
 
 ```text
@@ -647,7 +713,7 @@ decision
 3. 操作人员审核；
 4. 批准后形成新产物版本和基线；
 5. Project RequirementBaseline 变化时，直接将 Project DesignBaseline 标记 `STALE`（已过期）；
-6. Project DesignBaseline 变化时，通过 DesignSliceManifest、接口登记表和 CU 依赖图计算受影响 CU，只失效其 CodeBaseline/TestBaseline；
+6. Project DesignBaseline 或其 ValidationContract 变化时，通过断言覆盖关系、DesignSliceManifest、接口登记表和 CU 依赖图计算受影响 CU，只失效其 CodeBaseline/TestBaseline；
 7. 跨能力单元影响标记 `IMPACT_REVIEW_REQUIRED`（需要影响复核）；
 8. 任一已批准系统验收所绑定的基线、接口版本或验收场景被影响时，将对应 SystemAcceptanceBaseline 标记 `STALE`；
 9. 系统可以建议执行切片并重建 ExecutionPlan，但不自动修改代码或启动智能体。
@@ -784,9 +850,13 @@ context-plan.schema.json
 context-bundle.schema.json
 context-request.schema.json
 context-delta.schema.json
+capability-index.schema.json
+context-expansion-request.schema.json
 agent-invocation.schema.json
 handoff.schema.json
 evidence.schema.json
+validation-contract.schema.json
+validation-finding.schema.json
 gate-command.schema.json
 gate-result.schema.json
 interface-definition.schema.json
@@ -852,6 +922,8 @@ TemplateRegistration
   status: DRAFT | ACTIVE | DEPRECATED
 ```
 
+`role` 可取 `REQUIREMENT`、`DESIGN`、`CODER`、`TESTER`、`REVIEWER_ASSISTANT`、`SCRUTINY_VALIDATOR` 或 `USER_TESTING_VALIDATOR`。两个 Validator role 只能绑定只读检查能力和独立新会话策略；其输出合同固定为 ValidationFinding。
+
 通用治理规则：
 
 1. 生产资料发布前处于 `DRAFT`，通过一次具名发布确认后进入 `ACTIVE`；该确认不是交付物四阶段 Gate，但必须记录发布人、内容 Hash、理由和时间；
@@ -907,9 +979,21 @@ template_binding_ref?
 budget
 ```
 
-Context Selector（上下文选择器）只提供当前运行所需的基线、规则和引用，不重复注入全部历史聊天与整个资料库。Orchestrator 在创建 Run 时解析并固定生产资料引用；Stage Agent Adapter 只消费已完成版本绑定和 Prompt 构造的 AgentInvocation，不能把可变别名重新解析为其他内容。
+Context Assembler 只提供当前运行所需的基线、规则、引用和紧凑 CapabilityIndex，不重复注入全部历史聊天、完整工具 Schema 与整个资料库。Orchestrator 在创建 Run 时解析并固定生产资料引用；Stage Agent Adapter 只消费已完成版本绑定和 Prompt 构造的 AgentInvocation，不能把可变别名重新解析为其他内容。
 
-### 8.3 结构化 Handoff（交接单）
+### 8.3 Deferred Context（延迟上下文）
+
+MVP-A 使用 Discover → Promote → Reuse（发现—提升—复用）协议：
+
+1. **Discover**：Run 启动时生成 CapabilityIndex，每个条目只包含类型、名称、短描述、来源、版本、输入提示、权威等级、加载策略和内容 Hash；
+2. **Promote**：Agent 需要完整工具 Schema、技能、插件说明或资料时提交 ContextExpansionRequest；请求必须引用索引条目并说明与当前目标的关系；
+3. **Authorize**：Context Assembler 检查阶段、Agent role、RuleSet、来源权威、固定版本、Secret、预算和去重，不允许 Host 或 Agent 自行加载；
+4. **Load**：批准后由对应 Context Provider 读取内容，执行脱敏和 Hash 校验，更新 ContextManifest 后构造新的 AgentInvocation 增量；
+5. **Reuse**：已加载条目只在当前 Run 的上下文边界内复用。后续 Run 重新依据正式基线和索引计算，不能继承未经批准的聊天记忆。
+
+`APPROVED_BASELINE` 内容可以进入权威上下文；`REFERENCE` 只能作为带来源的参考；`EXECUTION_CAPABILITY` 只描述可调用能力。检索、AutoWiki、Memory、MCP、Skill 或 Plugin 的动态结果均不能覆盖正式基线。请求被拒绝或超预算时返回结构化原因；Agent 不得绕过 Context Assembler 直接扫描项目。
+
+### 8.4 结构化 Handoff（交接单）
 
 ```text
 handoff_submit
@@ -930,7 +1014,7 @@ handoff_submit
 - 智能体可以提出建议，但不能修改审核或交付状态；
 - 交接单丢失时运行失败，软件工厂不根据文件变化伪造“无问题”。
 
-### 8.4 Hook（钩子）
+### 8.5 Hook（钩子）
 
 钩子只允许捕获事件、建立关联、轻量安全保护和通知。钩子不执行长构建、完整测试、复杂智能体路由、门禁或状态迁移。
 
@@ -1092,6 +1176,33 @@ idempotency_key
 审核界面同时展示正式产物、上一版本 Diff（差异）、Handoff（交接单）、确定性检查、环境绑定、未解决问题和 Evidence（证据），不能只展示智能体总结。
 
 默认情况下，`reviewer_identity` 不能等于同一阶段的 `primary_executor_id`。本机单用户模式只能在 Project 配置中预先启用 `single_operator` 豁免；每次使用豁免仍必须记录审核人看到的证据、决定和理由，不能由系统静默自批。后续团队服务器模式必须关闭该豁免并接入认证、授权与不可抵赖审计。
+
+### 10.5 ValidationFinding（验证发现）与修复循环
+
+MVP-B 的独立 Validator 只输出以下结构化事实：
+
+```text
+finding_id
+project_id
+cu_id?
+implementation_run_id
+validator_run_id
+validation_type: SCRUTINY | USER_TESTING
+assertion_ref
+validator_agent_ref
+context_isolation: FRESH_SESSION
+severity: BLOCKING | NON_BLOCKING | SUGGESTION
+summary
+evidence_refs[]
+status: OPEN | ACKNOWLEDGED | RESOLVED | DISMISSED
+resolved_by_run_id?
+disposition_reason?
+code_mutation_allowed: false
+gate_authority: false
+created_at
+```
+
+实现 Run 与 Validator Run 必须不同；Validator Run 不挂载工作区写能力。阻塞 Finding 只能通过新实现 Run 的 Evidence 标记 `RESOLVED`，或由操作人员具名说明后标记 `DISMISSED`。Validator 不得自行重试至无限收敛：RunRequest 必须设置最大验证轮次、Validator 调用次数和 Token/成本预算；预算耗尽或相同 Finding 指纹重复出现时进入 `NeedsIntervention`。
 
 ---
 
@@ -1280,7 +1391,7 @@ ai-software-factory/
 ### M0：领域与合同冻结
 
 - 冻结 Project（项目）、CSCI、CapabilityCandidate（能力候选）、CU（能力单元）、RequirementItem（需求项）、DesignSliceManifest、ExecutionPlan、VerificationBatch、ExecutionSlice（执行切片）和 Run（运行）的唯一语义；
-- 冻结 InterfaceDefinition、AgentDefinition、PromptTemplate、RuleSet、TemplateRegistration、TemplateBinding、SystemAcceptance 和 FactoryTrajectoryEvent 的唯一语义；
+- 冻结 ValidationContract、ValidationFinding、CapabilityIndex、ContextExpansionRequest、InterfaceDefinition、AgentDefinition、PromptTemplate、RuleSet、TemplateRegistration、TemplateBinding、SystemAcceptance 和 FactoryTrajectoryEvent 的唯一语义；
 - 冻结初始化状态机、带作用域的 LifecycleStage、Guard（守卫条件）、Baseline（基线）和失效规则；
 - 冻结 OTel `factory.*` 自定义属性的 Schema 版本与语义；本阶段不要求部署 Collector 或外部观测后端；
 - 交付全部 P0（最高优先级）Schema（模式）、正反样例和 TCK（合同测试套件）；
@@ -1304,6 +1415,7 @@ ai-software-factory/
 
 - 用户一次提交完整项目需求；
 - 项目级 SRS（软件需求规格）、RequirementItem（需求项）、候选 CU 和验证方法；
+- 在正式 CU 拆分前形成 ValidationContract 草案，完成 CU 覆盖分配后随 Project DesignBaseline 冻结；
 - 项目级总体设计、最终 CU、CapabilityAllocation（能力分配）和 Capability Map（能力地图）；
 - Interface Registry（接口登记表）、EnvironmentProfile（环境配置）与 ExternalDependency（外部依赖）；
 - Project RequirementBaseline、Project DesignBaseline、DesignSliceManifest 和可重建 ExecutionPlan；
@@ -1314,14 +1426,14 @@ ai-software-factory/
 ### M3：OpenCode 单 CU 编码与测试闭环
 
 - 一个真实 OpenCode Host Adapter（宿主适配器）；
-- 确定性 Context Assembler、版本化 Prompt Builder 与 AgentInvocation；
+- 确定性 Context Assembler、CapabilityIndex、ContextExpansionRequest、版本化 Prompt Builder 与 AgentInvocation；
 - 结构化 Handoff（交接单）；
 - ExecutionSlice（执行切片）、单活动 Run、累计 ChangeSet（变更集）和单工作目录执行；
 - Gate（门禁）、EvidenceRef（证据引用）、状态事务与 Reconciler（对账器）；
 - TestObligation（测试义务）、EnvironmentBindingSnapshot（环境绑定快照）和追溯矩阵；
 - 测试四态、真实/Mock 证据分离、人工审核与 TestBaseline（测试基线）。
 
-退出标准：至少一个 Node 项目 CU 的多个切片在同一工作目录严格顺序执行，累计 Diff 通过权威检查并绑定精确 Git revision；该 CU 独立形成 CodeBaseline 与 TestBaseline。结果必须明确标注“CU 已交付，系统尚未验收”。
+退出标准：至少一个 Node 项目 CU 的多个切片在同一工作目录严格顺序执行，累计 Diff 通过权威检查并绑定精确 Git revision；CapabilityIndex 只暴露紧凑元数据，批准的 ContextExpansionRequest 可按固定版本加载并更新 ContextManifest；该 CU 独立形成 CodeBaseline 与 TestBaseline。结果必须明确标注“CU 已交付，系统尚未验收”。
 
 ### M4：恢复、变更与最薄控制台
 
@@ -1349,12 +1461,13 @@ ai-software-factory/
 - 项目 TemplateBinding 固定与一次显式模板升级影响评估；
 - 设计基线至少确认三个具有接口或业务依赖的 CU，并按依赖和同层优先级串行交付；
 - VerificationBatch（验证批次）可以共享环境和跨 CU 场景 Evidence，但各 CU 分别形成 TestBaseline；
+- Scrutiny Validator 与 User-testing Validator 使用全新会话、只读能力和独立 Run，输出 ValidationFinding；阻塞 Finding 通过新修复切片闭环，Validator 不得修改代码或批准 Gate；
 - 发布范围内至少三个 CU 完成后执行一次跨 CU System Integration Run；
 - SystemAcceptanceBaseline 绑定参与 CU 基线、接口、环境和 Evidence，并在任一绑定变化后正确失效；
 - 审核职责分离拦截与 `single_operator` 豁免审计；
 - 最小 FactoryTrajectoryEvent 本地 JSONL 与 Schema 回放。
 
-退出标准（MVP-B）：Spring Boot + Vue 项目的至少三个 CU 分别交付后，必须通过跨 CU 真实场景和项目级人工审核形成 SystemAcceptanceBaseline；任一绑定变化使系统验收失效，但不错误推翻未受影响 CU 的自身基线。
+退出标准（MVP-B）：Spring Boot + Vue 项目的至少三个 CU 分别交付后，必须由独立 Validator 对冻结断言完成审查和黑盒验证，并通过跨 CU 真实场景及项目级人工审核形成 SystemAcceptanceBaseline；任一绑定变化使系统验收失效，但不错误推翻未受影响 CU 的自身基线。
 
 ### M7：控制台与分析完善
 
@@ -1389,8 +1502,8 @@ ai-software-factory/
 1. 纯 Node 项目完成 `instantiate/compile/test/start/readiness/stop`（实例化/编译/测试/启动/就绪检查/停止）和初始化审核。
 2. 数据库迁移、状态事务、Outbox、幂等和重启恢复在真实 PostgreSQL 上通过，任何验收不得由 H2 结果替代。
 3. Windows 原生 Runner 能终止完整进程树；超时、取消和工厂异常退出后，可以识别活动 Run、RuntimeLease、工作目录 Git 状态和 Evidence。
-4. 用户一次提交完整需求，只形成一个 Project RequirementBaseline 和一个 Project DesignBaseline；需求阶段只产生候选 CU，设计阶段确认正式 CU 和 DesignSliceManifest。
-5. OpenCode 只通过 Host Adapter 接收已经装配的 AgentInvocation；Stage Agent Adapter 不读取资料、不选择上下文、不拼接 Prompt。
+4. 用户一次提交完整需求，只形成一个 Project RequirementBaseline 和一个 Project DesignBaseline；正式拆分 CU 前形成行为断言，设计阶段完成 CU 覆盖分配并把唯一 ValidationContract 冻结进设计基线。
+5. OpenCode 只通过 Host Adapter 接收已经装配的 AgentInvocation；启动上下文只包含紧凑 CapabilityIndex，完整能力或资料只能通过获批 ContextExpansionRequest 加载；Stage Agent Adapter 不读取资料、不选择上下文、不拼接 Prompt。
 6. 一个 CU 的多个 ExecutionSlice 在唯一工作目录中严格顺序执行，后一切片能够读取前一切片的已验证修改。
 7. CU 通过独立的编码、测试和人工审核形成 CodeBaseline 与 TestBaseline；输出必须明确“CU 已交付，系统尚未验收”。
 8. 缺少外部环境时，前置探针在 Run 启动前将 CU 置为 `OnHold`；恢复后由操作人员创建新运行。
@@ -1406,9 +1519,11 @@ ai-software-factory/
 3. Web—后端内部接口和外部接口均登记版本、消费者、环境和 SecretRef，接口变化产生可审计的影响候选集。
 4. 项目总体设计至少确认三个相关 CU；ExecutionPlan 按依赖拓扑和同层优先级串行调度，挂起 CU 不阻塞无依赖的 CU。
 5. 多个 CU 可以通过 VerificationBatch 共享环境与跨 CU Evidence，但必须分别形成 CodeBaseline 和 TestBaseline。
-6. 发布范围内全部 CU 交付后，仍必须执行跨 CU 真实场景并经项目级审核形成 SystemAcceptanceBaseline。
-7. 任一绑定 CU 基线、接口版本或系统验收场景变化后，SystemAcceptanceBaseline 自动变为 `STALE`，无关 CU 的自身基线保持有效。
-8. Project RequirementBaseline 变化使总体设计过期；Project DesignBaseline 变化只按 DesignSliceManifest、接口和依赖图失效受影响 CU。
+6. Scrutiny Validator 和 User-testing Validator 使用与实现者不同的独立 Run 和全新上下文，只读执行并提交 ValidationFinding；任何 Validator 修改代码或尝试批准 Gate 都被合同拒绝。
+7. 阻塞 Finding 由新的修复 ExecutionSlice 处理；达到最大轮次、预算或重复错误指纹后停止并交给操作人员。
+8. 发布范围内全部 CU 交付后，仍必须执行冻结 ValidationContract 中的跨 CU 真实断言，并经项目级审核形成 SystemAcceptanceBaseline。
+9. 任一绑定 CU 基线、接口版本、ValidationContract 或系统验收场景变化后，SystemAcceptanceBaseline 自动变为 `STALE`，无关 CU 的自身基线保持有效。
+10. Project RequirementBaseline 变化使总体设计过期；Project DesignBaseline 变化只按断言覆盖、DesignSliceManifest、接口和依赖图失效受影响 CU。
 
 任何“系统完整通过”声明必须同时具备：
 
@@ -1446,6 +1561,9 @@ MVP-A 只允许声明“基础闭环通过”和“单个 CU 已交付”；不�
 | Windows 原生执行缺少容器隔离 | 命令必须来自已发布 Adapter，限制工作目录和环境，终止完整进程树并保留审计；隔离需求成熟后再引入 Dagger Adapter |
 | 参考资料复现成本 | 默认 `detect-only`（仅检测），正式项目按实际读取内容去重快照 |
 | 智能体长推理和重复调用 | 运行预算、错误指纹、进展检测和执行切片拆分 |
+| 工具、技能和资料目录导致上下文稀释 | CapabilityIndex 只暴露紧凑元数据，完整内容通过受控 ContextExpansionRequest 按需加载 |
+| 实现 Agent 倾向自证正确 | MVP-B 使用全新只读 Validator Run；Finding 由新实现切片修复，最终 Gate 仍由确定性规则和人工决定 |
+| 独立验证循环成本失控 | 限制验证轮次、Validator 调用次数、Token/成本预算和重复 Finding 指纹，超限转人工 |
 | 自动重试污染上下文 | 新运行只使用正式基线、最新反馈和交接单 |
 | 日志不足导致无法定位早期 MVP 问题 | M0 即提供关联标识、诊断配置档和脱敏 |
 | 诊断日志泄密 | 机密信息提供器、写入前脱敏和诊断包脱敏报告 |
@@ -1461,7 +1579,8 @@ AI（人工智能）软件工厂 v1.2 的最终主线是：
 Project Initialization（项目初始化）
 → InitializationBaseline（初始化基线）
 → Project RequirementBaseline（项目需求基线）
-→ Project DesignBaseline（项目总体设计基线）
+→ ValidationContract Draft（验证合同草案）
+→ Project DesignBaseline + Frozen ValidationContract（项目总体设计基线与冻结验证合同）
 → Capability Map + DesignSliceManifest（能力地图与设计切片清单）
 → ExecutionPlan（执行计划）
 → CU Coding / CodeBaseline（能力单元编码/代码基线）
@@ -1472,11 +1591,11 @@ Project Initialization（项目初始化）
 → Project Release Accepted（系统发布已验收）
 ```
 
-项目需求和总体设计各执行一次，先建立全局业务规则、数据、接口与跨 CU 流程，再确认能够独立编码、验证和交付的 CU。CU 不再重复需求和设计阶段，而是通过 DesignSliceManifest 获取总体事实源中的必要上下文，并独立完成编码、测试、挂起、返工和交付。VerificationBatch 只复用测试环境与执行证据，不能取代 CU TestBaseline；多个 CU 分别交付也不能取代绑定精确版本与真实场景 Evidence 的 SystemAcceptanceBaseline。
+项目需求和总体设计各执行一次。设计阶段先依据需求定义有限、可验证的行为断言，再完成全局业务规则、数据、接口、跨 CU 流程和正式 CU 拆分，最终把覆盖关系完整的 ValidationContract 随 Project DesignBaseline 一起冻结。CU 不再重复需求和设计阶段，而是通过 DesignSliceManifest 引用总体事实源和稳定断言，并独立完成编码、测试、挂起、返工和交付。VerificationBatch 只复用测试环境与执行证据，不能取代 CU TestBaseline；多个 CU 分别交付也不能取代绑定精确版本、冻结断言与真实场景 Evidence 的 SystemAcceptanceBaseline。
 
 CSCI 管理配置、版本、部署和验证对象，CapabilityUnit（能力单元）管理业务交付，RequirementItem（需求项）表达具体需求，ExecutionSlice（执行切片）只承担内部调度。ExecutionPlan 由设计基线派生且可重建，v1.2 只按依赖和优先级串行执行；任一时刻只有一个活动业务 Run，其他请求以 `QUEUED_FOR_CAPACITY` 显式等待，所有切片共享项目唯一工作目录并依次承接修改。
 
-Factory（软件工厂）使用 Java 21、Spring Boot 3 模块化单体和 PostgreSQL 16+ 构成唯一控制平面，以 Vue 3 Web Console 提供操作入口。内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。MVP 首先接入 OpenCode，并通过 Windows 原生 Runner 执行受控命令；Dagger、Temporal、LangGraph 和其他多智能体框架都不进入 Factory Core。
+Factory（软件工厂）使用 Java 21、Spring Boot 3 模块化单体和 PostgreSQL 16+ 构成唯一控制平面，以 Vue 3 Web Console 提供操作入口。内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。MVP 首先接入 OpenCode，并通过 Windows 原生 Runner 执行受控命令；Context Assembler 使用 CapabilityIndex 与 ContextExpansionRequest 按需加载上下文；MVP-B 通过独立只读 Validator Run 提供反自证检查。Dagger、Temporal、LangGraph、Factory.ai Missions 和其他多智能体框架都不进入 Factory Core。
 
 Runner（执行器）、Gate（门禁）、Observer（观察器）、Interface Registry（接口登记表）、Production Asset Registry（生产资料登记表）、Environment Registry（环境登记表）、System Acceptance（系统验收）和 Reconciler（对账器）分别拥有明确职责；跨 PostgreSQL、Git、文件和进程的一致性由可对账协议保证，不声称拥有并不存在的全局事务。FactoryTrajectoryEvent 支持诊断和后续 Harness 学习闭环，但始终是只读派生信号，不能成为第二套业务事实源。
 

@@ -6,7 +6,7 @@
 
 ```text
 contracts/
-├─ json-schema/             # 13 个 Draft 2020-12 合同
+├─ json-schema/             # 17 个 Draft 2020-12 合同
 ├─ examples/
 │  ├─ valid/                # 每个合同一个正例
 │  └─ invalid/              # 每个合同一个反例
@@ -31,6 +31,10 @@ Schema 集合：
 - `factory-trajectory-event.schema.json`
 - `review-record.schema.json`
 - `baseline.schema.json`
+- `validation-contract.schema.json`
+- `validation-finding.schema.json`
+- `capability-index.schema.json`
+- `context-expansion-request.schema.json`
 
 ## 已冻结的裁决
 
@@ -41,6 +45,9 @@ Schema 集合：
 - `PromptTemplate` 是独立生产资料，不能只作为 AgentDefinition 内的松散路径和版本号。
 - ReviewRecord 完整表达职责分离；本机单用户只能使用带理由的 `SINGLE_OPERATOR_EXCEPTION`。
 - FactoryTrajectoryEvent 是 append-only（只追加）事实。DDL 使用触发器拒绝更新和删除；该表不引用 ReviewRecord 或 Baseline，也不能推进业务状态。
+- ValidationContract 在正式拆分 CU 前形成行为断言，完成 CU 覆盖分配后作为 Project DesignBaseline 的组成产物冻结；它不新增生命周期或 Gate。
+- MVP-A 使用 CapabilityIndex + ContextExpansionRequest 延迟加载完整工具、技能和资料；Agent 只能请求，Context Assembler 负责授权、版本解析、预算、脱敏和 ContextManifest 更新。
+- MVP-B 的 Scrutiny/User-testing Validator 必须使用全新会话，只能产生 ValidationFinding；合同固定 `code_mutation_allowed=false` 和 `gate_authority=false`。
 - 系统验收工具保持技术中立；Playwright 只是可能的首个实现，不进入机器合同。
 
 ## 验证
