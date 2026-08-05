@@ -1,11 +1,12 @@
-# AI 软件工厂系统设计方案 v1.1（最终版）
+# AI 软件工厂系统设计方案 v1.2（最终版）
 
 > 面向真实研发流程的 AI（人工智能）软件生产系统：项目级完成一次完整需求分析和总体设计，在设计基线中确认 CapabilityUnit（能力单元）；CU 随后独立编码、测试和交付。Spring Boot 控制平台管理状态、审核、调度、一致性和遥测，由可替换的 Agent Host（智能体宿主）与确定性 Runner（执行器）完成实际工作。
 
-- 状态：v1.1 架构基线，实施合同待冻结
+- 状态：v1.2 架构基线，实施合同待冻结
 - 日期：2026-08-05
 - 实测依据：[SDLC Pipeline 插件模式问题复盘](../research/sdlc-pipeline-plugin-mode-lessons-2026-08-03.md)
-- 当前裁决：进入“领域与机器合同冻结 + 纵向原型”，v1.1 全程只采用串行执行
+- 技术研究：[AI 软件工厂技术栈与 Harness 深度分析](../research/ai-software-factory-v1.1-technology-stack-analysis-2026-08-05.md)
+- 当前裁决：进入“领域与机器合同冻结 + 纵向原型”，v1.2 全程只采用串行执行
 
 ---
 
@@ -36,7 +37,7 @@
 
 ### 1.2 MVP 边界
 
-1. Factory（软件工厂）服务多个本地项目，但 v1.1 MVP（最小可用版本）选择**本机单用户模式**。
+1. Factory（软件工厂）服务多个本地项目，但 v1.2 MVP（最小可用版本）选择**本机单用户模式**。
 2. MVP 采用 Spring Boot 模块化单体、单实例部署和本地 Web Console（网页控制台）。
 3. 首期支持纯 Node 与 Spring Boot + Vue 两类模板资产。
 4. 首期接入一个真实智能体宿主；其他宿主通过合同测试和 Fake Adapter（模拟适配器）验证。
@@ -62,6 +63,12 @@
 14. 凭据只通过运行时 Secret（机密信息）通道注入，不进入需求、Prompt（提示词）、日志、交接单或 Git。
 15. 初始上下文由 Context Assembler（上下文装配器）确定性生成；智能体不能自行扫描项目或决定权威资料，只能提交结构化追加上下文请求。
 16. Stage Agent Adapter（阶段智能体适配器）只消费已经构造好的 AgentInvocation（智能体调用请求），不选择资料、不读取存储，也不拼接 Prompt。
+17. InterfaceDefinition（接口定义）、AgentDefinition（智能体定义）、PromptTemplate（提示词模板）、RuleSet（规则集）与 TemplateRegistration（模板注册）都是版本化生产资料；已发布版本不可原地修改，历史 Run 必须能按引用和内容 Hash 反查确切内容。
+18. CU 独立交付不等于系统交付；一个系统发布范围内的全部 CU 具有当前有效 TestBaseline 后，还必须完成跨 CU 系统集成运行和人工系统验收，形成 SystemAcceptanceBaseline（系统验收基线）。
+19. ExecutionPlan 仍是可重建调度投影，不承担系统发布或验收事实；SystemAcceptance（系统验收）绑定其版本和参与 CU 基线，但不把 ExecutionPlan 改造成新的生命周期实体。
+20. 单实例默认 `max_concurrent_runs = 1`；容量不足的请求进入 `QUEUED_FOR_CAPACITY`（等待容量），不记为失败，也不消耗重试预算。
+21. 执行人与审核人使用稳定身份标识。默认禁止同一人在同一作用域阶段同时担任主要执行人和审核人；本机单用户项目必须显式启用可审计的 `single_operator`（单操作员）豁免。
+22. FactoryTrajectoryEvent（工厂轨迹事件）只追加、只读且异步派生；它可以支持诊断和未来评估，但不能修改 Gate、Baseline、Run 或生命周期状态。
 
 ---
 
@@ -79,6 +86,8 @@ flowchart TD
     API --> LIFE["生命周期与审核"]
     API --> ORCH["Orchestrator（编排器）"]
     API --> CHANGE["Change Proposal（变更提案）"]
+    API --> ASSET["Production Asset Registry（生产资料登记表）"]
+    API --> ACCEPT["System Acceptance（系统验收）"]
 
     ORCH --> CTX["Context Assembler（上下文装配器）"]
     CTX --> SOURCE["Context Provider（上下文提供器）"]
@@ -123,6 +132,7 @@ flowchart TD
 | Lifecycle（生命周期） | 项目级与 CU 级阶段、作用域审核、基线、失效和完成判定 | 执行 Shell（命令行）命令 |
 | Planning（规划） | 从设计基线派生 ExecutionPlan，计算依赖、优先级、就绪和挂起状态 | 保存需求正文、决定 CU 边界或建立额外 Gate |
 | Orchestrator（编排器） | 执行切片、串行调度、单活动 Run、Retry（重试）、Stop（停止）和人工恢复 | 绕过门禁修改状态 |
+| Capacity Scheduler（容量调度器） | 单实例和项目配额、容量队列、公平选择与释放 | 把等待容量记成失败或隐式启用并行 |
 | Host Adapter（宿主适配器） | 原始输入捕获、会话启动、事件转换、能力探测和取消 | 生命周期真相 |
 | Context Assembler（上下文装配器） | 上下文选择、提供器调用、去重、预算、脱敏、顺序和上下文清单 | Agent Host 调用和生命周期迁移 |
 | Prompt Builder（提示词构建器） | 用版本化模板把任务、角色和上下文包构造成 AgentInvocation（智能体调用请求） | 选择资料或访问存储 |
@@ -132,14 +142,16 @@ flowchart TD
 | Project Runner（项目执行器） | 命令、进程树、超时、输出、就绪、清理和证据 | 判断需求是否正确 |
 | Gate Service（门禁服务） | 校验产物、证据和审核前置条件，提交领域事务 | 从聊天文本猜测结论 |
 | Interface Registry（接口登记表） | 内外部接口、版本、兼容性、依赖和影响候选 | 自动批准接口变化 |
+| Production Asset Registry（生产资料登记表） | Agent、Prompt、Rule 与 Template 的不可变版本、发布状态、内容 Hash 和历史反查 | 在 Run 中解析可变的 `latest` |
 | Environment Registry（环境登记表） | 环境、外部系统、设备和 SecretRef（机密引用）绑定 | 保存凭据明文 |
+| System Acceptance（系统验收） | 跨 CU 场景、系统集成运行、人工审核和系统验收基线 | 取代 CU 自身 Code/Test Gate |
 | Observer（观察器） | Event（事件）、Span（跨度）、Token（令牌）、成本和诊断包 | 修改业务状态 |
 | Artifact Inspector（产物检查器） | 结构、覆盖、Diff（差异）、Hash（哈希）和追溯检查 | 代替操作人员审批 |
 | Reconciler（对账器） | 发现孤立文件、遗留进程、过期 RuntimeLease 和引用损坏 | 静默伪造成功结果 |
 
 ### 2.2 外部 Seam（接缝）与 Adapter（适配器）
 
-v1.1 只冻结四类外部接口，各自独立版本化。以下英文名称是机器合同标识：
+v1.2 只冻结四类外部接口，各自独立版本化。以下英文名称是机器合同标识：
 
 ```text
 HostAdapter
@@ -148,7 +160,7 @@ ScaffoldTemplateAdapter
 ProjectRuntimeAdapter
 ```
 
-上下文提供器属于 Context Assembler（上下文装配器）的内部接缝。v1.1 不把每种资料来源都暴露为顶层 Factory Plugin（工厂插件），而是由上下文装配器通过统一的小接口管理多个提供器。
+上下文提供器属于 Context Assembler（上下文装配器）的内部接缝。v1.2 不把每种资料来源都暴露为顶层 Factory Plugin（工厂插件），而是由上下文装配器通过统一的小接口管理多个提供器。
 
 不设计包含大量可选方法的万能 `FactoryPlugin`（工厂插件）。只有存在两个真实实现，或一个真实实现加一个合同模拟器时，才把可替换点提升为稳定接缝；实现内部的技术栈细节不进入工厂应用接口。
 
@@ -183,6 +195,9 @@ erDiagram
     CAPABILITY_UNIT }o--o{ CSCI : allocated_to
     PROJECT ||--o{ EXECUTION_PLAN : projects
     EXECUTION_PLAN }o--o{ CAPABILITY_UNIT : schedules
+    PROJECT ||--o{ SYSTEM_ACCEPTANCE : accepts
+    SYSTEM_ACCEPTANCE }o--o{ CAPABILITY_UNIT : binds
+    SYSTEM_ACCEPTANCE ||--o| SYSTEM_ACCEPTANCE_BASELINE : approves
     CAPABILITY_UNIT ||--|| DESIGN_SLICE_MANIFEST : receives
     CAPABILITY_UNIT ||--o{ LIFECYCLE_STAGE : scopes
     LIFECYCLE_STAGE ||--o{ EXECUTION_SLICE : decomposes
@@ -194,6 +209,11 @@ erDiagram
     VERIFICATION_BATCH }o--o{ CAPABILITY_UNIT : verifies
     PROJECT ||--o{ INTERFACE_DEFINITION : registers
     PROJECT ||--o{ ENVIRONMENT_PROFILE : defines
+    PROJECT ||--o{ TEMPLATE_BINDING : pins
+    RUN }o--|| AGENT_DEFINITION : uses
+    RUN }o--|| PROMPT_TEMPLATE : uses
+    RUN }o--|| RULE_SET : uses
+    TEMPLATE_BINDING }o--|| TEMPLATE_REGISTRATION : uses
     RUN ||--o{ EVIDENCE : produces
     RUN ||--o{ TELEMETRY_EVENT : emits
 ```
@@ -212,6 +232,8 @@ erDiagram
 | DesignSliceManifest（设计切片清单） | CU 对项目需求与总体设计章节、数据归属、接口、依赖、验收标准和集成场景的引用清单 |
 | ExecutionPlan（执行计划） | 从 Project DesignBaseline 派生、可重建的运行时调度投影 |
 | VerificationBatch（验证批次） | 让多个 CU 共享一次环境启动和测试运行的执行容器，不拥有审核或交付状态 |
+| SystemAcceptance（系统验收） | 对一个系统发布范围执行跨 CU 真实场景并形成项目级验收结论；不替代各 CU 的 TestBaseline |
+| ProductionAssetVersion（生产资料版本） | Agent、Prompt、Rule 或 Template 的不可变已发布版本，以稳定 ID、版本和内容 Hash 标识 |
 | ExecutionSlice（执行切片） | 为智能体和执行器调度而拆分的内部技术切片 |
 | Run（运行） | 执行切片或项目操作的一次实际执行 |
 | Operation（操作） | 一次确定性项目动作及其结果，如 `compile`（编译）、`test`（测试）、`start`（启动） |
@@ -258,6 +280,28 @@ Project DesignBaseline
 
 ExecutionPlan 只保存 CU 依赖、同层优先级、就绪状态、执行顺序和挂起情况。CU 边界、数据归属、接口契约和依赖关系以 Project DesignBaseline 为权威事实源；这些内容变化必须走 ChangeProposal。操作人员可以直接调整同一依赖层内的优先级，因为这不改变设计事实。执行计划损坏或策略变化时可以从设计基线重新生成。
 
+### 3.5 SystemAcceptance（系统验收）
+
+SystemAcceptance 是项目级系统发布事实，不是 ExecutionPlan 的附属状态。它至少固定：
+
+```text
+system_acceptance_id
+project_id
+release_scope_id
+execution_plan_version
+participating_cu_baselines[]
+  cu_id
+  code_baseline_id
+  test_baseline_id
+integration_scenarios[]
+system_integration_run_id?
+environment_binding_ref?
+review_record_id?
+status: DRAFT | RUNNING | AWAITING_REVIEW | APPROVED | CHANGES_REQUESTED | STALE
+```
+
+`release_scope_id` 标识一次待交付的系统范围；首版默认包含当前 ExecutionPlan 的全部 CU。后续若支持分批发布，必须显式版本化发布范围，不能靠临时筛选条件改变既有验收语义。
+
 ---
 
 ## 4. 分层生命周期与审核
@@ -277,6 +321,10 @@ flowchart LR
     CG --> T["CU Testing（测试）"]
     T --> TG["测试人工审核 / CU TestBaseline"]
     TG --> DONE["CU 独立交付"]
+    DONE --> ALL{"发布范围内全部 CU\n具有当前有效 TestBaseline？"}
+    ALL -->|是| SI["System Integration Run（系统集成运行）"]
+    SI --> SA["系统级人工验收 / SystemAcceptanceBaseline"]
+    SA --> PD["Project Release Accepted（系统发布已验收）"]
 ```
 
 LifecycleStage（生命周期阶段）复用同一状态机、Gate 和 ReviewRecord，但必须显式声明作用域：
@@ -284,10 +332,10 @@ LifecycleStage（生命周期阶段）复用同一状态机、Gate 和 ReviewRec
 ```text
 scope_type: PROJECT | CAPABILITY_UNIT
 scope_id
-stage_type: REQUIREMENT | DESIGN | CODING | TESTING
+stage_type: REQUIREMENT | DESIGN | CODING | TESTING | SYSTEM_ACCEPTANCE
 ```
 
-合法组合只有 `PROJECT + REQUIREMENT`、`PROJECT + DESIGN`、`CAPABILITY_UNIT + CODING` 和 `CAPABILITY_UNIT + TESTING`。禁止为 CU 创建 Requirement/Design Stage，也禁止用项目级 Testing 替代 CU 测试审核。
+合法组合只有 `PROJECT + REQUIREMENT`、`PROJECT + DESIGN`、`CAPABILITY_UNIT + CODING`、`CAPABILITY_UNIT + TESTING` 和 `PROJECT + SYSTEM_ACCEPTANCE`。禁止为 CU 创建 Requirement/Design Stage，也禁止用项目级 Testing 或 SystemAcceptance 替代 CU 测试审核。
 
 ### 4.2 Project Initialization（项目初始化）状态机
 
@@ -394,12 +442,22 @@ stateDiagram-v2
 
 跨 CU 业务场景可以放入 VerificationBatch，共享一次环境启动、接口联调、数据库测试、E2E 或设备测试。批次 Evidence 可以关联多个 CU 和场景，但每个 CU 仍分别进入 `AwaitingReview`、`OnHold`、`ChangesRequested` 或 `Approved`，并分别形成 TestBaseline。
 
-### 4.6 缺陷返工与基线变更
+### 4.6 系统集成与验收
+
+1. 只有发布范围内全部 CU 都具有当前有效的 CodeBaseline 与 TestBaseline，才能创建 System Integration Run；
+2. 系统集成运行执行已批准总体设计中的跨 CU 真实业务场景；架构只冻结场景、执行、证据和结果合同，由 Project Runtime Adapter 负责实际启动、就绪和清理。Playwright 可作为首个用户可见 E2E（端到端）场景实现候选，但不是系统验收的强制依赖；
+3. 运行通过后进入项目级 `SYSTEM_ACCEPTANCE` 审核，操作人员必须同时看到参与 CU 基线、接口版本、环境快照、场景结果、未解决问题和完整 Evidence；
+4. 审核批准后形成 SystemAcceptanceBaseline，精确绑定参与 CU 的 Code/Test Baseline ID、接口版本、环境快照和系统集成 Evidence；
+5. 任一绑定的 CU 基线、接口版本或系统场景变更时，SystemAcceptanceBaseline 自动标记 `STALE`，系统发布验收随之失效；
+6. 验收失败只对有证据关联的 CU 创建返工或 ChangeProposal；其他 CU 的已批准基线继续有效，但系统必须重新完成受影响范围的集成运行与项目级验收。
+
+### 4.7 缺陷返工与基线变更
 
 - 实现缺陷从当前 CU 的 Testing 退回 Coding，创建新 Run 和新 CodeBaseline；旧 CodeBaseline 不原地修改，关联测试 Evidence 自动失效。
 - 需求遗漏、数据归属错误、接口契约错误或 CU 拆分错误必须发起 ChangeProposal，不能伪装成代码修复。
 - Project RequirementBaseline 变化后，Project DesignBaseline 标记 `STALE`。
 - Project DesignBaseline 变化后，根据 DesignSliceManifest、Interface Registry 和 CU 依赖图计算影响，只使受影响 CU 的 CodeBaseline/TestBaseline 失效。
+- 任一 SystemAcceptanceBaseline 所绑定的 CU Code/Test Baseline、接口版本或系统验收场景发生变化后，该系统验收基线标记 `STALE`；未受影响 CU 的自身基线不因此失效。
 
 ---
 
@@ -449,9 +507,18 @@ version
 compatibility_policy
 environment_bindings[]
 baseline_status
+status: DRAFT | PUBLISHED | DEPRECATED
+published_from_design_baseline_id?
+superseded_by?
 ```
 
-接口变更通过依赖图定位受影响的能力单元、CSCI、需求项、测试义务和环境绑定。影响计算只生成候选集，是否失效或返工由确定性规则与操作人员决定。
+生命周期规则：
+
+1. 设计阶段先创建 `DRAFT`（草稿）接口；
+2. Project DesignBaseline 审核通过后，与该基线绑定的接口版本原子转为 `PUBLISHED`（已发布）；
+3. 已发布版本不可原地修改。ChangeProposal 批准后创建新版本，旧版本设置 `superseded_by`，并在无当前消费者后才允许进入 `DEPRECATED`（已弃用）；
+4. 接口变更通过提供者、消费者、CapabilityAllocation 和追溯图自动计算 `affected_cu_ids[]` 候选集，定位受影响的能力单元、CSCI、需求项、测试义务和环境绑定；
+5. 候选影响集不能被调用者静默缩小。确定性规则给出应失效范围，操作人员只能批准、扩大范围，或带理由 Override（覆盖）并留下审计记录。
 
 ### 5.3 Environment（环境）与 ExternalDependency（外部依赖）
 
@@ -467,9 +534,12 @@ device_resources[]
 network_constraints[]
 secret_refs[]
 health_checks[]
+preflight_probes[]
 test_data_refs[]
 owner
 ```
+
+每个 `preflight_probe` 至少包含稳定 ID、探测类型、无机密命令模板或受限探针引用、适用阶段、超时和期望结果。需求阶段声明环境义务，设计阶段把义务绑定到 EnvironmentProfile；Orchestrator 在进入依赖该环境的 Run 前执行探测。缺少设备、外部系统、测试数据或 SecretRef 时，直接进入 `OnHold`，记录明确原因并释放活动执行权，不等待测试过程偶然失败。
 
 EnvironmentBindingSnapshot（环境绑定快照）固定以下内容：
 
@@ -506,6 +576,7 @@ Project RequirementBaseline
 Project DesignBaseline
 CU CodeBaseline
 CU TestBaseline
+SystemAcceptanceBaseline
 ```
 
 基线不是单文件指针，而是一组不可变条目：
@@ -514,7 +585,7 @@ CU TestBaseline
 baseline_id
 scope_type: PROJECT | CAPABILITY_UNIT
 scope_id
-baseline_type: INITIALIZATION | REQUIREMENT | DESIGN | CODE | TEST
+baseline_type: INITIALIZATION | REQUIREMENT | DESIGN | CODE | TEST | SYSTEM_ACCEPTANCE
 artifact_version
 content_hash
 source_revision?
@@ -523,12 +594,13 @@ items[]
   artifact_ref
   content_hash
 review_record_id
+signature_ref?
 reference_bindings[]
 validity_status
 created_at
 ```
 
-合法作用域为：Initialization/Requirement/Design 使用 `PROJECT`，Code/Test 使用 `CAPABILITY_UNIT`。批准后不得原地修改；任何新内容都产生新的 Artifact Version（产物版本）和基线。ArtifactVersion、ReviewRecord 和 Gate 使用相同作用域字段，不能再把 `cu_id` 设为所有基线的必填字段。
+合法作用域为：Initialization/Requirement/Design/SystemAcceptance 使用 `PROJECT`，Code/Test 使用 `CAPABILITY_UNIT`。批准后不得原地修改；任何新内容都产生新的 Artifact Version（产物版本）和基线。ArtifactVersion、ReviewRecord 和 Gate 使用相同作用域字段，不能再把 `cu_id` 设为所有基线的必填字段。`signature_ref` 只预留不可变签名或外部存证引用，本版不冻结签名算法，也不把它作为通过前置条件。
 
 ### 6.2 ChangeProposal（变更提案）
 
@@ -554,7 +626,8 @@ decision
 5. Project RequirementBaseline 变化时，直接将 Project DesignBaseline 标记 `STALE`（已过期）；
 6. Project DesignBaseline 变化时，通过 DesignSliceManifest、接口登记表和 CU 依赖图计算受影响 CU，只失效其 CodeBaseline/TestBaseline；
 7. 跨能力单元影响标记 `IMPACT_REVIEW_REQUIRED`（需要影响复核）；
-8. 系统可以建议执行切片并重建 ExecutionPlan，但不自动修改代码或启动智能体。
+8. 任一已批准系统验收所绑定的基线、接口版本或验收场景被影响时，将对应 SystemAcceptanceBaseline 标记 `STALE`；
+9. 系统可以建议执行切片并重建 ExecutionPlan，但不自动修改代码或启动智能体。
 
 ### 6.3 参考资料与 ReferenceBinding（引用绑定）
 
@@ -696,13 +769,83 @@ gate-result.schema.json
 interface-definition.schema.json
 environment-profile.schema.json
 environment-binding.schema.json
+environment-requirement.schema.json
 test-obligation.schema.json
 test-suite-result.schema.json
 telemetry-event.schema.json
+factory-trajectory-event.schema.json
+factory-run-budget.schema.json
+agent-definition.schema.json
+prompt-template.schema.json
+rule-set.schema.json
+template-registration.schema.json
+template-binding.schema.json
+system-acceptance.schema.json
+system-acceptance-baseline.schema.json
+review-record.schema.json
+baseline.schema.json
 error-envelope.schema.json
 ```
 
 每份模式必须具有有效、无效、缺字段、版本兼容和幂等重放样例。Template（模板）、Runner（执行器）、Host Adapter（宿主适配器）和 Context Provider（上下文提供器）共用各自的合同测试套件；合同模拟器与真实实现必须通过相同测试。
+
+### 7.5 Production Asset Registry（生产资料登记表）
+
+Factory 统一登记以下四类生产资料：
+
+```text
+AgentDefinition
+  agent_id
+  version
+  role
+  model_binding_ref
+  prompt_template_ref
+  capability_tags[]
+  content_hash
+  status: DRAFT | ACTIVE | DEPRECATED
+
+PromptTemplate
+  prompt_id
+  version
+  applicable_stage
+  content_ref
+  content_hash
+  status: DRAFT | ACTIVE | DEPRECATED
+
+RuleSet
+  ruleset_id
+  version
+  applicable_stage
+  stack_tags[]
+  content_ref
+  content_hash
+  status: DRAFT | ACTIVE | DEPRECATED
+
+TemplateRegistration
+  template_id
+  version
+  descriptor_ref
+  digest
+  status: DRAFT | ACTIVE | DEPRECATED
+```
+
+通用治理规则：
+
+1. 生产资料发布前处于 `DRAFT`，通过一次具名发布确认后进入 `ACTIVE`；该确认不是交付物四阶段 Gate，但必须记录发布人、内容 Hash、理由和时间；
+2. `ACTIVE` 版本不可原地修改，也不能让 `latest` 成为 Run 的持久化引用；更新必须创建新版本；
+3. Project 通过 TemplateBinding 固定模板版本。模板升级不强制迁移在研项目；显式升级前必须根据描述符和协议差异生成影响报告，必要时走 ChangeProposal；
+4. `DEPRECATED` 只阻止新绑定，不破坏历史 Run、InitializationBaseline 或可复现回放；
+5. AgentDefinition、PromptTemplate 与 RuleSet 分别版本化，Run 同时绑定三者，避免只更新 Prompt 却伪装成同一 Agent 版本。
+
+```text
+TemplateBinding
+  project_id
+  template_id
+  template_version
+  template_digest
+  bound_at
+  binding_reason
+```
 
 ---
 
@@ -734,13 +877,14 @@ objective
 baseline_refs[]
 reference_bindings[]
 environment_binding_ref?
-rules_version
-prompt_version
-agent_version
+agent_definition_ref: { id, version, content_hash }
+prompt_template_ref: { id, version, content_hash }
+rule_set_ref: { id, version, content_hash }
+template_binding_ref?
 budget
 ```
 
-Context Selector（上下文选择器）只提供当前运行所需的基线、规则和引用，不重复注入全部历史聊天与整个资料库。
+Context Selector（上下文选择器）只提供当前运行所需的基线、规则和引用，不重复注入全部历史聊天与整个资料库。Orchestrator 在创建 Run 时解析并固定生产资料引用；Stage Agent Adapter 只消费已完成版本绑定和 Prompt 构造的 AgentInvocation，不能把可变别名重新解析为其他内容。
 
 ### 8.3 结构化 Handoff（交接单）
 
@@ -783,11 +927,23 @@ handoff_submit
 | 大任务 | 拆分执行切片，禁止无限延长 Deadline（截止时间） |
 | 计数限制 | 文件、Token（令牌）、工具次数默认用于观测和告警，不直接裁决业务失败 |
 | 全局执行 | 同一 Factory 实例任一时刻只允许一个活动业务 Run |
+| 容量等待 | 无活动执行权的请求进入 `QUEUED_FOR_CAPACITY`，不计入失败或重试预算 |
 | CU 调度 | 按依赖图拓扑排序，再按同层业务优先级排序；一次只执行一个 CU |
 | CU 内切片 | 严格顺序执行；后一个切片承接前一个切片的已验证修改 |
 | 挂起跳过 | CU 进入 OnHold 后重新计算其他 CU 就绪状态，不阻塞无依赖的 CU |
 
 ### 9.2 单工作目录与单活动 Run
+
+首版容量合同显式定义为：
+
+```text
+FactoryRunBudget
+  max_concurrent_runs: 1
+  per_project_quota: 1
+  priority_policy: DEPENDENCY_THEN_BUSINESS_PRIORITY_THEN_FIFO
+```
+
+这不是并行执行开关。它把“等待唯一活动执行权”从隐式实现细节提升为可观测、可恢复的正常队列状态。未来若提高并发数，必须先引入工作目录隔离、锁与恢复合同，并发布新的架构基线。
 
 ```text
 project_id
@@ -893,11 +1049,15 @@ Run 为 RUNNING、进程不存在
 review_id
 scope_type: PROJECT | CAPABILITY_UNIT
 scope_id
-stage_type: REQUIREMENT | DESIGN | CODING | TESTING
+stage_type: REQUIREMENT | DESIGN | CODING | TESTING | SYSTEM_ACCEPTANCE
 baseline_candidate_ref
 artifact_hashes[]
 source_revision?
 reviewer_identity
+reviewer_role: DEVELOPER | REVIEWER | RELEASE_MANAGER
+primary_executor_id?
+separation_policy: ENFORCED | SINGLE_OPERATOR_EXCEPTION
+exception_reason?
 decision: APPROVED | CHANGES_REQUESTED
 comments
 reviewed_at
@@ -905,6 +1065,8 @@ idempotency_key
 ```
 
 审核界面同时展示正式产物、上一版本 Diff（差异）、Handoff（交接单）、确定性检查、环境绑定、未解决问题和 Evidence（证据），不能只展示智能体总结。
+
+默认情况下，`reviewer_identity` 不能等于同一阶段的 `primary_executor_id`。本机单用户模式只能在 Project 配置中预先启用 `single_operator` 豁免；每次使用豁免仍必须记录审核人看到的证据、决定和理由，不能由系统静默自批。后续团队服务器模式必须关闭该豁免并接入认证、授权与不可抵赖审计。
 
 ---
 
@@ -918,6 +1080,33 @@ idempotency_key
 | Operational Log（运行日志） | 运行诊断；可调整级别和保留期 |
 | Telemetry（遥测） | 耗时、令牌、成本和 Span（跨度）；可异步聚合 |
 | Evidence（证据） | 支撑门禁的正式证据；不受日志级别影响 |
+| FactoryTrajectoryEvent（工厂轨迹事件） | 公开输出、工具轨迹、版本绑定、运行结果和人工反馈的只追加分析信号；不拥有业务状态 |
+
+最小 FactoryTrajectoryEvent 至少包含：
+
+```text
+event_id
+occurred_at
+project_id
+cu_id?
+slice_id?
+run_id
+attempt_id
+trace_id
+authority_refs[]
+variant_binding
+  agent_definition_ref
+  prompt_template_ref
+  rule_set_ref
+  model_ref
+  tool_schema_version
+  context_bundle_hash
+outcome: PASSED | FAILED | BLOCKED | CANCELLED
+event_type
+payload_ref?
+```
+
+首版写入本地 JSONL，并固定 Schema 与 `factory.*` 语义版本。它由业务事实异步派生，写入失败不能回滚 Gate 或伪造 Run 失败；同样，轨迹分析、自动评分或外部观测后端也不能反向推进生命周期。原始私有思维链不属于必须采集的数据，只保留供应商公开摘要和可验证的外显轨迹。
 
 ### 11.2 诊断 Profile（配置档）
 
@@ -1017,9 +1206,12 @@ ai-software-factory/
 │  ├─ lifecycle/
 │  ├─ planning/
 │  ├─ orchestration/
+│  ├─ capacity-scheduling/
 │  ├─ review/
 │  ├─ interface-registry/
+│  ├─ production-asset-registry/
 │  ├─ environment-registry/
+│  ├─ system-acceptance/
 │  ├─ change-proposal/
 │  ├─ host-adapter/
 │  ├─ template-adapter/
@@ -1061,7 +1253,9 @@ ai-software-factory/
 ### M0：领域与合同冻结
 
 - 冻结 Project（项目）、CSCI、CapabilityCandidate（能力候选）、CU（能力单元）、RequirementItem（需求项）、DesignSliceManifest、ExecutionPlan、VerificationBatch、ExecutionSlice（执行切片）和 Run（运行）的唯一语义；
+- 冻结 InterfaceDefinition、AgentDefinition、PromptTemplate、RuleSet、TemplateRegistration、TemplateBinding、SystemAcceptance 和 FactoryTrajectoryEvent 的唯一语义；
 - 冻结初始化状态机、带作用域的 LifecycleStage、Guard（守卫条件）、Baseline（基线）和失效规则；
+- 冻结 OTel `factory.*` 自定义属性的 Schema 版本与语义；本阶段不要求部署 Collector 或外部观测后端；
 - 交付全部 P0（最高优先级）Schema（模式）、正反样例和 TCK（合同测试套件）；
 - 提供 Fake Host（模拟宿主）、Template（模板）和 Runner（执行器）；
 - 从第一天提供关联标识、Audit Event（审计事件）、最小诊断日志、脱敏和恢复元数据。
@@ -1092,7 +1286,8 @@ ai-software-factory/
 - 项目级 SRS（软件需求规格）、RequirementItem（需求项）、候选 CU 和验证方法；
 - 项目级总体设计、最终 CU、CapabilityAllocation（能力分配）和 Capability Map（能力地图）；
 - Interface Registry（接口登记表）、EnvironmentProfile（环境配置）与 ExternalDependency（外部依赖）；
-- Project RequirementBaseline、Project DesignBaseline、DesignSliceManifest 和可重建 ExecutionPlan。
+- Project RequirementBaseline、Project DesignBaseline、DesignSliceManifest 和可重建 ExecutionPlan；
+- InterfaceDefinition 的 Draft/Published/Deprecated 生命周期，以及从消费者与追溯图自动生成的影响候选集。
 
 退出标准：一次完整需求输入形成唯一的项目需求与设计基线，至少确认三个相关 CU，并可从任一 DesignSliceManifest 追溯跨 CU 接口、依赖和验收场景。
 
@@ -1101,7 +1296,7 @@ ai-software-factory/
 - 一个真实 Host Adapter（宿主适配器）；
 - 结构化 Handoff（交接单）；
 - ExecutionSlice（执行切片）、单活动 Run、累计 ChangeSet（变更集）和单工作目录执行；
-- Gate（门禁）、EvidenceRef（证据引用）、状态事务与 Reconciler（对账器）。
+- Gate（门禁）、EvidenceRef（证据引用）、状态事务与 Reconciler（对账器）；
 - 依赖拓扑排序、同层优先级和 CU/切片严格顺序执行。
 
 退出标准：多个执行切片在同一工作目录中依次完成，最终累计 Diff 通过权威检查并绑定精确 Git revision（源码修订）。
@@ -1118,21 +1313,33 @@ ai-software-factory/
 
 ### M6：调度、变更与恢复
 
-- CU 挂起跳过、就绪重算、单活动 Run 和人工恢复；
+- CU 挂起跳过、就绪重算、`QUEUED_FOR_CAPACITY`、单活动 Run 和人工恢复；
 - ChangeProposal（变更提案）和跨能力单元影响；
 - 软件工厂异常退出、孤立进程、工作目录、证据和 RuntimeLease 对账；
 - 工作目录脏状态与修订漂移的人工处置流程。
 
 退出标准：重启和工作目录漂移均有确定结果，一个 CU 挂起不阻塞无关 CU，设计变化只失效受影响 CU。
 
-### M7：控制台与分析
+### M7：系统治理与验收闭环
+
+- Agent/Prompt/Rule/Template 的不可变版本注册、具名发布确认和历史 Run 反查；
+- 项目 TemplateBinding 固定与一次显式模板升级影响评估；
+- 发布范围内至少三个 CU 完成后执行一次跨 CU System Integration Run；
+- SystemAcceptanceBaseline 绑定参与 CU 基线、接口、环境和 Evidence，并在任一绑定变化后正确失效；
+- 审核职责分离拦截与 `single_operator` 豁免审计；
+- 最小 FactoryTrajectoryEvent 本地 JSONL 与 Schema 回放。
+
+退出标准：系统交付不能由 CU 分别通过冒充；任一历史 Run 可反查确切生产资料内容，系统验收失效不错误推翻未受影响 CU 的自身基线，轨迹写入不拥有业务状态。
+
+### M8：控制台与分析
 
 - 初始化、项目级需求/设计审核与 CU 级编码/测试审核 UI；
 - Capability Map、接口/环境/追溯视图；
+- 生产资料版本、容量队列、系统验收和职责分离告警视图；
 - 诊断包、成本和版本基线比较；
 - Markdown/Word/PDF 只读装配导出。
 
-退出标准：Operator（操作人员）能在同一控制台完成分层生命周期检查、人工恢复和能力单元交付。
+退出标准：Operator（操作人员）能在同一控制台完成分层生命周期检查、人工恢复、能力单元交付和系统发布验收。
 
 ---
 
@@ -1156,11 +1363,16 @@ ai-software-factory/
 7. ExecutionPlan 按依赖拓扑和同层优先级顺序调度；当前 CU 挂起后跳过它，继续无依赖阻塞的 CU。
 8. 同一能力单元的多个执行切片在唯一工作目录中严格顺序执行，后一切片能够直接读取前一切片的已验证修改。
 9. 多个 CU 可通过 VerificationBatch 共享跨 CU 测试执行和 Evidence，但分别形成 TestBaseline。
-10. 单点登录或真实设备不可用时相关 CU 测试为 `BLOCKED`（阻塞），恢复后由操作人员创建新运行。
-11. 执行器运行中强制终止软件工厂，重启后识别遗留进程、活动 Run、工作目录 Git 状态和证据。
-12. Project RequirementBaseline 变化使总体设计过期；Project DesignBaseline 或接口版本变化只使受影响 CU 的代码和测试基线失效。
-13. `detect-only` 检测参考 Hash 变化，`reproducible` 恢复实际读取过的旧内容。
-14. `e2e` 诊断级别仍不输出密码、Token、Authorization Header 或完整凭据命令。
+10. 发布范围内三个 CU 全部交付后，系统仍需执行跨 CU 真实场景并经项目级审核形成 SystemAcceptanceBaseline；任一绑定 CU 新基线产生后，系统验收自动失效，但无关 CU 基线保持有效。
+11. 单点登录或真实设备不可用时，前置探针在 Run 启动前将相关 CU 置为 `OnHold`；恢复后由操作人员创建新运行。
+12. 第二个就绪 Run 请求进入 `QUEUED_FOR_CAPACITY`，第一个 Run 释放执行权后再按确定性策略启动；等待不消耗重试预算。
+13. 同一身份执行并审核同一阶段时默认被拦截；本机单用户项目只有显式启用并记录豁免才能继续。
+14. 执行器运行中强制终止软件工厂，重启后识别遗留进程、活动 Run、容量队列、工作目录 Git 状态和证据。
+15. Project RequirementBaseline 变化使总体设计过期；Project DesignBaseline 或接口版本变化只使受影响 CU 的代码和测试基线失效。
+16. 任一历史 Run 可通过固定引用和内容 Hash 恢复当时的 Agent、Prompt、Rule 与 Template 版本；注册表不存在可变 `latest` 引用。
+17. `detect-only` 检测参考 Hash 变化，`reproducible` 恢复实际读取过的旧内容。
+18. FactoryTrajectoryEvent 写入失败不改变 Run/Gate 结果，回放也不能推进生命周期。
+19. `e2e` 诊断级别仍不输出密码、Token、Authorization Header 或完整凭据命令。
 
 任何“完整通过”声明必须同时具备：
 
@@ -1168,7 +1380,8 @@ ai-software-factory/
 - 项目级需求/设计与 CU 级编码/测试的人工审核；
 - 当前源码、接口、环境和测试证据的精确绑定；
 - 最终产物符合性与未解决问题披露；
-- CU 交付决定。
+- CU 交付决定；
+- 当前发布范围的 SystemAcceptanceBaseline；若只声明单个 CU 交付，则必须明确不代表系统已验收。
 
 业务代码能运行不能替代 Factory Gate（工厂门禁）；所有单元测试通过也不能替代真实 Host（宿主）、Git、模板、环境和业务验收集成。
 
@@ -1182,6 +1395,12 @@ ai-software-factory/
 | 需求过早按 CU 局部化 | 项目级分析一次完整需求，总体设计后再确认 CU 与切片清单 |
 | CSCI 与能力单元关系复杂 | 使用 CapabilityAllocation（能力分配），不建立双生命周期 |
 | 模板协议演变 | 独立版本、能力探测、Schema（模式）样例和 TCK（合同测试套件） |
+| Agent/Prompt/Rule/Template 版本漂移 | Production Asset Registry 保存不可变版本和内容 Hash，Run 固定精确引用，禁止持久化 `latest` |
+| 各 CU 分别通过但系统组合失败 | 独立 System Integration Run、项目级审核和 SystemAcceptanceBaseline，绑定变化后自动失效 |
+| 接口消费者漏标导致影响范围不足 | 从已发布接口、消费者和追溯图自动生成候选影响集；缩小范围必须显式 Override 并审计 |
+| 测试执行中才发现设备或外部系统缺失 | 需求声明环境义务、设计绑定环境、Run 前执行受限前置探针并进入可恢复 OnHold |
+| 本机单用户形成自证通过 | 默认职责分离；单操作员只能使用项目级显式豁免，逐次记录证据、理由和决定 |
+| Harness 或观测后端侵入业务状态 | FactoryTrajectoryEvent 只追加、异步派生，任何分析和写入失败都不得修改 Gate/Baseline/Run |
 | 串行 Run 中途失败留下脏目录 | 保存 base revision、累计 Diff、Handoff 和 Evidence，人工确认后继续或放弃 |
 | 环境或设备不可用 | 当前 Run 明确进入 `BLOCKED`/`OnHold`，释放执行权并调度下一个就绪 CU |
 | 文件、Git、数据库无法原子提交 | 内容寻址、数据库事务引用、Outbox（事务发件箱）和 Reconciler（对账器） |
@@ -1196,7 +1415,7 @@ ai-software-factory/
 
 ## 16. 最终结论
 
-AI（人工智能）软件工厂 v1.1 的最终主线是：
+AI（人工智能）软件工厂 v1.2 的最终主线是：
 
 ```text
 Project Initialization（项目初始化）
@@ -1208,12 +1427,15 @@ Project Initialization（项目初始化）
 → CU Coding / CodeBaseline（能力单元编码/代码基线）
 → CU Testing / TestBaseline（能力单元测试/测试基线）
 → CU Delivered（能力单元已交付）
+→ System Integration Run（系统集成运行）
+→ SystemAcceptanceBaseline（系统验收基线）
+→ Project Release Accepted（系统发布已验收）
 ```
 
-项目需求和总体设计各执行一次，先建立全局业务规则、数据、接口与跨 CU 流程，再确认能够独立编码、验证和交付的 CU。CU 不再重复需求和设计阶段，而是通过 DesignSliceManifest 获取总体事实源中的必要上下文，并独立完成编码、测试、挂起、返工和交付。VerificationBatch 只复用测试环境与执行证据，不能取代 CU TestBaseline。
+项目需求和总体设计各执行一次，先建立全局业务规则、数据、接口与跨 CU 流程，再确认能够独立编码、验证和交付的 CU。CU 不再重复需求和设计阶段，而是通过 DesignSliceManifest 获取总体事实源中的必要上下文，并独立完成编码、测试、挂起、返工和交付。VerificationBatch 只复用测试环境与执行证据，不能取代 CU TestBaseline；多个 CU 分别交付也不能取代绑定精确版本与真实场景 Evidence 的 SystemAcceptanceBaseline。
 
-CSCI 管理配置、版本、部署和验证对象，CapabilityUnit（能力单元）管理业务交付，RequirementItem（需求项）表达具体需求，ExecutionSlice（执行切片）只承担内部调度。ExecutionPlan 由设计基线派生且可重建，v1.1 只按依赖和优先级串行执行；任一时刻只有一个活动业务 Run，所有切片共享项目唯一工作目录并依次承接修改。
+CSCI 管理配置、版本、部署和验证对象，CapabilityUnit（能力单元）管理业务交付，RequirementItem（需求项）表达具体需求，ExecutionSlice（执行切片）只承担内部调度。ExecutionPlan 由设计基线派生且可重建，v1.2 只按依赖和优先级串行执行；任一时刻只有一个活动业务 Run，其他请求以 `QUEUED_FOR_CAPACITY` 显式等待，所有切片共享项目唯一工作目录并依次承接修改。
 
-Factory（软件工厂）对外提供小而稳定的 Application Interface（应用接口），内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。Runner（执行器）、Gate（门禁）、Observer（观察器）、Interface Registry（接口登记表）、Environment Registry（环境登记表）和 Reconciler（对账器）分别拥有明确职责；跨数据库、Git、文件和进程的一致性由可对账协议保证，不声称拥有并不存在的全局事务。
+Factory（软件工厂）对外提供小而稳定的 Application Interface（应用接口），内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。Runner（执行器）、Gate（门禁）、Observer（观察器）、Interface Registry（接口登记表）、Production Asset Registry（生产资料登记表）、Environment Registry（环境登记表）、System Acceptance（系统验收）和 Reconciler（对账器）分别拥有明确职责；跨数据库、Git、文件和进程的一致性由可对账协议保证，不声称拥有并不存在的全局事务。FactoryTrajectoryEvent 支持诊断和后续 Harness 学习闭环，但始终是只读派生信号，不能成为第二套业务事实源。
 
-本文件是唯一保留的 v1.1 最终方案，但其定位是**架构基线**，不是已经完成的工程实施基线。下一步只进入 M0 合同冻结与纵向原型；Schema（模式）、样例、TCK（合同测试套件）和 Fake Adapter（模拟适配器）通过验证后，再按实施顺序逐项开发 Core（核心模块）、模板、Runner（执行器）、Host Adapter（宿主适配器）和控制台。
+本文件是唯一保留的 v1.2 最终方案，但其定位是**架构基线**，不是已经完成的工程实施基线。下一步只进入 M0 合同冻结与纵向原型；Schema（模式）、样例、TCK（合同测试套件）和 Fake Adapter（模拟适配器）通过验证后，再按实施顺序逐项开发 Core（核心模块）、模板、Runner（执行器）、Host Adapter（宿主适配器）和控制台。

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc-factory.local/schemas/v1.2/factory-trajectory-event.schema.json",
+  "title": "FactoryTrajectoryEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "occurred_at", "project_id", "run_id", "attempt_id", "trace_id", "authority_refs", "variant_binding", "outcome", "event_type"],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "project_id": { "type": "string", "minLength": 1 },
+    "cu_id": { "type": ["string", "null"] },
+    "slice_id": { "type": ["string", "null"] },
+    "run_id": { "type": "string", "minLength": 1 },
+    "attempt_id": { "type": "string", "minLength": 1 },
+    "trace_id": { "type": "string", "minLength": 1 },
+    "authority_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "variant_binding": { "$ref": "#/$defs/variantBinding" },
+    "outcome": { "enum": ["PASSED", "FAILED", "BLOCKED", "CANCELLED"] },
+    "event_type": { "type": "string", "minLength": 1 },
+    "payload_ref": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "versionedRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "content_hash"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }, "content_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" } }
+    },
+    "variantBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["agent_definition_ref", "prompt_template_ref", "rule_set_ref", "model_ref", "tool_schema_version", "context_bundle_hash"],
+      "properties": {
+        "agent_definition_ref": { "$ref": "#/$defs/versionedRef" },
+        "prompt_template_ref": { "$ref": "#/$defs/versionedRef" },
+        "rule_set_ref": { "$ref": "#/$defs/versionedRef" },
+        "model_ref": { "type": "string", "minLength": 1 },
+        "tool_schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "context_bundle_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

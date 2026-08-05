@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc-factory.local/schemas/v1.2/environment-requirement.schema.json",
+  "title": "EnvironmentRequirement",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requirement_id", "environment_requirements"],
+  "properties": {
+    "requirement_id": { "type": "string", "minLength": 1 },
+    "environment_requirements": { "type": "array", "items": { "$ref": "#/$defs/requirement" }, "uniqueItems": true }
+  },
+  "$defs": {
+    "requirement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "description", "required_for_stage"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["DEVICE", "THIRD_PARTY_API", "EXTERNAL_SYSTEM", "DATA_FIXTURE", "SECRET"] },
+        "description": { "type": "string", "minLength": 1 },
+        "probe": { "$ref": "#/$defs/probe" },
+        "required_for_stage": { "enum": ["CODING", "TESTING", "SYSTEM_ACCEPTANCE"] }
+      }
+    },
+    "probe": {
+      "type": "object", "additionalProperties": false,
+      "required": ["probe_id", "probe_type", "probe_ref", "timeout_ms", "expected_result"],
+      "properties": {
+        "probe_id": { "type": "string", "minLength": 1 },
+        "probe_type": { "enum": ["COMMAND_TEMPLATE", "HTTP", "TCP", "RESOURCE_LOOKUP"] },
+        "probe_ref": { "type": "string", "minLength": 1, "description": "受限探针或无机密命令模板引用，不保存凭据" },
+        "timeout_ms": { "type": "integer", "minimum": 1 },
+        "expected_result": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

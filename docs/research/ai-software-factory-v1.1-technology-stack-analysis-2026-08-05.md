@@ -45,7 +45,7 @@ OpenTelemetry Collector
 
 ## 2. 评估目标与边界
 
-当前 v1.1 设计已经明确：ExecutionPlan 是从 Project DesignBaseline 派生的可重建调度投影；任一时刻只有一个活动业务 Run；Runner 提供权威执行证据；Handoff 使用版本化结构，而 Gate 由操作人员或明确定义的策略裁决。详见 [v1.1 架构基线](../v1.1/ai-software-factory-design-v1.1-final.md)。
+后续 v1.2 设计继续保持这些边界：ExecutionPlan 是从 Project DesignBaseline 派生的可重建调度投影；任一时刻只有一个活动业务 Run；Runner 提供权威执行证据；Handoff 使用版本化结构，而 Gate 由操作人员或明确定义的策略裁决。详见 [v1.2 架构基线](../v1.2/ai-software-factory-design-v1.2-final.md)。
 
 新增目标是把每次工厂运行沉淀为可持续迭代的 Harness：
 

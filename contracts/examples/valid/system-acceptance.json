@@ -1,0 +1,1 @@
+{"system_acceptance_id":"SA-1","project_id":"PROJECT-1","release_scope_id":"RELEASE-1","execution_plan_version":1,"participating_cu_baselines":[{"cu_id":"CU-USER","code_baseline_id":"BL-CODE-1","test_baseline_id":"BL-TEST-1"}],"integration_scenarios":["用户登录后查询用户列表"],"status":"DRAFT","created_at":"2026-08-05T12:00:00Z"}

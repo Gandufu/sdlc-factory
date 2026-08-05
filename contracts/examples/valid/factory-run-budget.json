@@ -1,0 +1,1 @@
+{"max_concurrent_runs":1,"per_project_quota":1,"priority_policy":"DEPENDENCY_THEN_BUSINESS_PRIORITY_THEN_FIFO"}

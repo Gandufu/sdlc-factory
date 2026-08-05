@@ -1,0 +1,1 @@
+{"requirement_id":"REQ-1","environment_requirements":[{"id":"ENVREQ-DEVICE-1","kind":"DEVICE","description":"真实终端设备","probe":{"probe_id":"PROBE-1","probe_type":"RESOURCE_LOOKUP","probe_ref":"device-lab/terminal-1","timeout_ms":5000,"expected_result":"AVAILABLE"},"required_for_stage":"TESTING"}]}
