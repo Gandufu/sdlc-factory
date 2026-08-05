@@ -5,7 +5,7 @@
 - 状态：v1.1 架构基线，实施合同待冻结
 - 日期：2026-08-05
 - 实测依据：[SDLC Pipeline 插件模式问题复盘](../research/sdlc-pipeline-plugin-mode-lessons-2026-08-03.md)
-- 当前裁决：进入“领域与机器合同冻结 + 纵向原型”，暂不直接并行开发完整平台
+- 当前裁决：进入“领域与机器合同冻结 + 纵向原型”，v1.1 全程只采用串行执行
 
 ---
 
@@ -122,7 +122,7 @@ flowchart TD
 | Configuration Model（配置模型） | CSCI、能力地图、能力单元分配和版本关系 | 智能体会话 |
 | Lifecycle（生命周期） | 项目级与 CU 级阶段、作用域审核、基线、失效和完成判定 | 执行 Shell（命令行）命令 |
 | Planning（规划） | 从设计基线派生 ExecutionPlan，计算依赖、优先级、就绪和挂起状态 | 保存需求正文、决定 CU 边界或建立额外 Gate |
-| Orchestrator（编排器） | 执行切片、调度、租约、Retry（重试）、Stop（停止）和人工恢复 | 绕过门禁修改状态 |
+| Orchestrator（编排器） | 执行切片、串行调度、单活动 Run、Retry（重试）、Stop（停止）和人工恢复 | 绕过门禁修改状态 |
 | Host Adapter（宿主适配器） | 原始输入捕获、会话启动、事件转换、能力探测和取消 | 生命周期真相 |
 | Context Assembler（上下文装配器） | 上下文选择、提供器调用、去重、预算、脱敏、顺序和上下文清单 | Agent Host 调用和生命周期迁移 |
 | Prompt Builder（提示词构建器） | 用版本化模板把任务、角色和上下文包构造成 AgentInvocation（智能体调用请求） | 选择资料或访问存储 |
@@ -135,7 +135,7 @@ flowchart TD
 | Environment Registry（环境登记表） | 环境、外部系统、设备和 SecretRef（机密引用）绑定 | 保存凭据明文 |
 | Observer（观察器） | Event（事件）、Span（跨度）、Token（令牌）、成本和诊断包 | 修改业务状态 |
 | Artifact Inspector（产物检查器） | 结构、覆盖、Diff（差异）、Hash（哈希）和追溯检查 | 代替操作人员审批 |
-| Reconciler（对账器） | 发现孤立文件、遗留进程、遗留租约和引用损坏 | 静默伪造成功结果 |
+| Reconciler（对账器） | 发现孤立文件、遗留进程、过期 RuntimeLease 和引用损坏 | 静默伪造成功结果 |
 
 ### 2.2 外部 Seam（接缝）与 Adapter（适配器）
 
@@ -242,7 +242,7 @@ CU 必须满足：
 3. 可从项目需求与总体设计中获得完整、无歧义的 DesignSliceManifest；
 4. 可整体由操作人员审核与交付；
 5. 可形成独立的 CodeBaseline 和 TestBaseline；
-6. 内部执行切片默认顺序执行，不能脱离能力单元声明业务交付完成。
+6. 内部执行切片严格顺序执行，不能脱离能力单元声明业务交付完成。
 
 ### 3.4 ExecutionPlan（执行计划）
 
@@ -376,12 +376,12 @@ stateDiagram-v2
 **Coding（编码）**
 
 1. Implementation Planner（实现规划器）只根据当前 CU 的 DesignSliceManifest 把实现拆为可独立验证的执行切片。
-2. 每个切片可使用独立 WorktreeLease（工作树租约）和 `factory/<cu-id>/<slice-id>` 分支，但 v1.1 默认顺序执行。
+2. 所有切片在项目唯一工作目录中严格顺序执行；后一个切片承接前一个切片的已验证修改。
 3. 智能体只接收当前切片的目标、版本化提示词和已装配的上下文包。
 4. 智能体通过 `handoff_submit`（提交交接单）报告变更、验证和问题。
-5. 软件工厂独立计算实际 Diff（差异）；执行器完成聚焦检查并形成 ChangeSet（变更集）。
-6. Integration Slice（集成切片）合并变更集，并执行权威的 `compile/build/lint/unit test`（编译/构建/静态检查/单元测试）。
-7. 操作人员审核能力单元的集成差异后形成 CU CodeBaseline；它绑定 Project RequirementBaseline、Project DesignBaseline、DesignSliceManifest 和唯一 Git revision。
+5. 软件工厂独立计算当前切片及 CU 累计实际 Diff（差异）；执行器完成聚焦检查并记录 ChangeSet（变更集）。
+6. 所有切片完成后，Project Runner 在同一工作目录执行权威的 `compile/build/lint/unit test`（编译/构建/静态检查/单元测试）。
+7. 操作人员审核能力单元的累计差异后形成 CU CodeBaseline；它绑定 Project RequirementBaseline、Project DesignBaseline、DesignSliceManifest 和唯一 Git revision。
 
 **Testing（测试）**
 
@@ -737,8 +737,6 @@ environment_binding_ref?
 rules_version
 prompt_version
 agent_version
-worktree_lease_ref?
-resource_claims[]
 budget
 ```
 
@@ -771,7 +769,7 @@ handoff_submit
 
 ---
 
-## 9. Runner（执行器）、隔离与调度资源
+## 9. Runner（执行器）与串行调度
 
 ### 9.1 执行规则
 
@@ -784,43 +782,36 @@ handoff_submit
 | 上下文 | 使用正式基线、最新反馈和结构化交接单 |
 | 大任务 | 拆分执行切片，禁止无限延长 Deadline（截止时间） |
 | 计数限制 | 文件、Token（令牌）、工具次数默认用于观测和告警，不直接裁决业务失败 |
-| CU 调度 | 按依赖图拓扑排序，再按同层业务优先级排序；默认一次只执行一个 CU |
-| CU 内切片 | 默认顺序执行；worktree/branch 用于隔离、Diff、失败保留和审核 |
+| 全局执行 | 同一 Factory 实例任一时刻只允许一个活动业务 Run |
+| CU 调度 | 按依赖图拓扑排序，再按同层业务优先级排序；一次只执行一个 CU |
+| CU 内切片 | 严格顺序执行；后一个切片承接前一个切片的已验证修改 |
 | 挂起跳过 | CU 进入 OnHold 后重新计算其他 CU 就绪状态，不阻塞无依赖的 CU |
 
-### 9.2 WorktreeLease（工作树租约）
+### 9.2 单工作目录与单活动 Run
 
 ```text
-slice_id
-path
-branch
+project_id
+workspace_path
+active_run_id
+active_cu_id?
+active_slice_id?
 base_revision
-owner_run_id
-heartbeat_at
-expires_at
+working_revision?
 status
 ```
 
 不变量：
 
-1. 同一分支不能被两个活动 Run（运行）同时持有；
-2. 软件工厂重启后由对账器识别遗留 worktree（工作树）和无主进程；
-3. 运行失败后默认保留工作树，等待人工决定集成、修复或清理；
-4. 基线变为 `STALE`（已过期）后，未开始的切片失效，运行中的切片转为 `NEEDS_REVIEW`（需要复核）；
-5. 合并冲突停止自动集成并转人工处理；
-6. Windows 实现必须处理路径长度、PID 重用、编码和进程树清理。
+1. 所有修改只发生在项目唯一工作目录中。
+2. 新 Run 启动前必须确认不存在其他活动业务 Run，并记录工作目录状态与 `base_revision`。
+3. 每个切片完成确定性检查后，其修改留在同一工作目录，下一切片在此基础上继续。
+4. 运行失败时保留当前目录、实际 Diff、Handoff 和 Evidence，等待操作人员决定继续、返工或放弃；不自动回滚。
+5. 基线变为 `STALE`（已过期）后，未开始的切片失效，活动 Run 转为 `NEEDS_REVIEW`（需要复核）。
+6. 软件工厂重启后由对账器检查数据库中的活动 Run、实际进程、工作目录 Git 状态和记录的修订是否一致。
 
-### 9.3 ResourceClaim（资源声明）与 ResourceLease（资源租约）
+### 9.3 环境阻塞
 
-并行能力在 v1.1 架构中保留但默认关闭；并行数量不能代表资源隔离。每次运行在执行前提交资源声明，由 Orchestrator（编排器）获得带期限的资源租约：
-
-```text
-WORKTREE | PORT_RANGE | DATABASE | TEST_ENVIRONMENT | DEVICE | EXTERNAL_SANDBOX
-```
-
-租约包含资源标识、Owner Run（所属运行）、独占/共享模式、获得时间、心跳、到期时间和清理策略。拿不到必需资源时运行状态为 `BLOCKED`（阻塞），不能通过重试抢占他人资源。
-
-只有共享文件检测、实际修改范围分析、数据库迁移顺序检查和确定性集成检查均已实现并通过验收后，才允许显式开启 CU 或切片并行策略。
+端口、数据库、测试环境、设备和外部 Sandbox 是当前 Run 的环境绑定。缺少必需条件时进入 `BLOCKED` 或 `OnHold`，释放活动执行权后由调度器选择下一个就绪 CU。
 
 ### 9.4 挂起与人工恢复
 
@@ -860,7 +851,7 @@ validate expected stage version
 → append Outbox/ReconciliationRecord
 ```
 
-以上数据库记录在同一事务中提交，并使用 `expected_version`（预期版本）、`review_id`（审核标识）和幂等键防止并发覆盖与重复提交。Git、Markdown（标记文档）、证据文件和外部进程不属于该数据库事务。
+以上数据库记录在同一事务中提交，并使用 `expected_version`（预期版本）、`review_id`（审核标识）和幂等键防止重复提交与过期操作覆盖。Git、Markdown（标记文档）、证据文件和外部进程不属于该数据库事务。
 
 ### 10.2 文件 Evidence（证据）提交协议
 
@@ -890,8 +881,8 @@ Run 为 RUNNING、进程不存在
 进程存在、RuntimeLease 已失效
 → 先隔离和提示，再按 cleanup policy 处理
 
-WorktreeLease 已失效、目录仍存在
-→ 标记遗留资产，禁止静默复用
+数据库记录的工作修订与项目目录实际 Git 状态不一致
+→ NEEDS_INTERVENTION，禁止继续启动下一个 Run
 ```
 
 对账器只能恢复可证明的事实，不能把不完整执行修复为成功。
@@ -1007,9 +998,9 @@ redaction-report.json
 
 | 数据 | 权威存储 | 用途 |
 |---|---|---|
-| 生命周期、审核、调度和租约 | 关系数据库 | 控制与查询 |
+| 生命周期、审核、调度、活动 Run 和 RuntimeLease | 关系数据库 | 控制与查询 |
 | Requirement/Design/Test Report（需求/设计/测试报告） | Markdown（标记文档） | 正式可读产物 |
-| 源码 | Git | 代码历史与集成 |
+| 源码 | Git | 代码历史与基线修订绑定 |
 | 命令和测试 Evidence（证据） | 内容寻址 Evidence Store（证据存储） | 门禁证据 |
 | Runtime Event（运行事件） | JSONL（逐行结构化数据） | 过程分析 |
 | 聚合指标 | 数据库或 metrics.json | 查询与基线比较 |
@@ -1055,14 +1046,13 @@ ai-software-factory/
       ├─ inputs/
       ├─ index/
       ├─ content/
-      ├─ worktrees/
       ├─ evidence/
       ├─ telemetry/
       ├─ handoffs/
       └─ exports/
 ```
 
-`references/`、正式文档和源码是用户项目资产；遥测、临时 worktree 和运行缓存默认不进入 Git。
+`references/`、正式文档和源码是用户项目资产；遥测和运行缓存默认不进入 Git。
 
 ---
 
@@ -1110,11 +1100,11 @@ ai-software-factory/
 
 - 一个真实 Host Adapter（宿主适配器）；
 - 结构化 Handoff（交接单）；
-- ExecutionSlice（执行切片）、WorktreeLease（工作树租约）、ChangeSet（变更集）和集成；
+- ExecutionSlice（执行切片）、单活动 Run、累计 ChangeSet（变更集）和单工作目录执行；
 - Gate（门禁）、EvidenceRef（证据引用）、状态事务与 Reconciler（对账器）。
-- 依赖拓扑排序、同层优先级和 CU/切片默认顺序执行。
+- 依赖拓扑排序、同层优先级和 CU/切片严格顺序执行。
 
-退出标准：多个执行切片集成到精确 Git revision（源码修订），冲突和遗留 worktree（工作树）有确定处理。
+退出标准：多个执行切片在同一工作目录中依次完成，最终累计 Diff 通过权威检查并绑定精确 Git revision（源码修订）。
 
 ### M5：测试闭环
 
@@ -1128,12 +1118,12 @@ ai-software-factory/
 
 ### M6：调度、变更与恢复
 
-- CU 挂起跳过、就绪重算、人工恢复和 ResourceLease（资源租约）；
+- CU 挂起跳过、就绪重算、单活动 Run 和人工恢复；
 - ChangeProposal（变更提案）和跨能力单元影响；
-- 软件工厂异常退出、孤立进程、证据和租约对账；
-- 人工恢复和合并冲突流程。
+- 软件工厂异常退出、孤立进程、工作目录、证据和 RuntimeLease 对账；
+- 工作目录脏状态与修订漂移的人工处置流程。
 
-退出标准：重启和冲突均有确定结果，一个 CU 挂起不阻塞无关 CU，设计变化只失效受影响 CU。并行策略仍保持关闭。
+退出标准：重启和工作目录漂移均有确定结果，一个 CU 挂起不阻塞无关 CU，设计变化只失效受影响 CU。
 
 ### M7：控制台与分析
 
@@ -1150,9 +1140,9 @@ ai-software-factory/
 
 ### 14.1 四层验证
 
-1. **领域单元测试**：初始化与带作用域 LifecycleStage 状态机、Baseline（基线）、ChangeProposal（变更提案）、影响失效、幂等和并发版本。
+1. **领域单元测试**：初始化与带作用域 LifecycleStage 状态机、Baseline（基线）、ChangeProposal（变更提案）、影响失效、幂等和预期版本校验。
 2. **Adapter TCK（适配器合同测试套件）**：Host（宿主）、Scaffold（脚手架）、Runtime（运行时）、Handoff（交接单）、Secret（机密信息）脱敏和错误信封。
-3. **Trace/Recovery Replay（追踪/恢复重放）**：父子会话、取消、重试、成本缺失、孤立进程、孤立文件和租约到期。
+3. **Trace/Recovery Replay（追踪/恢复重放）**：父子会话、取消、重试、成本缺失、孤立进程、孤立文件、RuntimeLease 到期和工作目录修订漂移。
 4. **真实纵向流程**：Node 与 Spring Boot + Vue 初始化、一次完整项目需求与总体设计、一个真实宿主、至少一个完整 CU 和外部环境阻塞。
 
 ### 14.2 首版验收场景
@@ -1164,10 +1154,10 @@ ai-software-factory/
 5. 查询、新增、修改、删除属于同一“卫星信息管理”能力单元，且该 CU 同时分配给 Vue CSCI 和 Spring Boot CSCI。
 6. Web—后端是内部接口，SSO（单点登录）是外部接口，并绑定 SIT（系统集成测试）地址和 SecretRef（机密引用）。
 7. ExecutionPlan 按依赖拓扑和同层优先级顺序调度；当前 CU 挂起后跳过它，继续无依赖阻塞的 CU。
-8. 同一能力单元的多个执行切片默认顺序执行并使用独立工作树；两个切片修改同一文件时停止自动集成，进入人工冲突处理。
+8. 同一能力单元的多个执行切片在唯一工作目录中严格顺序执行，后一切片能够直接读取前一切片的已验证修改。
 9. 多个 CU 可通过 VerificationBatch 共享跨 CU 测试执行和 Evidence，但分别形成 TestBaseline。
 10. 单点登录或真实设备不可用时相关 CU 测试为 `BLOCKED`（阻塞），恢复后由操作人员创建新运行。
-11. 执行器运行中强制终止软件工厂，重启后识别遗留进程、运行、工作树和证据。
+11. 执行器运行中强制终止软件工厂，重启后识别遗留进程、活动 Run、工作目录 Git 状态和证据。
 12. Project RequirementBaseline 变化使总体设计过期；Project DesignBaseline 或接口版本变化只使受影响 CU 的代码和测试基线失效。
 13. `detect-only` 检测参考 Hash 变化，`reproducible` 恢复实际读取过的旧内容。
 14. `e2e` 诊断级别仍不输出密码、Token、Authorization Header 或完整凭据命令。
@@ -1188,13 +1178,12 @@ ai-software-factory/
 
 | 风险 | 应对 |
 |---|---|
-| 能力单元范围较大 | 阶段内部拆执行切片，由阶段统一集成和审核 |
+| 能力单元范围较大 | 阶段内部拆执行切片，由阶段统一执行权威检查和审核 |
 | 需求过早按 CU 局部化 | 项目级分析一次完整需求，总体设计后再确认 CU 与切片清单 |
 | CSCI 与能力单元关系复杂 | 使用 CapabilityAllocation（能力分配），不建立双生命周期 |
 | 模板协议演变 | 独立版本、能力探测、Schema（模式）样例和 TCK（合同测试套件） |
-| 多工作树冲突 | 固定 base revision（基础修订）、租约、集成检查和人工冲突处理 |
-| 过早并行放大共享文件冲突 | v1.1 默认顺序调度，达到并行准入检查后再显式开启 |
-| 环境与设备资源冲突 | ResourceClaim/Lease（资源声明/租约），拿不到资源时明确 `BLOCKED`（阻塞） |
+| 串行 Run 中途失败留下脏目录 | 保存 base revision、累计 Diff、Handoff 和 Evidence，人工确认后继续或放弃 |
+| 环境或设备不可用 | 当前 Run 明确进入 `BLOCKED`/`OnHold`，释放执行权并调度下一个就绪 CU |
 | 文件、Git、数据库无法原子提交 | 内容寻址、数据库事务引用、Outbox（事务发件箱）和 Reconciler（对账器） |
 | 参考资料复现成本 | 默认 `detect-only`（仅检测），正式项目按实际读取内容去重快照 |
 | 智能体长推理和重复调用 | 运行预算、错误指纹、进展检测和执行切片拆分 |
@@ -1223,8 +1212,8 @@ Project Initialization（项目初始化）
 
 项目需求和总体设计各执行一次，先建立全局业务规则、数据、接口与跨 CU 流程，再确认能够独立编码、验证和交付的 CU。CU 不再重复需求和设计阶段，而是通过 DesignSliceManifest 获取总体事实源中的必要上下文，并独立完成编码、测试、挂起、返工和交付。VerificationBatch 只复用测试环境与执行证据，不能取代 CU TestBaseline。
 
-CSCI 管理配置、版本、部署和验证对象，CapabilityUnit（能力单元）管理业务交付，RequirementItem（需求项）表达具体需求，ExecutionSlice（执行切片）只承担内部调度。ExecutionPlan 由设计基线派生且可重建，v1.1 默认按依赖和优先级顺序执行；并行能力保留为默认关闭的策略，不再作为 MVP 验收目标。
+CSCI 管理配置、版本、部署和验证对象，CapabilityUnit（能力单元）管理业务交付，RequirementItem（需求项）表达具体需求，ExecutionSlice（执行切片）只承担内部调度。ExecutionPlan 由设计基线派生且可重建，v1.1 只按依赖和优先级串行执行；任一时刻只有一个活动业务 Run，所有切片共享项目唯一工作目录并依次承接修改。
 
 Factory（软件工厂）对外提供小而稳定的 Application Interface（应用接口），内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。Runner（执行器）、Gate（门禁）、Observer（观察器）、Interface Registry（接口登记表）、Environment Registry（环境登记表）和 Reconciler（对账器）分别拥有明确职责；跨数据库、Git、文件和进程的一致性由可对账协议保证，不声称拥有并不存在的全局事务。
 
-本文件是唯一保留的 v1.1 最终方案，但其定位是**架构基线**，不是已经完成的工程实施基线。下一步只进入 M0 合同冻结与纵向原型；待 Schema（模式）、样例、TCK（合同测试套件）和 Fake Adapter（模拟适配器）实际交付并通过验证后，才能允许 Core（核心模块）、模板、Runner（执行器）、Host Adapter（宿主适配器）和控制台多人并行开发。
+本文件是唯一保留的 v1.1 最终方案，但其定位是**架构基线**，不是已经完成的工程实施基线。下一步只进入 M0 合同冻结与纵向原型；Schema（模式）、样例、TCK（合同测试套件）和 Fake Adapter（模拟适配器）通过验证后，再按实施顺序逐项开发 Core（核心模块）、模板、Runner（执行器）、Host Adapter（宿主适配器）和控制台。
