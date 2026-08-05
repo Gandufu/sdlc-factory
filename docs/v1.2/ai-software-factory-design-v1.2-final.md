@@ -4,9 +4,8 @@
 
 - 状态：v1.2 架构基线，实施合同待冻结
 - 日期：2026-08-05
-- 实测依据：[SDLC Pipeline 插件模式问题复盘](../research/sdlc-pipeline-plugin-mode-lessons-2026-08-03.md)
-- 技术研究：[AI 软件工厂技术栈与 Harness 深度分析](../research/ai-software-factory-v1.1-technology-stack-analysis-2026-08-05.md)
-- 当前裁决：进入“领域与机器合同冻结 + 纵向原型”，v1.2 全程只采用串行执行
+- 最终事实源：本文件与 `contracts/` 下的版本化机器合同；仓库不保留评审稿、调研稿或旧方案
+- 当前裁决：进入“领域与机器合同冻结 + 两级纵向验证”，v1.2 全程只采用串行执行
 
 ---
 
@@ -39,11 +38,13 @@
 
 1. Factory（软件工厂）服务多个本地项目，但 v1.2 MVP（最小可用版本）选择**本机单用户模式**。
 2. MVP 采用 Spring Boot 模块化单体、单实例部署和本地 Web Console（网页控制台）。
-3. 首期支持纯 Node 与 Spring Boot + Vue 两类模板资产。
-4. 首期接入一个真实智能体宿主；其他宿主通过合同测试和 Fake Adapter（模拟适配器）验证。
-5. 正式正文使用 Markdown（标记文档）；Word/PDF 只按需导出，不维护第二份可写正文。
-6. 不引入微服务、消息队列、通用工作流引擎、远程 Agent Runtime（智能体运行时）、自动发布和组织级协作。
-7. 团队服务器模式需要另行补齐身份认证、项目授权、审核人身份、操作审计和 Secret（机密信息）隔离，不是本版默认能力。
+3. MVP 分为两级：MVP-A 先以纯 Node 模板和单个 CU 验证基础闭环；MVP-B 再以 Spring Boot + Vue 复合模板和至少三个相关 CU 验证系统交付闭环。
+4. 首期只接入 OpenCode 一个真实智能体宿主；其他宿主通过合同测试和 Fake Adapter（模拟适配器）验证。
+5. MVP Runner 使用 Windows 原生受控子进程；容器 Runner 和 Dagger Adapter 只保留后续扩展边界，不与 MVP 同期实现。
+6. 权威关系数据库只采用 PostgreSQL；不维护 H2 与 PostgreSQL 双数据库兼容路径。
+7. 正式正文使用 Markdown（标记文档）；Word/PDF 只按需导出，不维护第二份可写正文。
+8. 不引入微服务、消息队列、通用工作流引擎、向量数据库、远程 Agent Runtime（智能体运行时）、自动发布和组织级协作。
+9. 团队服务器模式需要另行补齐身份认证、项目授权、审核人身份、操作审计和 Secret（机密信息）隔离，不是本版默认能力。
 
 ### 1.3 核心不变量
 
@@ -112,7 +113,7 @@ flowchart TD
     AGENT --> OBS
     RUNNER --> OBS
 
-    PROJECT --> DB[("H2 / PostgreSQL")]
+    PROJECT --> DB[("PostgreSQL")]
     DOMAIN --> DB
     LIFE --> DB
     ORCH --> DB
@@ -175,6 +176,28 @@ Console / CLI / Agent Tool
 ```
 
 插件不得直接定位模板脚本，否则插件会重新依赖 Maven、npm、Spring Boot、Vue 等实现细节。
+
+### 2.3 技术选型与采用边界
+
+| 层次 | 最终选型 | 采用理由与边界 |
+|---|---|---|
+| 控制平面 | Java 21、Spring Boot 3 模块化单体 | Core（核心模块）拥有状态机、门禁、基线、证据引用和恢复规则；本版不拆微服务 |
+| 权威数据库 | PostgreSQL 16+、Flyway、显式 SQL/Spring JDBC | 只维护一套数据库语义；状态迁移、Outbox 和审计查询保持显式，不以 ORM 回调隐式推进生命周期 |
+| Web Console | Vue 3、TypeScript、Vite、REST + SSE | REST 承担命令与查询，SSE 推送运行事件；控制台不能绕过 Application Interface（应用接口）修改状态 |
+| 机器合同 | JSON Schema Draft 2020-12、正反样例、TCK | 命令、事件、Handoff、Evidence、生产资料和 Baseline 使用版本化合同；Markdown 仍是长篇正式正文 |
+| 首个 Agent Host | OpenCode Host Adapter | 复用其会话、工具、权限和事件能力，但 OpenCode Plugin、MCP、CLI 或 SDK 都只是可替换宿主边界，不拥有业务事实 |
+| 上下文 | 确定性 Context Assembler、Git、文件清单、文本/符号索引 | 先按固定来源、版本、Hash、预算和顺序装配；本版不引入向量数据库，未来检索结果也不能覆盖正式基线 |
+| 首个 Runner | Windows 原生受控子进程 | 统一工作目录、环境、超时、取消、进程树终止、输出脱敏和 Evidence；不要求用户安装 Docker Desktop |
+| 可观测性 | OpenTelemetry + 本地 JSONL | OTel Span 和 FactoryTrajectoryEvent 只读追加；观测失败不得改变 Run、Gate 或 Baseline |
+
+以下项目只吸收设计原则，不作为 MVP 依赖：
+
+- OpenHands：采用控制台、Agent Server 和执行环境分离的思路；不采用其 Beta 平台作为 Factory Core，也不允许无提示的宿主文件系统全权限运行。
+- mini-SWE-agent 与 Aider：采用最小 Agent Loop（智能体循环）、有预算的失败反馈、Repo Map（仓库映射）和修改后确定性验证；不采用 Agent 自评成功或自动 Git 提交作为业务 Gate。
+- Backstage：采用版本化模板描述、参数 Schema、顺序 Action 和资产 Owner；不引入完整开发者门户，也不直接引用可变的上游示例模板。
+- Temporal：采用确定性编排与副作用执行分离、追加式历史、幂等和可恢复任务的原则；MVP 不部署 Temporal，避免产生第二套工作流事实源和额外运维面。
+- Dagger：把 Typed Operation（类型化操作）、内容寻址缓存和统一 OTel 作为未来容器 Runner 的候选；MVP 不强制 Docker Desktop。
+- LangGraph、MetaGPT 与 ChatDev：可用于 Agent 内部实验、角色分工或工作流原型；不得承载 Factory 生命周期、人工审核、Baseline 或系统验收。
 
 ---
 
@@ -917,6 +940,8 @@ handoff_submit
 
 ### 9.1 执行规则
 
+MVP Runner 通过 Windows 原生受控子进程执行模板和项目命令。所有命令必须来自已发布的 TemplateRegistration 或 Project Runtime Adapter，不接受 Agent 直接提交任意 Shell。Runner 负责规范化工作目录、环境变量、超时、取消、完整进程树终止、输出脱敏、退出码和 Evidence；Dagger、Docker 或远程执行器只能在通过同一 Runner TCK 后作为后续 Adapter 加入。
+
 | 控制项 | 规则 |
 |---|---|
 | 单次运行超时 | 终止完整进程树并记录 `TIMED_OUT`（已超时） |
@@ -1195,6 +1220,8 @@ redaction-report.json
 | 聚合指标 | 数据库或 metrics.json | 查询与基线比较 |
 | Reference Snapshot（参考快照） | 可选内容寻址存储 | `reproducible`（可复现）模式复现 |
 
+权威关系数据只写入 PostgreSQL 16+。MVP 不提供 H2 运行模式，也不以 H2 测试结果声明 PostgreSQL 合同通过；数据库迁移和集成验收必须在真实 PostgreSQL 上执行。
+
 ### 12.2 推荐目录
 
 ```text
@@ -1262,84 +1289,89 @@ ai-software-factory/
 
 退出标准：文档、数据库、Application Interface（应用接口）、Schema（模式）、Prompt（提示词）和 UI（用户界面）无第二套术语；所有合同测试通过。
 
-### M1：纯 Node 初始化闭环
+### M1：PostgreSQL、原生 Runner 与纯 Node 初始化闭环
 
+- 建立 PostgreSQL 迁移、事务、Outbox、幂等键、预期版本和 Reconciler（对账器）基础；
+- 原生 Runner 覆盖工作目录、环境、超时、取消、完整进程树终止、输出脱敏和 Evidence；
 - Template Catalog（模板目录）、参数模式、实例化、bootstrap（引导准备）和校验；
 - `compile/test/start/readiness/stop`（编译/测试/启动/就绪检查/停止）；
 - RuntimeLease（运行时租约）、Evidence（证据）和初始化人工审核；
 - 形成 InitializationBaseline（初始化基线）与初始 Git revision（源码修订）。
 
-退出标准：一次 Node 项目初始化可完整追溯，失败或重启后不产生假成功。
+退出标准：一次 Node 项目初始化可在真实 PostgreSQL 和 Windows 原生 Runner 上完整追溯；超时、取消、失败或重启后不残留未识别进程，也不产生假成功。
 
-### M2：Spring Boot + Vue 复合模板
+### M2：项目需求与设计闭环
 
-- 多模块 ExecutionPlan（执行计划）；
-- 前后端 `compile/build/package`（编译/构建/打包）；
-- 复合进程运行时租约、聚合就绪检查、日志和幂等停止；
-- Factory Core（工厂核心）不出现 Maven、npm、Spring 或 Vue 专属判断。
-
-退出标准：两类模板通过同一 Runtime TCK（运行时合同测试套件）。
-
-### M3：需求与设计闭环
-
-- 用户一次提交包含用户管理、角色权限和审计日志的完整项目需求；
+- 用户一次提交完整项目需求；
 - 项目级 SRS（软件需求规格）、RequirementItem（需求项）、候选 CU 和验证方法；
 - 项目级总体设计、最终 CU、CapabilityAllocation（能力分配）和 Capability Map（能力地图）；
 - Interface Registry（接口登记表）、EnvironmentProfile（环境配置）与 ExternalDependency（外部依赖）；
 - Project RequirementBaseline、Project DesignBaseline、DesignSliceManifest 和可重建 ExecutionPlan；
 - InterfaceDefinition 的 Draft/Published/Deprecated 生命周期，以及从消费者与追溯图自动生成的影响候选集。
 
-退出标准：一次完整需求输入形成唯一的项目需求与设计基线，至少确认三个相关 CU，并可从任一 DesignSliceManifest 追溯跨 CU 接口、依赖和验收场景。
+退出标准：一次完整需求输入形成唯一的项目需求与设计基线；先确认至少一个可独立验证的 CU，并能从其 DesignSliceManifest 追溯需求、设计、接口、依赖和验收条件。
 
-### M4：编码闭环
+### M3：OpenCode 单 CU 编码与测试闭环
 
-- 一个真实 Host Adapter（宿主适配器）；
+- 一个真实 OpenCode Host Adapter（宿主适配器）；
+- 确定性 Context Assembler、版本化 Prompt Builder 与 AgentInvocation；
 - 结构化 Handoff（交接单）；
 - ExecutionSlice（执行切片）、单活动 Run、累计 ChangeSet（变更集）和单工作目录执行；
 - Gate（门禁）、EvidenceRef（证据引用）、状态事务与 Reconciler（对账器）；
-- 依赖拓扑排序、同层优先级和 CU/切片严格顺序执行。
-
-退出标准：多个执行切片在同一工作目录中依次完成，最终累计 Diff 通过权威检查并绑定精确 Git revision（源码修订）。
-
-### M5：测试闭环
-
 - TestObligation（测试义务）、EnvironmentBindingSnapshot（环境绑定快照）和追溯矩阵；
-- 测试四态与 Evidence（证据）类型；
-- VerificationBatch（验证批次）共享环境和跨 CU 场景证据；
-- 真实/Mock 证据分离；
-- 测试人工审核与 TestBaseline（测试基线）。
+- 测试四态、真实/Mock 证据分离、人工审核与 TestBaseline（测试基线）。
 
-退出标准：至少一个 CU 独立形成 TestBaseline 并交付；缺设备或外部系统的 CU 为 `BLOCKED`，批次运行不改变 CU 独立审核语义。
+退出标准：至少一个 Node 项目 CU 的多个切片在同一工作目录严格顺序执行，累计 Diff 通过权威检查并绑定精确 Git revision；该 CU 独立形成 CodeBaseline 与 TestBaseline。结果必须明确标注“CU 已交付，系统尚未验收”。
 
-### M6：调度、变更与恢复
+### M4：恢复、变更与最薄控制台
 
 - CU 挂起跳过、就绪重算、`QUEUED_FOR_CAPACITY`、单活动 Run 和人工恢复；
 - ChangeProposal（变更提案）和跨能力单元影响；
 - 软件工厂异常退出、孤立进程、工作目录、证据和 RuntimeLease 对账；
-- 工作目录脏状态与修订漂移的人工处置流程。
+- 工作目录脏状态与修订漂移的人工处置流程；
+- 提供项目状态、运行详情、Evidence、需求/设计审核、CU 编码/测试审核和人工恢复的最薄 Web Console；
+- 通过 REST 执行命令与查询，通过 SSE 展示运行事件。
 
-退出标准：重启和工作目录漂移均有确定结果，一个 CU 挂起不阻塞无关 CU，设计变化只失效受影响 CU。
+退出标准（MVP-A）：操作人员可从控制台完成 Node 项目初始化、项目需求与设计、一个 CU 的编码测试和人工审核；重启、工作目录漂移和外部环境阻塞均有确定结果，全部关键状态和 Evidence 可追溯。
 
-### M7：系统治理与验收闭环
+### M5：Spring Boot + Vue 复合模板
+
+- 通过同一 Factory Interface 操作前后端模块；
+- 前后端 `compile/build/package/start/readiness/stop`（编译/构建/打包/启动/就绪检查/停止）；
+- 复合进程 RuntimeLease、聚合就绪检查、日志和幂等停止；
+- Factory Core 不出现 Maven、npm、Spring 或 Vue 专属判断。
+
+退出标准：Node 与 Spring Boot + Vue 模板通过同一 Template/Runtime TCK；复合应用可以被原生 Runner 确定性启动、检查和清理。
+
+### M6：多 CU 系统治理与验收闭环
 
 - Agent/Prompt/Rule/Template 的不可变版本注册、具名发布确认和历史 Run 反查；
 - 项目 TemplateBinding 固定与一次显式模板升级影响评估；
+- 设计基线至少确认三个具有接口或业务依赖的 CU，并按依赖和同层优先级串行交付；
+- VerificationBatch（验证批次）可以共享环境和跨 CU 场景 Evidence，但各 CU 分别形成 TestBaseline；
 - 发布范围内至少三个 CU 完成后执行一次跨 CU System Integration Run；
 - SystemAcceptanceBaseline 绑定参与 CU 基线、接口、环境和 Evidence，并在任一绑定变化后正确失效；
 - 审核职责分离拦截与 `single_operator` 豁免审计；
 - 最小 FactoryTrajectoryEvent 本地 JSONL 与 Schema 回放。
 
-退出标准：系统交付不能由 CU 分别通过冒充；任一历史 Run 可反查确切生产资料内容，系统验收失效不错误推翻未受影响 CU 的自身基线，轨迹写入不拥有业务状态。
+退出标准（MVP-B）：Spring Boot + Vue 项目的至少三个 CU 分别交付后，必须通过跨 CU 真实场景和项目级人工审核形成 SystemAcceptanceBaseline；任一绑定变化使系统验收失效，但不错误推翻未受影响 CU 的自身基线。
 
-### M8：控制台与分析
+### M7：控制台与分析完善
 
-- 初始化、项目级需求/设计审核与 CU 级编码/测试审核 UI；
 - Capability Map、接口/环境/追溯视图；
 - 生产资料版本、容量队列、系统验收和职责分离告警视图；
 - 诊断包、成本和版本基线比较；
 - Markdown/Word/PDF 只读装配导出。
 
 退出标准：Operator（操作人员）能在同一控制台完成分层生命周期检查、人工恢复、能力单元交付和系统发布验收。
+
+### M8：MVP 后扩展评估
+
+- 只有真实场景需要容器级隔离、内容寻址缓存或跨 CI 一致执行时，才实现 Dagger Runner Adapter；
+- 只有出现分布式、长时间运行和多 Worker 调度需求时，才重新评估 Temporal，且 Factory Core 仍是业务事实源；
+- 第二个 Agent Host、并行 Run、团队服务器和检索增强分别建立独立架构基线，不通过隐藏配置提前启用。
+
+退出标准：每项扩展都有第二个真实实现需求、独立合同、迁移方案和不破坏既有 Baseline/审计语义的验证结果。
 
 ---
 
@@ -1350,38 +1382,44 @@ ai-software-factory/
 1. **领域单元测试**：初始化与带作用域 LifecycleStage 状态机、Baseline（基线）、ChangeProposal（变更提案）、影响失效、幂等和预期版本校验。
 2. **Adapter TCK（适配器合同测试套件）**：Host（宿主）、Scaffold（脚手架）、Runtime（运行时）、Handoff（交接单）、Secret（机密信息）脱敏和错误信封。
 3. **Trace/Recovery Replay（追踪/恢复重放）**：父子会话、取消、重试、成本缺失、孤立进程、孤立文件、RuntimeLease 到期和工作目录修订漂移。
-4. **真实纵向流程**：Node 与 Spring Boot + Vue 初始化、一次完整项目需求与总体设计、一个真实宿主、至少一个完整 CU 和外部环境阻塞。
+4. **真实纵向流程**：MVP-A 验证 Node、OpenCode 与一个完整 CU；MVP-B 验证 Spring Boot + Vue、至少三个相关 CU 和跨 CU 系统验收。
 
-### 14.2 首版验收场景
+### 14.2 MVP-A 基础闭环验收
 
 1. 纯 Node 项目完成 `instantiate/compile/test/start/readiness/stop`（实例化/编译/测试/启动/就绪检查/停止）和初始化审核。
-2. Spring Boot + Vue 通过同一 Factory Interface（工厂接口）操作两个模块。
-3. 用户一次提交包含用户管理、角色权限和审计日志的完整需求，只形成一个 Project RequirementBaseline 和一个 Project DesignBaseline。
-4. 需求阶段只产生候选 CU；设计阶段依据数据归属、接口、事务和依赖确认最终 CU，并为每个 CU 生成 DesignSliceManifest。
-5. 查询、新增、修改、删除属于同一“卫星信息管理”能力单元，且该 CU 同时分配给 Vue CSCI 和 Spring Boot CSCI。
-6. Web—后端是内部接口，SSO（单点登录）是外部接口，并绑定 SIT（系统集成测试）地址和 SecretRef（机密引用）。
-7. ExecutionPlan 按依赖拓扑和同层优先级顺序调度；当前 CU 挂起后跳过它，继续无依赖阻塞的 CU。
-8. 同一能力单元的多个执行切片在唯一工作目录中严格顺序执行，后一切片能够直接读取前一切片的已验证修改。
-9. 多个 CU 可通过 VerificationBatch 共享跨 CU 测试执行和 Evidence，但分别形成 TestBaseline。
-10. 发布范围内三个 CU 全部交付后，系统仍需执行跨 CU 真实场景并经项目级审核形成 SystemAcceptanceBaseline；任一绑定 CU 新基线产生后，系统验收自动失效，但无关 CU 基线保持有效。
-11. 单点登录或真实设备不可用时，前置探针在 Run 启动前将相关 CU 置为 `OnHold`；恢复后由操作人员创建新运行。
-12. 第二个就绪 Run 请求进入 `QUEUED_FOR_CAPACITY`，第一个 Run 释放执行权后再按确定性策略启动；等待不消耗重试预算。
-13. 同一身份执行并审核同一阶段时默认被拦截；本机单用户项目只有显式启用并记录豁免才能继续。
-14. 执行器运行中强制终止软件工厂，重启后识别遗留进程、活动 Run、容量队列、工作目录 Git 状态和证据。
-15. Project RequirementBaseline 变化使总体设计过期；Project DesignBaseline 或接口版本变化只使受影响 CU 的代码和测试基线失效。
-16. 任一历史 Run 可通过固定引用和内容 Hash 恢复当时的 Agent、Prompt、Rule 与 Template 版本；注册表不存在可变 `latest` 引用。
-17. `detect-only` 检测参考 Hash 变化，`reproducible` 恢复实际读取过的旧内容。
-18. FactoryTrajectoryEvent 写入失败不改变 Run/Gate 结果，回放也不能推进生命周期。
-19. `e2e` 诊断级别仍不输出密码、Token、Authorization Header 或完整凭据命令。
+2. 数据库迁移、状态事务、Outbox、幂等和重启恢复在真实 PostgreSQL 上通过，任何验收不得由 H2 结果替代。
+3. Windows 原生 Runner 能终止完整进程树；超时、取消和工厂异常退出后，可以识别活动 Run、RuntimeLease、工作目录 Git 状态和 Evidence。
+4. 用户一次提交完整需求，只形成一个 Project RequirementBaseline 和一个 Project DesignBaseline；需求阶段只产生候选 CU，设计阶段确认正式 CU 和 DesignSliceManifest。
+5. OpenCode 只通过 Host Adapter 接收已经装配的 AgentInvocation；Stage Agent Adapter 不读取资料、不选择上下文、不拼接 Prompt。
+6. 一个 CU 的多个 ExecutionSlice 在唯一工作目录中严格顺序执行，后一切片能够读取前一切片的已验证修改。
+7. CU 通过独立的编码、测试和人工审核形成 CodeBaseline 与 TestBaseline；输出必须明确“CU 已交付，系统尚未验收”。
+8. 缺少外部环境时，前置探针在 Run 启动前将 CU 置为 `OnHold`；恢复后由操作人员创建新运行。
+9. 第二个就绪 Run 请求进入 `QUEUED_FOR_CAPACITY`，等待不消耗重试预算。
+10. 同一身份执行并审核同一阶段时默认被拦截；本机单用户项目只有显式启用并记录豁免才能继续。
+11. 任一历史 Run 可通过固定引用和内容 Hash 恢复当时的 Agent、Prompt、Rule 与 Template 版本；注册表不存在可变 `latest` 引用。
+12. FactoryTrajectoryEvent 写入失败不改变 Run/Gate 结果；`e2e` 诊断级别仍不输出密码、Token、Authorization Header 或完整凭据命令。
 
-任何“完整通过”声明必须同时具备：
+### 14.3 MVP-B 系统交付验收
+
+1. Spring Boot + Vue 通过同一 Factory Interface 操作前后端模块，并通过与 Node 相同的 Template/Runtime TCK。
+2. 查询、新增、修改、删除仍属于同一业务 CU；该 CU 可以同时分配给 Vue CSCI 和 Spring Boot CSCI。
+3. Web—后端内部接口和外部接口均登记版本、消费者、环境和 SecretRef，接口变化产生可审计的影响候选集。
+4. 项目总体设计至少确认三个相关 CU；ExecutionPlan 按依赖拓扑和同层优先级串行调度，挂起 CU 不阻塞无依赖的 CU。
+5. 多个 CU 可以通过 VerificationBatch 共享环境与跨 CU Evidence，但必须分别形成 CodeBaseline 和 TestBaseline。
+6. 发布范围内全部 CU 交付后，仍必须执行跨 CU 真实场景并经项目级审核形成 SystemAcceptanceBaseline。
+7. 任一绑定 CU 基线、接口版本或系统验收场景变化后，SystemAcceptanceBaseline 自动变为 `STALE`，无关 CU 的自身基线保持有效。
+8. Project RequirementBaseline 变化使总体设计过期；Project DesignBaseline 变化只按 DesignSliceManifest、接口和依赖图失效受影响 CU。
+
+任何“系统完整通过”声明必须同时具备：
 
 - InitializationBaseline（初始化基线）和项目初始化审核；
 - 项目级需求/设计与 CU 级编码/测试的人工审核；
 - 当前源码、接口、环境和测试证据的精确绑定；
 - 最终产物符合性与未解决问题披露；
 - CU 交付决定；
-- 当前发布范围的 SystemAcceptanceBaseline；若只声明单个 CU 交付，则必须明确不代表系统已验收。
+- 当前发布范围的 SystemAcceptanceBaseline。
+
+MVP-A 只允许声明“基础闭环通过”和“单个 CU 已交付”；不得声明系统已验收。MVP-B 满足以上全部条件后，才允许声明“系统交付闭环通过”。
 
 业务代码能运行不能替代 Factory Gate（工厂门禁）；所有单元测试通过也不能替代真实 Host（宿主）、Git、模板、环境和业务验收集成。
 
@@ -1404,6 +1442,8 @@ ai-software-factory/
 | 串行 Run 中途失败留下脏目录 | 保存 base revision、累计 Diff、Handoff 和 Evidence，人工确认后继续或放弃 |
 | 环境或设备不可用 | 当前 Run 明确进入 `BLOCKED`/`OnHold`，释放执行权并调度下一个就绪 CU |
 | 文件、Git、数据库无法原子提交 | 内容寻址、数据库事务引用、Outbox（事务发件箱）和 Reconciler（对账器） |
+| H2 与 PostgreSQL 语义漂移 | 权威数据库只采用 PostgreSQL，迁移和集成验收在真实 PostgreSQL 上执行 |
+| Windows 原生执行缺少容器隔离 | 命令必须来自已发布 Adapter，限制工作目录和环境，终止完整进程树并保留审计；隔离需求成熟后再引入 Dagger Adapter |
 | 参考资料复现成本 | 默认 `detect-only`（仅检测），正式项目按实际读取内容去重快照 |
 | 智能体长推理和重复调用 | 运行预算、错误指纹、进展检测和执行切片拆分 |
 | 自动重试污染上下文 | 新运行只使用正式基线、最新反馈和交接单 |
@@ -1436,6 +1476,8 @@ Project Initialization（项目初始化）
 
 CSCI 管理配置、版本、部署和验证对象，CapabilityUnit（能力单元）管理业务交付，RequirementItem（需求项）表达具体需求，ExecutionSlice（执行切片）只承担内部调度。ExecutionPlan 由设计基线派生且可重建，v1.2 只按依赖和优先级串行执行；任一时刻只有一个活动业务 Run，其他请求以 `QUEUED_FOR_CAPACITY` 显式等待，所有切片共享项目唯一工作目录并依次承接修改。
 
-Factory（软件工厂）对外提供小而稳定的 Application Interface（应用接口），内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。Runner（执行器）、Gate（门禁）、Observer（观察器）、Interface Registry（接口登记表）、Production Asset Registry（生产资料登记表）、Environment Registry（环境登记表）、System Acceptance（系统验收）和 Reconciler（对账器）分别拥有明确职责；跨数据库、Git、文件和进程的一致性由可对账协议保证，不声称拥有并不存在的全局事务。FactoryTrajectoryEvent 支持诊断和后续 Harness 学习闭环，但始终是只读派生信号，不能成为第二套业务事实源。
+Factory（软件工厂）使用 Java 21、Spring Boot 3 模块化单体和 PostgreSQL 16+ 构成唯一控制平面，以 Vue 3 Web Console 提供操作入口。内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。MVP 首先接入 OpenCode，并通过 Windows 原生 Runner 执行受控命令；Dagger、Temporal、LangGraph 和其他多智能体框架都不进入 Factory Core。
 
-本文件是唯一保留的 v1.2 最终方案，但其定位是**架构基线**，不是已经完成的工程实施基线。下一步只进入 M0 合同冻结与纵向原型；Schema（模式）、样例、TCK（合同测试套件）和 Fake Adapter（模拟适配器）通过验证后，再按实施顺序逐项开发 Core（核心模块）、模板、Runner（执行器）、Host Adapter（宿主适配器）和控制台。
+Runner（执行器）、Gate（门禁）、Observer（观察器）、Interface Registry（接口登记表）、Production Asset Registry（生产资料登记表）、Environment Registry（环境登记表）、System Acceptance（系统验收）和 Reconciler（对账器）分别拥有明确职责；跨 PostgreSQL、Git、文件和进程的一致性由可对账协议保证，不声称拥有并不存在的全局事务。FactoryTrajectoryEvent 支持诊断和后续 Harness 学习闭环，但始终是只读派生信号，不能成为第二套业务事实源。
+
+本文件是仓库唯一保留的 v1.2 最终方案，`contracts/` 是其版本化机器合同；评审稿、调研稿和旧方案不作为并列事实源保留。实施先完成 MVP-A：Node、PostgreSQL、OpenCode、原生 Runner 和单 CU 基础闭环；再完成 MVP-B：Spring Boot + Vue、至少三个相关 CU、跨 CU 系统集成和 SystemAcceptanceBaseline。两级验收通过前，不把架构基线描述为已经完成的工程实施基线。

@@ -34,6 +34,7 @@ Schema 集合：
 
 ## 已冻结的裁决
 
+- PostgreSQL 16+ 是唯一权威关系数据库；不提供 H2 运行模式，也不维护双数据库兼容合同。
 - SystemAcceptance 绑定 `project_id + execution_plan_version`，不引入 `DeliveryPlan`。
 - v1.2 保持单活动 Run；`FactoryRunBudget.max_concurrent_runs` 和 `per_project_quota` 都固定为 `1`，其他 Run 进入 `QUEUED_FOR_CAPACITY`。
 - Agent、Prompt、Rule 与 Template 使用稳定 ID、版本和内容 Hash；持久化合同不接受 `latest`。
