@@ -1,0 +1,1 @@
+{"evidence_id":"EVD-1","run_id":"RUN-1","evidence_type":"TEST_RESULT","media_type":"application/json","storage_ref":"evidence/EVD-1.json","content_hash":"bad","byte_length":-1,"source":{"kind":"RUNNER","source_id":"EXE-1"},"sanitized":false,"produced_at":"2026-08-05T10:04:00Z"}

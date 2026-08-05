@@ -38,8 +38,8 @@
 ### 1.2 MVP 边界
 
 1. Factory（软件工厂）服务多个本地项目，但 v1.2 MVP（最小可用版本）选择**本机单用户模式**。
-2. MVP 采用 Spring Boot 模块化单体、单实例部署和本地 Web Console（网页控制台）。
-3. MVP 分为两级：MVP-A 先以纯 Node 模板和单个 CU 验证基础闭环；MVP-B 再以 Spring Boot + Vue 复合模板和至少三个相关 CU 验证系统交付闭环。
+2. MVP 采用 Spring Boot 模块化单体、单实例部署和 Electron Desktop Console（桌面控制台）；Renderer（渲染进程）使用 React，开发期直接通过 `pnpm start` 启动真实 Electron 窗口，正式安装包在核心闭环稳定后提供。
+3. MVP 分为两级：MVP-A 先以纯 Node 模板和单个 CU 验证基础闭环；MVP-B 再以 Spring Boot + React 复合模板和至少三个相关 CU 验证系统交付闭环。
 4. 首期只接入 OpenCode 一个真实智能体宿主；其他宿主通过合同测试和 Fake Adapter（模拟适配器）验证。
 5. MVP Runner 使用 Windows 原生受控子进程；容器 Runner 和 Dagger Adapter 只保留后续扩展边界，不与 MVP 同期实现。
 6. 权威关系数据库只采用 PostgreSQL；不维护 H2 与 PostgreSQL 双数据库兼容路径。
@@ -82,9 +82,11 @@
 
 ```mermaid
 flowchart TD
-    U["Operator（操作人员）"] --> WEB["本地网页控制台"]
+    U["Operator（操作人员）"] --> DESKTOP["Electron Desktop App（桌面应用）"]
     U --> CLI["Factory CLI（命令行）"]
+    DESKTOP --> WEB["React Renderer（渲染进程）"]
     WEB --> API["Factory Application Interface（工厂应用接口）"]
+    DESKTOP -. "仅启动、健康检查与退出协调" .-> API
     CLI --> API
 
     API --> PROJECT["项目与初始化"]
@@ -182,7 +184,7 @@ Console / CLI / Agent Tool
 → Project Runner（项目执行器）
 ```
 
-插件不得直接定位模板脚本，否则插件会重新依赖 Maven、npm、Spring Boot、Vue 等实现细节。
+插件不得直接定位模板脚本，否则插件会重新依赖 Maven、pnpm、Spring Boot、React 等实现细节。
 
 ### 2.3 技术选型与采用边界
 
@@ -190,9 +192,11 @@ Console / CLI / Agent Tool
 |---|---|---|
 | 控制平面 | Java 21、Spring Boot 3 模块化单体 | Core（核心模块）拥有状态机、门禁、基线、证据引用和恢复规则；本版不拆微服务 |
 | 权威数据库 | PostgreSQL 16+、Flyway、显式 SQL/Spring JDBC | 只维护一套数据库语义；状态迁移、Outbox 和审计查询保持显式，不以 ORM 回调隐式推进生命周期 |
-| Web Console | Vue 3、TypeScript、Vite、REST + SSE | REST 承担命令与查询，SSE 推送运行事件；控制台不能绕过 Application Interface（应用接口）修改状态 |
+| Desktop Shell（桌面外壳） | Electron Forge、现有 `sdlc-electron-scaffold`、pnpm | 开发期以 `pnpm start` 启动 Vite、main/preload 和真实 Electron 窗口；Electron 只负责窗口、应用生命周期、通知及 Spring Boot 进程的启动、健康检查和退出协调，不拥有领域状态 |
+| Desktop Console（桌面控制台） | React、TypeScript、Vite、REST + SSE | Renderer 通过 REST 执行命令与查询，通过 SSE 接收运行事件；同一 React 应用允许浏览器独立预览，但浏览器不是 MVP 的主要交付形态 |
+| UI Design System（界面设计系统） | Tailwind CSS、Radix UI、CVA、Lucide、TanStack Query/Table/Virtual、React Hook Form、Zod、Sonner、Recharts、CodeMirror | 采用 Codex/Claude Code 式连续 Agent 工作区和定制 shadcn/ui 风格，不引入 Ant Design 或 Material UI 作为全局视觉基础；复杂表格使用无样式 Headless（无头）组件保持一致视觉语言 |
 | 机器合同 | JSON Schema Draft 2020-12、正反样例、TCK | 命令、事件、Handoff、Evidence、生产资料和 Baseline 使用版本化合同；Markdown 仍是长篇正式正文 |
-| 首个 Agent Host | OpenCode Host Adapter | 复用其会话、工具、权限和事件能力，但 OpenCode Plugin、MCP、CLI 或 SDK 都只是可替换宿主边界，不拥有业务事实 |
+| 首个 Agent Host | Node.js/TypeScript OpenCode Host Adapter | Adapter 固定 `@opencode-ai/sdk` 与 OpenCode 版本，负责本地 Server 生命周期、REST/SSE、取消、结构化输出和错误转换；Spring Boot Core 只依赖自有 P0 合同，不接触 OpenCode SDK 类型 |
 | 上下文 | 确定性 Context Assembler、Git、文件清单、文本/符号索引 | 先按固定来源、版本、Hash、预算和顺序装配；本版不引入向量数据库，未来检索结果也不能覆盖正式基线 |
 | 首个 Runner | Windows 原生受控子进程 | 统一工作目录、环境、超时、取消、进程树终止、输出脱敏和 Evidence；不要求用户安装 Docker Desktop |
 | 可观测性 | OpenTelemetry + 本地 JSONL | OTel Span 和 FactoryTrajectoryEvent 只读追加；观测失败不得改变 Run、Gate 或 Baseline |
@@ -206,6 +210,41 @@ Console / CLI / Agent Tool
 - Temporal：采用确定性编排与副作用执行分离、追加式历史、幂等和可恢复任务的原则；MVP 不部署 Temporal，避免产生第二套工作流事实源和额外运维面。
 - Dagger：把 Typed Operation（类型化操作）、内容寻址缓存和统一 OTel 作为未来容器 Runner 的候选；MVP 不强制 Docker Desktop。
 - LangGraph、MetaGPT 与 ChatDev：可用于 Agent 内部实验、角色分工或工作流原型；不得承载 Factory 生命周期、人工审核、Baseline 或系统验收。
+
+### 2.4 Desktop Console（桌面控制台）与交互架构
+
+Factory 的主要用户界面是桌面 Agent Workspace（智能体工作区），不是传统 CRUD（增删改查）后台。现有 `sdlc-electron-scaffold` 作为桌面基线，保留 Electron Forge、React、Vite、TypeScript、typed IPC（类型化进程间通信）、sandbox（沙箱）、CSP（内容安全策略）和 IPC sender validation（IPC 发送方校验）。开发期直接运行 Electron，不把“先实现浏览器版、以后重写桌面版”作为实施路径；React Renderer 可由 Vite 单独预览，但生产代码保持同一份。
+
+进程职责如下：
+
+```text
+Electron Main（主进程）
+├─ 创建窗口、托盘和系统通知
+├─ 启动并监测 Spring Boot 本地进程
+├─ 等待 readiness（就绪检查）并协调退出
+└─ 通过 preload 只暴露最小业务语义 IPC
+
+React Renderer（渲染进程）
+├─ Projects（项目）
+├─ Attention（待处理事项）
+├─ Operations（运行与容量看板）
+└─ Project Agent Workspace（项目智能体工作区）
+
+Spring Boot Control Plane（控制平面）
+└─ Application Interface、状态机、Gate、Evidence、审计与 Adapter 编排
+```
+
+Electron Main 不直接读写 PostgreSQL，不执行 Factory 领域迁移，不判断 Gate，也不把通用 `ipcRenderer`、文件系统或 Shell 能力暴露给 Renderer。Spring Boot 只绑定 loopback（本机回环）地址；开发期和打包后均需使用受保护的本地会话，不能因为监听本机端口而把 Application Interface 视为可信调用。
+
+项目内工作区采用三栏连续结构：左侧展示项目生命周期与阶段状态，中间以 Codex/Claude Code 式会话流交错呈现 Agent 消息、执行步骤、Artifact（产物）、Diff、测试结果和正式人工 Gate，右侧按当前阶段展示 Evidence、Baseline、文件和运行动态；底部输入框只用于提问、补充上下文和要求修订，不能代替批准、退回或接管等正式命令。
+
+跨项目管理只设置三个顶层入口：
+
+1. `Projects`：项目、最近活动和进入项目工作区的入口；
+2. `Attention`：等待人工裁决、阻塞、失败、超时和恢复请求；
+3. `Operations`：按 `READY → RUNNING → WAITING_FOR_HUMAN → BLOCKED → COMPLETED` 展示运行队列、容量和执行看板。
+
+Operations 看板是只读 Projection（投影）。卡片可以打开权威 Run 或阶段上下文，但不能通过拖拽修改生命周期、越过 Gate 或创建 Baseline；所有状态迁移仍必须提交明确命令并由 Spring Boot Guard（守卫条件）校验。界面的视觉基线沿用现有原型的深色石墨 Surface（表面）、低对比边框、蓝色活动态、绿色通过态、琥珀等待态和红色阻塞态；最具辨识度的元素是同时表达阶段、Agent 活动、Evidence 完整度和人工 Gate 的可执行生命周期轨，而不是通用统计卡片。
 
 ---
 
@@ -282,13 +321,13 @@ erDiagram
 | Baseline（基线） | 经审核批准且不可原地修改的一组版本化产物引用 |
 | Evidence（证据） | 支撑 Gate（门禁）判断的不可变执行事实 |
 
-`Task`（任务）不作为领域实体。UI（用户界面）顶层只显示项目、能力地图、执行计划、能力单元和阶段；执行切片与验证批次只显示在执行详情中。
+`Task`（任务）不作为领域实体。UI（用户界面）顶层只提供 Projects、Attention 和 Operations 三个入口；项目内显示能力地图、执行计划、能力单元和阶段，执行切片与验证批次只显示在执行详情中。看板卡片是查询投影，不成为新的领域实体。
 
 ### 3.3 CSCI（计算机软件配置项）、CU（能力单元）与分配
 
 ```text
 Project（项目）：卫星管理系统
-├─ CSCI-WEB：Vue 前端
+├─ CSCI-WEB：React 前端
 ├─ CSCI-SERVICE：Spring Boot 后端
 ├─ CapabilityUnit（能力单元）：卫星信息管理
 │  ├─ FR-001 查询卫星信息
@@ -772,7 +811,7 @@ cancel()
 protocol_version: "1.1"
 
 template:
-  id: springboot-vue
+  id: springboot-react
   version: 1.0.0
   digest: sha256:...
   min_factory_version: 1.1.0
@@ -787,7 +826,7 @@ modules:
     path: backend
     depends_on: []
   - id: frontend
-    type: vue
+    type: react
     path: frontend
     depends_on: [backend]
 
@@ -834,7 +873,24 @@ cleanup_token
 
 ### 7.4 Schema（模式）与 TCK（合同测试套件）
 
-编码前必须冻结以下机器合同。文件名保留英文，便于代码和自动化工具直接引用：
+机器合同按首次消费者分批冻结，不以文件数量作为完成指标。开始 M1 前必须冻结下列 P0 跨模块合同，并由 Fake Host、Fake Runner 与真实 Adapter 共用 TCK：
+
+```text
+run-request.schema.json
+agent-invocation.schema.json
+context-manifest.schema.json
+handoff.schema.json
+evidence.schema.json
+gate-command.schema.json
+gate-result.schema.json
+host-run-event.schema.json
+host-run-result.schema.json
+execution-result.schema.json
+runtime-lease.schema.json
+error-envelope.schema.json
+```
+
+其余合同在对应里程碑首次实现前冻结；完整目标集合如下。文件名保留英文，便于代码和自动化工具直接引用：
 
 ```text
 project-bootstrap-request.schema.json
@@ -880,7 +936,7 @@ baseline.schema.json
 error-envelope.schema.json
 ```
 
-每份模式必须具有有效、无效、缺字段、版本兼容和幂等重放样例。Template（模板）、Runner（执行器）、Host Adapter（宿主适配器）和 Context Provider（上下文提供器）共用各自的合同测试套件；合同模拟器与真实实现必须通过相同测试。
+每份模式必须具有有效和无效样例；P0 TCK 还必须覆盖缺字段、版本不匹配、幂等重放、取消、超时和结构化输出无效。Template（模板）、Runner（执行器）、Host Adapter（宿主适配器）和 Context Provider（上下文提供器）共用各自的合同测试套件；合同模拟器与真实实现必须通过相同测试。不得为了达到“40+”数量而在没有真实消费者时提前冻结浅合同。
 
 ### 7.5 Production Asset Registry（生产资料登记表）
 
@@ -948,6 +1004,8 @@ TemplateBinding
 
 ### 8.1 Host Adapter（宿主适配器）
 
+首个实现是独立 Node.js/TypeScript 进程。它使用固定版本的 `@opencode-ai/sdk` 启动或连接本地 OpenCode Server，再通过 Factory 自有的 RunRequest、AgentInvocation、HostRunEvent、HostRunResult、Handoff 和 ErrorEnvelope 与 Spring Boot Core 通信。Java Core 不直接依赖 OpenCode 的 `Session`、`Message`、`Part` 或其他生成类型；SDK/API 变化只能在 Adapter 内部吸收。
+
 宿主适配器负责：
 
 - 模型处理前捕获原始输入；
@@ -957,7 +1015,9 @@ TemplateBinding
 - 在运行时安全注入凭据；
 - 处理宿主升级、重启和不可用。
 
-宿主适配器不保存正式生命周期真相，也不让宿主聊天记录成为交付事实源。
+启动握手必须记录 Adapter、SDK 和 Host 的精确语义版本，并以 `/global/health` 返回的 Host 版本为准；任一版本不满足已验证兼容矩阵时拒绝创建 Run。Adapter 允许使用宿主 JSON Schema 模式，但仍必须在本地以固定 Schema 二次校验返回对象。宿主报告 `finish=tool-calls`、却没有有效结构化对象，或字段在版本间由 `structured_output` 漂移为 `structured` 时，Adapter 必须转换为 `STRUCTURED_OUTPUT_INVALID` 或显式兼容映射，不得报告成功。
+
+宿主适配器不保存正式生命周期真相，也不让宿主聊天记录成为交付事实源。Adapter 的自动重试必须关闭或纳入 Factory 的统一重试预算，避免 SDK 内部重试与 Orchestrator 重试叠加。
 
 ### 8.2 RunRequest（运行请求）
 
@@ -1357,12 +1417,17 @@ ai-software-factory/
 │  ├─ gate/
 │  ├─ observer/
 │  └─ reconciler/
+├─ desktop-console/
+│  ├─ src/main/
+│  ├─ src/preload/
+│  ├─ src/renderer/
+│  └─ src/shared/
 ├─ agent-adapters/
 │  ├─ opencode/
 │  └─ codex/
 ├─ templates/
 │  ├─ node-service/
-│  └─ springboot-vue/
+│  └─ springboot-react/
 ├─ contracts/
 │  ├─ schemas/
 │  ├─ examples/
@@ -1390,19 +1455,23 @@ ai-software-factory/
 
 ### M0：领域与合同冻结
 
+- 先在临时目录以固定 CLI/SDK 版本执行 OpenCode Spike，验证启动、健康版本、会话、SSE、结构化输出、取消、删除和清理；Spike 只形成兼容性证据，不作为第二份架构文档保留；
+- 复用 `sdlc-electron-scaffold` 初始化 `desktop-console` 工程边界，冻结 main/preload/renderer/shared 的职责和 `pnpm start` 开发入口；M0 只要求安全空壳与 Spring Boot readiness 接缝，不制作正式安装包；
+
 - 冻结 Project（项目）、CSCI、CapabilityCandidate（能力候选）、CU（能力单元）、RequirementItem（需求项）、DesignSliceManifest、ExecutionPlan、VerificationBatch、ExecutionSlice（执行切片）和 Run（运行）的唯一语义；
 - 冻结 ValidationContract、ValidationFinding、CapabilityIndex、ContextExpansionRequest、InterfaceDefinition、AgentDefinition、PromptTemplate、RuleSet、TemplateRegistration、TemplateBinding、SystemAcceptance 和 FactoryTrajectoryEvent 的唯一语义；
 - 冻结初始化状态机、带作用域的 LifecycleStage、Guard（守卫条件）、Baseline（基线）和失效规则；
 - 冻结 OTel `factory.*` 自定义属性的 Schema 版本与语义；本阶段不要求部署 Collector 或外部观测后端；
-- 交付全部 P0（最高优先级）Schema（模式）、正反样例和 TCK（合同测试套件）；
-- 提供 Fake Host（模拟宿主）、Template（模板）和 Runner（执行器）；
+- 交付 7.4 节列出的 P0（最高优先级）Schema（模式）、正反样例和 TCK（合同测试套件），其余 Schema 在首次消费者所在里程碑前冻结；
+- 提供 Fake Host（模拟宿主）和 Fake Runner（模拟执行器）；Fake Template 在 M1 的 Template Interface 开始实现前提供；
+- 交付可从空 PostgreSQL 执行的 Flyway V1 初始迁移；该文件同时是独立 DDL 验证的唯一输入，不维护第二份初始化 SQL；
 - 从第一天提供关联标识、Audit Event（审计事件）、最小诊断日志、脱敏和恢复元数据。
 
-退出标准：文档、数据库、Application Interface（应用接口）、Schema（模式）、Prompt（提示词）和 UI（用户界面）无第二套术语；所有合同测试通过。
+退出标准：OpenCode Spike 的真实行为已映射为稳定 Host 合同；文档、数据库、Application Interface（应用接口）、Schema（模式）、Prompt（提示词）和 UI（用户界面）无第二套术语；P0 正反例、Fake Adapter TCK 和幂等重放全部通过。
 
 ### M1：PostgreSQL、原生 Runner 与纯 Node 初始化闭环
 
-- 建立 PostgreSQL 迁移、事务、Outbox、幂等键、预期版本和 Reconciler（对账器）基础；
+- 以 M0 的 Flyway V1 为起点，建立增量迁移、事务、Outbox、幂等键、预期版本和 Reconciler（对账器）基础；
 - 原生 Runner 覆盖工作目录、环境、超时、取消、完整进程树终止、输出脱敏和 Evidence；
 - Template Catalog（模板目录）、参数模式、实例化、bootstrap（引导准备）和校验；
 - `compile/test/start/readiness/stop`（编译/测试/启动/就绪检查/停止）；
@@ -1435,25 +1504,26 @@ ai-software-factory/
 
 退出标准：至少一个 Node 项目 CU 的多个切片在同一工作目录严格顺序执行，累计 Diff 通过权威检查并绑定精确 Git revision；CapabilityIndex 只暴露紧凑元数据，批准的 ContextExpansionRequest 可按固定版本加载并更新 ContextManifest；该 CU 独立形成 CodeBaseline 与 TestBaseline。结果必须明确标注“CU 已交付，系统尚未验收”。
 
-### M4：恢复、变更与最薄控制台
+### M4：恢复、变更与最薄桌面控制台
 
 - CU 挂起跳过、就绪重算、`QUEUED_FOR_CAPACITY`、单活动 Run 和人工恢复；
 - ChangeProposal（变更提案）和跨能力单元影响；
 - 软件工厂异常退出、孤立进程、工作目录、证据和 RuntimeLease 对账；
 - 工作目录脏状态与修订漂移的人工处置流程；
-- 提供项目状态、运行详情、Evidence、需求/设计审核、CU 编码/测试审核和人工恢复的最薄 Web Console；
-- 通过 REST 执行命令与查询，通过 SSE 展示运行事件。
+- 复用 `sdlc-electron-scaffold`，以 React Renderer 实现项目状态、阶段会话流、运行详情、Evidence、需求/设计审核、CU 编码/测试审核和人工恢复；
+- `pnpm start` 作为开发期统一入口，协调 Vite、Electron main/preload 与 Spring Boot 开发进程；通过 readiness 确认后打开窗口，退出时清理本次启动的子进程；
+- Renderer 通过 REST 执行命令与查询，通过 SSE 展示运行事件；preload 只暴露目录选择、通知、应用版本等最小业务语义能力。
 
 退出标准（MVP-A）：操作人员可从控制台完成 Node 项目初始化、项目需求与设计、一个 CU 的编码测试和人工审核；重启、工作目录漂移和外部环境阻塞均有确定结果，全部关键状态和 Evidence 可追溯。
 
-### M5：Spring Boot + Vue 复合模板
+### M5：Spring Boot + React 复合模板
 
 - 通过同一 Factory Interface 操作前后端模块；
 - 前后端 `compile/build/package/start/readiness/stop`（编译/构建/打包/启动/就绪检查/停止）；
 - 复合进程 RuntimeLease、聚合就绪检查、日志和幂等停止；
-- Factory Core 不出现 Maven、npm、Spring 或 Vue 专属判断。
+- Factory Core 不出现 Maven、pnpm、Spring 或 React 专属判断。
 
-退出标准：Node 与 Spring Boot + Vue 模板通过同一 Template/Runtime TCK；复合应用可以被原生 Runner 确定性启动、检查和清理。
+退出标准：Node 与 Spring Boot + React 模板通过同一 Template/Runtime TCK；复合应用可以被原生 Runner 确定性启动、检查和清理。
 
 ### M6：多 CU 系统治理与验收闭环
 
@@ -1467,16 +1537,20 @@ ai-software-factory/
 - 审核职责分离拦截与 `single_operator` 豁免审计；
 - 最小 FactoryTrajectoryEvent 本地 JSONL 与 Schema 回放。
 
-退出标准（MVP-B）：Spring Boot + Vue 项目的至少三个 CU 分别交付后，必须由独立 Validator 对冻结断言完成审查和黑盒验证，并通过跨 CU 真实场景及项目级人工审核形成 SystemAcceptanceBaseline；任一绑定变化使系统验收失效，但不错误推翻未受影响 CU 的自身基线。
+退出标准（MVP-B）：Spring Boot + React 项目的至少三个 CU 分别交付后，必须由独立 Validator 对冻结断言完成审查和黑盒验证，并通过跨 CU 真实场景及项目级人工审核形成 SystemAcceptanceBaseline；任一绑定变化使系统验收失效，但不错误推翻未受影响 CU 的自身基线。
 
-### M7：控制台与分析完善
+### M7：控制台、分析与桌面分发
 
+- 完成 Projects、Attention、Operations 和项目三栏 Agent Workspace；
+- Operations 看板展示运行队列、容量、等待人工处理和阻塞原因，但所有卡片操作仍提交正式 Application Command；
 - Capability Map、接口/环境/追溯视图；
 - 生产资料版本、容量队列、系统验收和职责分离告警视图；
 - 诊断包、成本和版本基线比较；
 - Markdown/Word/PDF 只读装配导出。
+- 仅在 MVP-A、MVP-B 和进程恢复验收通过后，冻结 Electron、JRE、Spring Boot、Node Adapter 与数据库迁移的统一版本集；
+- 明确 PostgreSQL 本机服务或外部服务的部署、备份、升级和卸载责任，完成 Windows 安装器、Authenticode 签名与受控升级；开发构建不得冒充正式发布包。
 
-退出标准：Operator（操作人员）能在同一控制台完成分层生命周期检查、人工恢复、能力单元交付和系统发布验收。
+退出标准：Operator（操作人员）能在同一控制台完成分层生命周期检查、人工恢复、能力单元交付和系统发布验收；签名安装包能够安装、启动、升级和卸载，不丢失用户数据，也不遗留无法识别的子进程或数据库服务。
 
 ### M8：MVP 后扩展评估
 
@@ -1495,7 +1569,7 @@ ai-software-factory/
 1. **领域单元测试**：初始化与带作用域 LifecycleStage 状态机、Baseline（基线）、ChangeProposal（变更提案）、影响失效、幂等和预期版本校验。
 2. **Adapter TCK（适配器合同测试套件）**：Host（宿主）、Scaffold（脚手架）、Runtime（运行时）、Handoff（交接单）、Secret（机密信息）脱敏和错误信封。
 3. **Trace/Recovery Replay（追踪/恢复重放）**：父子会话、取消、重试、成本缺失、孤立进程、孤立文件、RuntimeLease 到期和工作目录修订漂移。
-4. **真实纵向流程**：MVP-A 验证 Node、OpenCode 与一个完整 CU；MVP-B 验证 Spring Boot + Vue、至少三个相关 CU 和跨 CU 系统验收。
+4. **真实纵向流程**：MVP-A 验证 Node、OpenCode 与一个完整 CU；MVP-B 验证 Spring Boot + React、至少三个相关 CU 和跨 CU 系统验收。
 
 ### 14.2 MVP-A 基础闭环验收
 
@@ -1514,8 +1588,8 @@ ai-software-factory/
 
 ### 14.3 MVP-B 系统交付验收
 
-1. Spring Boot + Vue 通过同一 Factory Interface 操作前后端模块，并通过与 Node 相同的 Template/Runtime TCK。
-2. 查询、新增、修改、删除仍属于同一业务 CU；该 CU 可以同时分配给 Vue CSCI 和 Spring Boot CSCI。
+1. Spring Boot + React 通过同一 Factory Interface 操作前后端模块，并通过与 Node 相同的 Template/Runtime TCK。
+2. 查询、新增、修改、删除仍属于同一业务 CU；该 CU 可以同时分配给 React CSCI 和 Spring Boot CSCI。
 3. Web—后端内部接口和外部接口均登记版本、消费者、环境和 SecretRef，接口变化产生可审计的影响候选集。
 4. 项目总体设计至少确认三个相关 CU；ExecutionPlan 按依赖拓扑和同层优先级串行调度，挂起 CU 不阻塞无依赖的 CU。
 5. 多个 CU 可以通过 VerificationBatch 共享环境与跨 CU Evidence，但必须分别形成 CodeBaseline 和 TestBaseline。
@@ -1549,6 +1623,7 @@ MVP-A 只允许声明“基础闭环通过”和“单个 CU 已交付”；不�
 | CSCI 与能力单元关系复杂 | 使用 CapabilityAllocation（能力分配），不建立双生命周期 |
 | 模板协议演变 | 独立版本、能力探测、Schema（模式）样例和 TCK（合同测试套件） |
 | Agent/Prompt/Rule/Template 版本漂移 | Production Asset Registry 保存不可变版本和内容 Hash，Run 固定精确引用，禁止持久化 `latest` |
+| OpenCode CLI、SDK 与文档字段漂移 | Node Adapter 固定并握手校验 CLI/SDK/Host 版本，以真实 Spike 建立兼容矩阵；所有宿主输出再次通过 Factory Schema，外部类型不泄漏进 Java Core |
 | 各 CU 分别通过但系统组合失败 | 独立 System Integration Run、项目级审核和 SystemAcceptanceBaseline，绑定变化后自动失效 |
 | 接口消费者漏标导致影响范围不足 | 从已发布接口、消费者和追溯图自动生成候选影响集；缩小范围必须显式 Override 并审计 |
 | 测试执行中才发现设备或外部系统缺失 | 需求声明环境义务、设计绑定环境、Run 前执行受限前置探针并进入可恢复 OnHold |
@@ -1559,6 +1634,8 @@ MVP-A 只允许声明“基础闭环通过”和“单个 CU 已交付”；不�
 | 文件、Git、数据库无法原子提交 | 内容寻址、数据库事务引用、Outbox（事务发件箱）和 Reconciler（对账器） |
 | H2 与 PostgreSQL 语义漂移 | 权威数据库只采用 PostgreSQL，迁移和集成验收在真实 PostgreSQL 上执行 |
 | Windows 原生执行缺少容器隔离 | 命令必须来自已发布 Adapter，限制工作目录和环境，终止完整进程树并保留审计；隔离需求成熟后再引入 Dagger Adapter |
+| Electron、JVM、Node Adapter 与 PostgreSQL 打包复杂 | 开发期保持 `pnpm start` 和独立开发进程，核心闭环稳定后再冻结统一版本集、JRE、数据库部署、安装器、签名和升级策略 |
+| 看板或会话 UI 形成第二套状态迁移 | UI 只读取 Projection 并提交显式 Application Command；拖拽、聊天文本和本地状态均不能直接改变 Gate、Run 或 Baseline |
 | 参考资料复现成本 | 默认 `detect-only`（仅检测），正式项目按实际读取内容去重快照 |
 | 智能体长推理和重复调用 | 运行预算、错误指纹、进展检测和执行切片拆分 |
 | 工具、技能和资料目录导致上下文稀释 | CapabilityIndex 只暴露紧凑元数据，完整内容通过受控 ContextExpansionRequest 按需加载 |
@@ -1595,8 +1672,8 @@ Project Initialization（项目初始化）
 
 CSCI 管理配置、版本、部署和验证对象，CapabilityUnit（能力单元）管理业务交付，RequirementItem（需求项）表达具体需求，ExecutionSlice（执行切片）只承担内部调度。ExecutionPlan 由设计基线派生且可重建，v1.2 只按依赖和优先级串行执行；任一时刻只有一个活动业务 Run，其他请求以 `QUEUED_FOR_CAPACITY` 显式等待，所有切片共享项目唯一工作目录并依次承接修改。
 
-Factory（软件工厂）使用 Java 21、Spring Boot 3 模块化单体和 PostgreSQL 16+ 构成唯一控制平面，以 Vue 3 Web Console 提供操作入口。内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。MVP 首先接入 OpenCode，并通过 Windows 原生 Runner 执行受控命令；Context Assembler 使用 CapabilityIndex 与 ContextExpansionRequest 按需加载上下文；MVP-B 通过独立只读 Validator Run 提供反自证检查。Dagger、Temporal、LangGraph、Factory.ai Missions 和其他多智能体框架都不进入 Factory Core。
+Factory（软件工厂）使用 Java 21、Spring Boot 3 模块化单体和 PostgreSQL 16+ 构成唯一控制平面，以 Electron Forge + React Desktop Console 提供桌面操作入口。开发期直接复用 `sdlc-electron-scaffold` 并通过 `pnpm start` 启动真实 Electron 窗口，正式安装包在核心闭环稳定后提供；Electron 只拥有桌面壳和进程生命周期职责，Spring Boot 始终拥有状态机、Gate、Evidence、审计和编排事实。控制台采用 Codex/Claude Code 式连续 Agent Workspace，并以 Projects、Attention、Operations 看板补充跨项目管理。内部通过 Host（宿主）、Stage Agent（阶段智能体）、Scaffold Template（脚手架模板）和 Project Runtime（项目运行时）四类版本化 Adapter（适配器）隔离宿主与技术栈差异。MVP 首先以 Node.js/TypeScript Adapter 和固定版本的 `@opencode-ai/sdk` 接入 OpenCode，并通过 Windows 原生 Runner 执行受控命令；Java Core 只依赖 Factory 自有合同，不依赖 OpenCode 类型。Context Assembler 使用 CapabilityIndex 与 ContextExpansionRequest 按需加载上下文；MVP-B 通过独立只读 Validator Run 提供反自证检查。Dagger、Temporal、LangGraph、Factory.ai Missions 和其他多智能体框架都不进入 Factory Core。
 
 Runner（执行器）、Gate（门禁）、Observer（观察器）、Interface Registry（接口登记表）、Production Asset Registry（生产资料登记表）、Environment Registry（环境登记表）、System Acceptance（系统验收）和 Reconciler（对账器）分别拥有明确职责；跨 PostgreSQL、Git、文件和进程的一致性由可对账协议保证，不声称拥有并不存在的全局事务。FactoryTrajectoryEvent 支持诊断和后续 Harness 学习闭环，但始终是只读派生信号，不能成为第二套业务事实源。
 
-本文件是仓库唯一保留的 v1.2 最终方案，`contracts/` 是其版本化机器合同；评审稿、调研稿和旧方案不作为并列事实源保留。实施先完成 MVP-A：Node、PostgreSQL、OpenCode、原生 Runner 和单 CU 基础闭环；再完成 MVP-B：Spring Boot + Vue、至少三个相关 CU、跨 CU 系统集成和 SystemAcceptanceBaseline。两级验收通过前，不把架构基线描述为已经完成的工程实施基线。
+本文件是仓库唯一保留的 v1.2 最终方案，`contracts/` 是其版本化机器合同；评审稿、调研稿和旧方案不作为并列事实源保留。实施先完成 MVP-A：Node、PostgreSQL、OpenCode、原生 Runner、Electron + React 最薄控制台和单 CU 基础闭环；再完成 MVP-B：Spring Boot + React、至少三个相关 CU、跨 CU 系统集成和 SystemAcceptanceBaseline。两级验收通过前，不把架构基线描述为已经完成的工程实施基线。

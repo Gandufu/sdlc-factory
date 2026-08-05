@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc-factory.local/schemas/v1.2/host-run-event.schema.json",
+  "title": "HostRunEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "run_id", "invocation_id", "host_session_id", "sequence", "event_type", "occurred_at", "payload"],
+  "properties": {
+    "event_id": { "type": "string", "pattern": "^HEV-[A-Z0-9][A-Z0-9-]*$" },
+    "run_id": { "type": "string", "pattern": "^RUN-[A-Z0-9][A-Z0-9-]*$" },
+    "invocation_id": { "type": "string", "pattern": "^INV-[A-Z0-9][A-Z0-9-]*$" },
+    "host_session_id": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "event_type": { "enum": ["SESSION_STARTED", "MESSAGE_PART", "TOOL_STARTED", "TOOL_COMPLETED", "USAGE_UPDATED", "SESSION_IDLE", "SESSION_ABORTED", "HOST_ERROR"] },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["sanitized"],
+      "properties": { "sanitized": { "const": true } }
+    }
+  }
+}

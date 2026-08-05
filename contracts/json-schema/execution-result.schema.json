@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc-factory.local/schemas/v1.2/execution-result.schema.json",
+  "title": "ExecutionResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["execution_id", "run_id", "operation", "operation_status", "started_at", "completed_at", "evidence_refs"],
+  "properties": {
+    "execution_id": { "type": "string", "pattern": "^EXE-[A-Z0-9][A-Z0-9-]*$" },
+    "run_id": { "type": "string", "pattern": "^RUN-[A-Z0-9][A-Z0-9-]*$" },
+    "operation": { "enum": ["INSTANTIATE", "COMPILE", "BUILD", "PACKAGE", "TEST", "START", "READINESS", "STOP", "CLEAN"] },
+    "operation_status": { "enum": ["SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "BLOCKED"] },
+    "test_outcome": { "type": ["string", "null"], "enum": ["PASSED", "FAILED", "SKIPPED", "BLOCKED", null] },
+    "exit_code": { "type": ["integer", "null"] },
+    "base_revision": { "type": "string", "minLength": 1 },
+    "working_revision": { "type": "string", "minLength": 1 },
+    "runtime_lease_ref": { "type": "string", "minLength": 1 },
+    "error_ref": { "type": "string", "minLength": 1 },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "evidence_refs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+  },
+  "allOf": [
+    { "if": { "properties": { "operation": { "const": "TEST" } }, "required": ["operation"] }, "then": { "required": ["test_outcome"] } },
+    { "if": { "properties": { "operation": { "const": "START" }, "operation_status": { "const": "SUCCEEDED" } }, "required": ["operation", "operation_status"] }, "then": { "required": ["runtime_lease_ref"] } },
+    { "if": { "properties": { "operation_status": { "enum": ["FAILED", "TIMED_OUT", "BLOCKED"] } }, "required": ["operation_status"] }, "then": { "required": ["error_ref"] } }
+  ]
+}

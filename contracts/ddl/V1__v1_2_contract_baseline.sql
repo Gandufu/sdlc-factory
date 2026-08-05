@@ -2,8 +2,6 @@
 -- 本文件可从空数据库执行。它覆盖 v1.2 机器合同所需的最小核心关系，
 -- 不是对未来完整实现数据库的不可变承诺。
 
-BEGIN;
-
 CREATE TABLE project (
     project_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -488,6 +486,176 @@ CREATE TABLE validation_finding_evidence (
     PRIMARY KEY (finding_id, evidence_ref)
 );
 
+CREATE TABLE run_request (
+    run_id TEXT PRIMARY KEY REFERENCES run(run_id),
+    attempt_id TEXT NOT NULL,
+    protocol_version TEXT NOT NULL CHECK (protocol_version = '1.0'),
+    idempotency_key TEXT NOT NULL UNIQUE,
+    payload_ref TEXT NOT NULL,
+    payload_hash TEXT NOT NULL CHECK (payload_hash ~ '^sha256:[a-f0-9]{64}$'),
+    requested_at TIMESTAMPTZ NOT NULL,
+    FOREIGN KEY (run_id, attempt_id) REFERENCES run(run_id, attempt_id)
+);
+
+CREATE TABLE context_manifest (
+    manifest_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    attempt_id TEXT NOT NULL,
+    total_estimated_tokens INTEGER NOT NULL CHECK (total_estimated_tokens >= 0),
+    payload JSONB NOT NULL,
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    assembled_at TIMESTAMPTZ NOT NULL,
+    FOREIGN KEY (run_id, attempt_id) REFERENCES run(run_id, attempt_id)
+);
+
+CREATE TABLE agent_invocation (
+    invocation_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    attempt_id TEXT NOT NULL,
+    context_manifest_id TEXT NOT NULL REFERENCES context_manifest(manifest_id),
+    adapter_id TEXT NOT NULL,
+    adapter_version TEXT NOT NULL,
+    host_version TEXT NOT NULL,
+    sdk_version TEXT,
+    output_schema_id TEXT NOT NULL,
+    output_schema_version TEXT NOT NULL,
+    output_schema_hash TEXT NOT NULL CHECK (output_schema_hash ~ '^sha256:[a-f0-9]{64}$'),
+    payload_ref TEXT NOT NULL,
+    payload_hash TEXT NOT NULL CHECK (payload_hash ~ '^sha256:[a-f0-9]{64}$'),
+    created_at TIMESTAMPTZ NOT NULL,
+    FOREIGN KEY (run_id, attempt_id) REFERENCES run(run_id, attempt_id)
+);
+
+CREATE TABLE handoff (
+    handoff_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    role TEXT NOT NULL CHECK (role IN ('REQUIREMENT','DESIGN','CODER','TESTER','REVIEWER_ASSISTANT','SCRUTINY_VALIDATOR','USER_TESTING_VALIDATOR')),
+    artifact_ref TEXT NOT NULL,
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    payload JSONB NOT NULL,
+    submitted_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE evidence (
+    evidence_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    evidence_type TEXT NOT NULL CHECK (evidence_type IN ('COMMAND_OUTPUT','TEST_RESULT','DIFF','FILE','SCREENSHOT','TRACE','REPORT')),
+    media_type TEXT NOT NULL,
+    storage_ref TEXT NOT NULL,
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^sha256:[a-f0-9]{64}$'),
+    byte_length BIGINT NOT NULL CHECK (byte_length >= 0),
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('HOST','RUNNER','FACTORY','OPERATOR')),
+    source_id TEXT NOT NULL,
+    sanitized BOOLEAN NOT NULL CHECK (sanitized),
+    produced_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE error_envelope (
+    error_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    source TEXT NOT NULL CHECK (source IN ('FACTORY','HOST_ADAPTER','HOST','RUNNER','TOOL','ENVIRONMENT')),
+    category TEXT NOT NULL CHECK (category IN ('VALIDATION','AUTHENTICATION','PERMISSION','RATE_LIMIT','TIMEOUT','CANCELLED','CONFLICT','UNAVAILABLE','STRUCTURED_OUTPUT','INTERNAL')),
+    code TEXT NOT NULL,
+    retryable BOOLEAN NOT NULL,
+    fingerprint TEXT NOT NULL CHECK (fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+    sanitized BOOLEAN NOT NULL CHECK (sanitized),
+    payload JSONB NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE host_run_event (
+    event_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    invocation_id TEXT NOT NULL REFERENCES agent_invocation(invocation_id),
+    host_session_id TEXT NOT NULL,
+    sequence_no BIGINT NOT NULL CHECK (sequence_no >= 0),
+    event_type TEXT NOT NULL CHECK (event_type IN ('SESSION_STARTED','MESSAGE_PART','TOOL_STARTED','TOOL_COMPLETED','USAGE_UPDATED','SESSION_IDLE','SESSION_ABORTED','HOST_ERROR')),
+    occurred_at TIMESTAMPTZ NOT NULL,
+    sanitized BOOLEAN NOT NULL CHECK (sanitized),
+    payload JSONB NOT NULL,
+    UNIQUE (invocation_id, sequence_no)
+);
+
+CREATE TABLE host_run_result (
+    result_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    invocation_id TEXT NOT NULL REFERENCES agent_invocation(invocation_id),
+    host_session_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('SUCCEEDED','FAILED','CANCELLED','TIMED_OUT','BLOCKED')),
+    handoff_id TEXT REFERENCES handoff(handoff_id),
+    error_id TEXT REFERENCES error_envelope(error_id),
+    input_tokens BIGINT NOT NULL CHECK (input_tokens >= 0),
+    output_tokens BIGINT NOT NULL CHECK (output_tokens >= 0),
+    cost_usd NUMERIC(18,6) NOT NULL CHECK (cost_usd >= 0),
+    host_calls INTEGER NOT NULL CHECK (host_calls >= 0),
+    completed_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT chk_host_result_binding CHECK (
+        (status = 'SUCCEEDED' AND handoff_id IS NOT NULL AND error_id IS NULL) OR
+        (status IN ('FAILED','TIMED_OUT','BLOCKED') AND handoff_id IS NULL AND error_id IS NOT NULL) OR
+        (status = 'CANCELLED' AND handoff_id IS NULL)
+    )
+);
+
+CREATE TABLE runtime_lease (
+    runtime_id TEXT PRIMARY KEY,
+    owner_run_id TEXT NOT NULL REFERENCES run(run_id),
+    process_handles JSONB NOT NULL,
+    endpoints JSONB NOT NULL,
+    allocated_ports JSONB NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL,
+    readiness_status TEXT NOT NULL CHECK (readiness_status IN ('STARTING','READY','DEGRADED','FAILED','STOPPED')),
+    lease_expires_at TIMESTAMPTZ NOT NULL,
+    cleanup_token_hash TEXT NOT NULL CHECK (cleanup_token_hash ~ '^sha256:[a-f0-9]{64}$')
+);
+
+CREATE TABLE execution_result (
+    execution_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES run(run_id),
+    operation TEXT NOT NULL CHECK (operation IN ('INSTANTIATE','COMPILE','BUILD','PACKAGE','TEST','START','READINESS','STOP','CLEAN')),
+    operation_status TEXT NOT NULL CHECK (operation_status IN ('SUCCEEDED','FAILED','CANCELLED','TIMED_OUT','BLOCKED')),
+    test_outcome TEXT CHECK (test_outcome IN ('PASSED','FAILED','SKIPPED','BLOCKED')),
+    exit_code INTEGER,
+    runtime_id TEXT REFERENCES runtime_lease(runtime_id),
+    error_id TEXT REFERENCES error_envelope(error_id),
+    payload JSONB NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL,
+    completed_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT chk_execution_test_outcome CHECK (operation <> 'TEST' OR test_outcome IS NOT NULL),
+    CONSTRAINT chk_execution_runtime_lease CHECK (operation <> 'START' OR operation_status <> 'SUCCEEDED' OR runtime_id IS NOT NULL),
+    CONSTRAINT chk_execution_error CHECK (operation_status NOT IN ('FAILED','TIMED_OUT','BLOCKED') OR error_id IS NOT NULL)
+);
+
+CREATE TABLE gate_command (
+    command_id TEXT PRIMARY KEY,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    expected_version INTEGER NOT NULL CHECK (expected_version >= 0),
+    actor TEXT NOT NULL,
+    scope_type TEXT NOT NULL CHECK (scope_type IN ('PROJECT','CAPABILITY_UNIT')),
+    scope_id TEXT NOT NULL,
+    stage_type TEXT NOT NULL CHECK (stage_type IN ('INITIALIZATION','REQUIREMENT','DESIGN','CODING','TESTING','SYSTEM_ACCEPTANCE')),
+    action TEXT NOT NULL CHECK (action IN ('APPROVE','REQUEST_CHANGES')),
+    candidate_ref TEXT NOT NULL,
+    evidence_refs JSONB NOT NULL,
+    payload JSONB NOT NULL,
+    issued_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE gate_result (
+    result_id TEXT PRIMARY KEY,
+    command_id TEXT NOT NULL REFERENCES gate_command(command_id),
+    outcome TEXT NOT NULL CHECK (outcome IN ('APPLIED','REJECTED','IDEMPOTENT_REPLAY')),
+    actual_version INTEGER NOT NULL CHECK (actual_version >= 0),
+    review_record_id TEXT REFERENCES review_record(review_id),
+    baseline_id TEXT REFERENCES baseline(baseline_id),
+    error_id TEXT REFERENCES error_envelope(error_id),
+    decided_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT chk_gate_result_binding CHECK (
+        (outcome = 'APPLIED' AND review_record_id IS NOT NULL AND error_id IS NULL) OR
+        (outcome = 'REJECTED' AND error_id IS NOT NULL) OR
+        outcome = 'IDEMPOTENT_REPLAY'
+    )
+);
+
 CREATE TABLE factory_run_budget (
     singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
     max_concurrent_runs INTEGER NOT NULL DEFAULT 1 CHECK (max_concurrent_runs = 1),
@@ -647,4 +815,15 @@ CREATE TRIGGER factory_trajectory_authority_ref_append_only
 BEFORE UPDATE OR DELETE ON factory_trajectory_authority_ref
 FOR EACH ROW EXECUTE FUNCTION reject_factory_trajectory_mutation();
 
-COMMIT;
+CREATE FUNCTION reject_host_run_event_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'host_run_event is append-only';
+END;
+$$;
+
+CREATE TRIGGER host_run_event_append_only
+BEFORE UPDATE OR DELETE ON host_run_event
+FOR EACH ROW EXECUTE FUNCTION reject_host_run_event_mutation();

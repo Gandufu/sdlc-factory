@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $contractsRoot = Split-Path -Parent $PSScriptRoot
-$ddlPath = Join-Path $contractsRoot 'ddl\v1.2-schema.sql'
+$ddlPath = Join-Path $contractsRoot 'ddl\V1__v1_2_contract_baseline.sql'
 $validationRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('sdlc-factory-pglite-' + [guid]::NewGuid().ToString('N'))
 
 try {
@@ -42,6 +42,11 @@ await db.query("insert into validation_assertion(validation_contract_id,validati
 await db.query("insert into run(run_id,project_id,cu_id,attempt_id,status) values ($1,$2,$3,$4,$5)", ["RUN-2", "PROJECT-1", "CU-1", "ATTEMPT-2", "SUCCEEDED"]);
 await db.query("insert into capability_index(capability_index_id,project_id,run_id,stage,generated_at) values ($1,$2,$3,$4,now())", ["CI-1", "PROJECT-1", "RUN-1", "CODING"]);
 await db.query("insert into capability_index_entry(capability_index_id,entry_id,kind,name,short_description,source_ref,version,authority_class,load_policy,content_hash) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", ["CI-1", "CAP-1", "INTERNAL_TOOL", "source-query", "query source", "registry:source-query", "1.0.0", "EXECUTION_CAPABILITY", "DEFERRED", hashC]);
+await db.query("insert into run_request(run_id,attempt_id,protocol_version,idempotency_key,payload_ref,payload_hash,requested_at) values ($1,$2,$3,$4,$5,$6,now())", ["RUN-1", "ATTEMPT-1", "1.0", "RUN-REQUEST-1", "requests/RUN-1.json", hashA]);
+await db.query("insert into context_manifest(manifest_id,run_id,attempt_id,total_estimated_tokens,payload,content_hash,assembled_at) values ($1,$2,$3,$4,$5::jsonb,$6,now())", ["CTX-1", "RUN-1", "ATTEMPT-1", 10, "{}", hashB]);
+await db.query("insert into agent_invocation(invocation_id,run_id,attempt_id,context_manifest_id,adapter_id,adapter_version,host_version,sdk_version,output_schema_id,output_schema_version,output_schema_hash,payload_ref,payload_hash,created_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())", ["INV-1", "RUN-1", "ATTEMPT-1", "CTX-1", "opencode-node", "1.0.0", "1.18.10", "1.18.10", "handoff", "1.0.0", hashC, "invocations/INV-1.json", hashF]);
+await db.query("insert into handoff(handoff_id,run_id,role,artifact_ref,content_hash,payload,submitted_at) values ($1,$2,$3,$4,$5,$6::jsonb,now())", ["HND-1", "RUN-1", "CODER", "handoffs/HND-1.json", hashA, "{}"]);
+await db.query("insert into host_run_event(event_id,run_id,invocation_id,host_session_id,sequence_no,event_type,occurred_at,sanitized,payload) values ($1,$2,$3,$4,$5,$6,now(),true,$7::jsonb)", ["HEV-1", "RUN-1", "INV-1", "session-1", 0, "SESSION_STARTED", "{}"]);
 
 let budgetGuard = false;
 try { await db.exec("update factory_run_budget set max_concurrent_runs = 2"); } catch { budgetGuard = true; }
@@ -55,12 +60,18 @@ try { await db.query("insert into validation_finding(finding_id,project_id,cu_id
 let contextGuard = false;
 try { await db.query("insert into context_expansion_request(request_id,project_id,run_id,capability_index_id,entry_id,requested_by_agent_id,requested_by_agent_version,requested_by_agent_content_hash,reason,status,decision_reason,decided_at,requested_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())", ["CER-1", "PROJECT-1", "RUN-1", "CI-1", "CAP-1", "AGT-CODER", "1.0.0", hashB, "need source", "LOADED", "approved"]); } catch { contextGuard = true; }
 
+let hostEventGuard = false;
+try { await db.exec("update host_run_event set event_type = 'SESSION_IDLE' where event_id = 'HEV-1'"); } catch { hostEventGuard = true; }
+
+let hostResultGuard = false;
+try { await db.query("insert into host_run_result(result_id,run_id,invocation_id,host_session_id,status,input_tokens,output_tokens,cost_usd,host_calls,completed_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())", ["HRS-1", "RUN-1", "INV-1", "session-1", "SUCCEEDED", 1, 1, 0, 1]); } catch { hostResultGuard = true; }
+
 const tables = await db.query("select count(*)::int as count from pg_tables where schemaname = 'public' and tablename not like 'pglite_%'");
-if (tables.rows[0].count !== 49 || !budgetGuard || !trajectoryGuard || !validatorGuard || !contextGuard) {
-  throw new Error(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard, validatorGuard, contextGuard }));
+if (tables.rows[0].count !== 61 || !budgetGuard || !trajectoryGuard || !validatorGuard || !contextGuard || !hostEventGuard || !hostResultGuard) {
+  throw new Error(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard, validatorGuard, contextGuard, hostEventGuard, hostResultGuard }));
 }
 
-console.log(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard, validatorGuard, contextGuard }));
+console.log(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard, validatorGuard, contextGuard, hostEventGuard, hostResultGuard }));
 '@ | node --input-type=module 2>$null
     $nodeExitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'

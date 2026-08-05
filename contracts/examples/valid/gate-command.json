@@ -1,0 +1,1 @@
+{"command_id":"GCM-1","idempotency_key":"gate-project-1-v2","expected_version":2,"actor":"operator-1","scope_type":"PROJECT","scope_id":"PRJ-1","stage_type":"DESIGN","action":"APPROVE","candidate_ref":"candidate/DESIGN-1","evidence_refs":["EVD-1"],"comments":"Approved after review","issued_at":"2026-08-05T10:10:00Z"}

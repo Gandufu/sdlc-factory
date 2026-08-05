@@ -1,0 +1,1 @@
+{"protocol_version":"1.0","handoff_id":"HND-1","run_id":"RUN-1","slice_id":"SLC-1","role":"CODER","summary":"Implemented the approved slice","observations":["No baseline drift detected"],"declared_changed_paths":["src/main.ts"],"validations":[{"name":"unit","outcome":"PASSED","evidence_refs":["EVD-1"]}],"open_issues":[],"submitted_at":"2026-08-05T10:05:00Z"}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc-factory.local/schemas/v1.2/context-manifest.schema.json",
+  "title": "ContextManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_id", "run_id", "attempt_id", "entries", "total_estimated_tokens", "assembled_at", "content_hash"],
+  "properties": {
+    "manifest_id": { "type": "string", "pattern": "^CTX-[A-Z0-9][A-Z0-9-]*$" },
+    "run_id": { "type": "string", "pattern": "^RUN-[A-Z0-9][A-Z0-9-]*$" },
+    "attempt_id": { "type": "string", "pattern": "^ATT-[A-Z0-9][A-Z0-9-]*$" },
+    "entries": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["order", "source_class", "authority_class", "source_ref", "source_version", "content_hash", "estimated_tokens", "redacted", "load_reason"],
+        "properties": {
+          "order": { "type": "integer", "minimum": 0 },
+          "source_class": { "enum": ["BASELINE", "REFERENCE", "RULE", "PROMPT", "CAPABILITY", "FEEDBACK"] },
+          "authority_class": { "enum": ["APPROVED_BASELINE", "REFERENCE", "EXECUTION_CAPABILITY"] },
+          "source_ref": { "type": "string", "minLength": 1 },
+          "source_version": { "type": "string", "minLength": 1 },
+          "content_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "estimated_tokens": { "type": "integer", "minimum": 0 },
+          "redacted": { "type": "boolean" },
+          "load_reason": { "type": "string", "minLength": 1 },
+          "expansion_request_id": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "total_estimated_tokens": { "type": "integer", "minimum": 0 },
+    "assembled_at": { "type": "string", "format": "date-time" },
+    "content_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}
