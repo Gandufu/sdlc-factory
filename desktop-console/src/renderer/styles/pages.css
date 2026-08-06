@@ -43,3 +43,13 @@
 .attention-signal { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--amber); background: #fff0d7; font-weight: 900; }
 .attention-signal.blocked { color: var(--red); background: #ffebe8; }
 .data-note { margin-top: 14px; color: var(--muted); font-size: 11px; }
+.create-project-form { display: grid; grid-template-columns: 1fr 1fr auto auto; align-items: end; gap: 14px; margin: -18px 0 28px; padding: 18px; border: 1px solid var(--line); border-radius: 13px; background: white; }
+.create-project-form label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
+.create-project-form input { min-width: 160px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px; }
+.create-project-form > span { padding-bottom: 9px; color: var(--muted); font-size: 11px; }
+.create-project-form p { grid-column: 1 / -1; margin: 0; color: var(--red); }
+.initialization-card { max-width: 860px; padding: 26px; border: 1px solid var(--line); border-radius: 13px; background: white; box-shadow: var(--shadow); }
+.initialization-card dl { display: grid; gap: 0; margin: 18px 0 24px; }
+.initialization-card dl div { display: grid; grid-template-columns: 160px 1fr; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.initialization-card dt { color: var(--muted); }
+.initialization-card dd { margin: 0; overflow-wrap: anywhere; font-family: "Cascadia Mono", monospace; }

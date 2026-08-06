@@ -9,15 +9,23 @@ beforeEach(() => {
       state: 'unavailable', checkedAt: '2026-08-06T00:00:00Z', detail: '测试环境未启动控制平面',
     }),
   };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => [{
+      project_id: 'PRJ-REAL-1', name: 'M1 初始化项目', state: 'AWAITING_REVIEW',
+      workspace_path: 'C:/factory/m1', template_id: 'TPL-NODE-BASIC', template_version: '1.0.0',
+      updated_at: '2026-08-06T00:00:00Z', initial_git_revision: 'abc123',
+    }],
+  }));
 });
 
 describe('Factory Desktop Console', () => {
-  it('从项目目录进入项目工作区', async () => {
+  it('从真实项目目录进入初始化审核', async () => {
     render(<App />);
     expect(screen.getByText('把交付事实放在一条线上。')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('统一身份平台'));
-    expect(await screen.findByText('总体设计等待裁决')).toBeInTheDocument();
-    expect(screen.getByText('M0 数据边界')).toBeInTheDocument();
+    fireEvent.click(await screen.findByText('M1 初始化项目'));
+    expect(await screen.findByText('项目初始化')).toBeInTheDocument();
+    expect(screen.getByText('批准初始化并形成基线')).toBeInTheDocument();
   });
 
   it('控制平面不可用时给出可操作提示', async () => {

@@ -46,3 +46,7 @@ management:
 logging:
   level:
     dev.sdlc.factory: INFO
+
+factory:
+  # 生成项目只能落在受控根目录下；REST 请求不接受绝对路径。
+  workspace-root: ${FACTORY_WORKSPACE_ROOT:${user.home}/sdlc-factory-projects}

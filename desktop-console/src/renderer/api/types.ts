@@ -25,6 +25,26 @@ export type RunEvent = {
   [key: string]: unknown;
 };
 
+export type ProjectSummary = {
+  project_id: string;
+  name: string;
+  state: 'AWAITING_REVIEW' | 'APPROVED' | 'FAILED' | string;
+  workspace_path: string;
+  template_id: string;
+  template_version: string;
+  updated_at: string;
+  initial_git_revision?: string;
+  template_digest?: string;
+  failure_detail?: string;
+};
+
+export type CreateProjectInput = {
+  project_name: string;
+  directory_name: string;
+  template_id: string;
+  template_version: string;
+};
+
 /**
  * 保留 HTTP 状态与机器错误信封，页面可给出可恢复提示，
  * 但不得从普通异常文本反推 retry 或生命周期动作。

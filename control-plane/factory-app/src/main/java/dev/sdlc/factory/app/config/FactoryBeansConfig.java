@@ -7,6 +7,13 @@ import dev.sdlc.factory.orchestration.CapacityScheduler;
 import dev.sdlc.factory.orchestration.FactoryRunBudget;
 import dev.sdlc.factory.runner.ProcessTreeTerminator;
 import dev.sdlc.factory.runner.WindowsProcessRunner;
+import dev.sdlc.factory.app.initialization.NodeTemplateAdapter;
+import dev.sdlc.factory.app.initialization.ProjectInitializationService;
+import dev.sdlc.factory.persistence.ProjectInitializationRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -34,5 +41,26 @@ public class FactoryBeansConfig {
     @Bean
     public WindowsProcessRunner windowsProcessRunner() {
         return new WindowsProcessRunner(new ProcessTreeTerminator());
+    }
+
+    /** M1 项目初始化：显式 SQL 存储、固定 Node 模板和事务编排。 */
+    @Bean
+    public ProjectInitializationRepository projectInitializationRepository(JdbcTemplate jdbcTemplate) {
+        return new ProjectInitializationRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public NodeTemplateAdapter nodeTemplateAdapter(WindowsProcessRunner runner) {
+        return new NodeTemplateAdapter(runner);
+    }
+
+    @Bean
+    public ProjectInitializationService projectInitializationService(
+            ProjectInitializationRepository repository,
+            NodeTemplateAdapter template,
+            PlatformTransactionManager transactionManager,
+            @Value("${factory.workspace-root:${user.home}/sdlc-factory-projects}") String workspaceRoot) {
+        return new ProjectInitializationService(repository, template,
+                new TransactionTemplate(transactionManager), workspaceRoot);
     }
 }

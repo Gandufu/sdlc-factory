@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import type { ControlPlaneStatus } from '../../shared/contracts';
 
-export type View = 'projects' | 'attention' | 'operations' | 'workspace';
+export type View = 'projects' | 'attention' | 'operations' | 'workspace' | 'initialization';
 
-const navItems: Array<{ id: Exclude<View, 'workspace'>; label: string; glyph: string }> = [
+const navItems: Array<{ id: Exclude<View, 'workspace' | 'initialization'>; label: string; glyph: string }> = [
   { id: 'projects', label: '项目', glyph: '▦' },
   { id: 'attention', label: '待处理', glyph: '!' },
   { id: 'operations', label: '运行', glyph: '▶' },

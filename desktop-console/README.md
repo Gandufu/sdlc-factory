@@ -5,7 +5,8 @@ Electron Forge + React + Vite + TypeScript 的 M0 生产骨架。Renderer 通过
 ## 数据边界
 
 - `/actuator/health`、`/api/capacity/board`、`/api/runs/events` 使用真实控制平面。
-- Projects、Attention、Workspace 暂无后端查询合同，当前由 `src/renderer/data/fixtures.ts` 提供明确标注的 M0 演示快照。
+- Projects 已接入真实 PostgreSQL 项目目录，并支持模板驱动初始化与人工批准。
+- Attention、交付 Workspace 暂无后端查询合同，当前仍由 `src/renderer/data/fixtures.ts` 提供明确标注的 M0 演示快照。
 - fixture 不会写入控制平面，也不能提交 Gate。接口冻结后应替换数据适配器，不应在页面组件中继续堆叠样例数据。
 
 ## 开发与验证

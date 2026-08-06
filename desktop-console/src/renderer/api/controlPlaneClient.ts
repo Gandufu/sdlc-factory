@@ -1,5 +1,5 @@
 import type { ControlPlaneStatus } from '../../shared/contracts';
-import { ControlPlaneError, type CapacityBoard, type ErrorEnvelope, type RunEvent } from './types';
+import { ControlPlaneError, type CapacityBoard, type CreateProjectInput, type ErrorEnvelope, type ProjectSummary, type RunEvent } from './types';
 
 const productionOrigin = 'http://127.0.0.1:8420';
 const baseUrl = import.meta.env.DEV ? '' : productionOrigin;
@@ -20,6 +20,17 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
 
 export const controlPlaneClient = {
   getCapacityBoard: () => request<CapacityBoard>('/api/capacity/board'),
+  getProjects: () => request<ProjectSummary[]>('/api/projects'),
+  createProject: (input: CreateProjectInput) => request<ProjectSummary>('/api/projects', {
+    method: 'POST', body: JSON.stringify(input),
+  }),
+  approveInitialization: (projectId: string) => request<ProjectSummary>(`/api/projects/${projectId}/initialization/approve`, {
+    method: 'POST', body: JSON.stringify({
+      reviewer_identity: 'gandaofu',
+      comments: '已核对模板、Git 修订和全部初始化运行证据。',
+      idempotency_key: `INIT-${projectId}-${crypto.randomUUID()}`,
+    }),
+  }),
   transition: (state: string, command: string, reason?: string) =>
     request<{ previous_state: string; new_state: string }>('/api/lifecycle/transitions', {
       method: 'POST', body: JSON.stringify({ state, command, reason }),
