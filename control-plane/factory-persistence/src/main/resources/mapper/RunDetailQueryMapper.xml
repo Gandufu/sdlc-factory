@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Run 详情的复杂多表 SQL（v1.2 约定：多表连接一律放 XML）。
+  结果通过 <constructor> 显式绑定到 RunDetailProjection record，
+  不依赖 setter 自动映射，保证投影只读。
+-->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="dev.sdlc.factory.persistence.mapper.RunDetailQueryMapper">
+
+    <!-- Run 详情结果映射：列 → record 构造参数 -->
+    <resultMap id="runDetailProjection"
+               type="dev.sdlc.factory.persistence.projection.RunDetailProjection">
+        <constructor>
+            <arg column="run_id" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="project_id" javaType="java.lang.String"/>
+            <arg column="project_name" javaType="java.lang.String"/>
+            <arg column="cu_id" javaType="java.lang.String"/>
+            <arg column="cu_name" javaType="java.lang.String"/>
+            <arg column="delivery_status" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <!-- 公共多表连接片段：run × project × capability_unit(可空) -->
+    <sql id="runDetailColumns">
+        r.run_id            AS run_id,
+        r.status            AS status,
+        r.project_id        AS project_id,
+        p.name              AS project_name,
+        r.cu_id             AS cu_id,
+        cu.name             AS cu_name,
+        cu.delivery_status  AS delivery_status,
+        r.created_at        AS created_at
+    </sql>
+
+    <!-- 项目维度 Run 详情 -->
+    <select id="selectRunDetailsByProject" resultMap="runDetailProjection">
+        SELECT
+        <include refid="runDetailColumns"/>
+        FROM run r
+        INNER JOIN project p ON p.project_id = r.project_id
+        LEFT JOIN capability_unit cu ON cu.cu_id = r.cu_id
+        WHERE r.project_id = #{projectId}
+        ORDER BY r.created_at DESC, r.run_id
+    </select>
+
+    <!-- Operations 看板：只展示与容量相关的活动/排队 Run -->
+    <select id="selectCapacityBoard" resultMap="runDetailProjection">
+        SELECT
+        <include refid="runDetailColumns"/>
+        FROM run r
+        INNER JOIN project p ON p.project_id = r.project_id
+        LEFT JOIN capability_unit cu ON cu.cu_id = r.cu_id
+        WHERE r.status IN ('QUEUED_FOR_CAPACITY', 'RUNNING')
+        ORDER BY
+        CASE r.status WHEN 'RUNNING' THEN 0 ELSE 1 END,
+        r.created_at
+    </select>
+
+</mapper>

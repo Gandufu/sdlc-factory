@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  factory-contracts：P0 机器合同的 Java 投影
+  与 contracts/json-schema/*.schema.json 一一对应；字段采用 camelCase，
+  JSON 序列化时由全局 SNAKE_CASE 命名策略映射为合同规定的 snake_case。
+  全部使用 record（不可变），本模块为纯 Java 模块，不依赖 Spring。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.sdlc.factory</groupId>
+        <artifactId>factory-build</artifactId>
+        <version>1.2.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>factory-contracts</artifactId>
+    <name>Factory Contracts</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.sdlc.factory</groupId>
+            <artifactId>factory-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

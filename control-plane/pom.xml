@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AI 软件工厂控制平面 —— 聚合父 POM
+  依据 docs/v1.2/ai-software-factory-design-v1.2-final.md 第 12.2 节的模块划分。
+  模块依赖方向（自底向上，领域模块不依赖 Spring）：
+    factory-common ← factory-contracts ← factory-lifecycle / factory-orchestration / factory-runner
+                                        ← factory-gate ← factory-persistence ← factory-app
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <!-- Spring Boot 版本集中在该属性，便于按调研结论在 4.0.x / 4.1.x 间切换 -->
+        <version>4.1.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>dev.sdlc.factory</groupId>
+    <artifactId>factory-build</artifactId>
+    <version>1.2.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>SDLC Factory Control Plane</name>
+    <description>AI 软件工厂 v1.2 控制平面：状态机、门禁、基线、调度与遥测的唯一事实源</description>
+
+    <properties>
+        <!-- JDK 25（LTS）：启用 records、sealed、模式匹配、虚拟线程等已定型特性 -->
+        <java.version>25</java.version>
+        <maven.compiler.release>25</maven.compiler.release>
+        <!-- MyBatis-Plus 版本：待 Boot 4 兼容性调研结论确认后可能升级或更换 starter 坐标 -->
+        <mybatis-plus.version>3.5.7</mybatis-plus.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <modules>
+        <module>factory-common</module>
+        <module>factory-contracts</module>
+        <module>factory-lifecycle</module>
+        <module>factory-orchestration</module>
+        <module>factory-runner</module>
+        <module>factory-gate</module>
+        <module>factory-persistence</module>
+        <module>factory-app</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- 内部模块统一版本管理，子模块引用时无需再写 version -->
+            <dependency>
+                <groupId>dev.sdlc.factory</groupId>
+                <artifactId>factory-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.sdlc.factory</groupId>
+                <artifactId>factory-contracts</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.sdlc.factory</groupId>
+                <artifactId>factory-lifecycle</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.sdlc.factory</groupId>
+                <artifactId>factory-orchestration</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.sdlc.factory</groupId>
+                <artifactId>factory-runner</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.sdlc.factory</groupId>
+                <artifactId>factory-gate</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.sdlc.factory</groupId>
+                <artifactId>factory-persistence</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- MyBatis-Plus：复杂多表 SQL 放在 XML Mapper（见 factory-persistence/resources/mapper） -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- 保留参数名，供 MyBatis 与 Spring MVC 按名称绑定 -->
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
