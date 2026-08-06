@@ -42,6 +42,14 @@ public class GlobalExceptionHandler {
         return handleFactoryException(exception);
     }
 
+    /** 请求参数校验失败对调用方透明，不得伪装成内部故障。 */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorEnvelope> handleInvalidArgument(IllegalArgumentException exception) {
+        ErrorEnvelope envelope = envelope(ErrorCategory.VALIDATION, exception.getMessage(), false);
+        log.info("请求参数校验失败 [{}] {}", envelope.code(), envelope.message());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(envelope);
+    }
+
     /**
      * 集中映射全部工厂领域异常。
      *

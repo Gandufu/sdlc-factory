@@ -15,9 +15,9 @@ beforeEach(() => {
       updated_at: '2026-08-06T00:00:00Z', initial_git_revision: 'abc123',
       operations: [{ operation: 'READINESS', status: 'SUCCEEDED', runtime_id: 'RTM-1' }],
   };
-  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string) => ({
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string, init?: RequestInit) => ({
     ok: true,
-    json: async () => input.endsWith('/PRJ-REAL-1') ? project : [project],
+    json: async () => init?.method === 'POST' || input.endsWith('/PRJ-REAL-1') ? project : [project],
   })));
 });
 
@@ -44,5 +44,18 @@ describe('Factory Desktop Console', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /^运行$/ }));
     expect(await screen.findByText('控制平面尚未就绪')).toBeInTheDocument();
+  });
+
+  it('创建项目时提交绝对工作区路径', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '＋ 创建项目' }));
+    fireEvent.change(screen.getByLabelText('项目名称'), { target: { value: '绝对路径项目' } });
+    fireEvent.change(screen.getByLabelText('项目绝对路径'), { target: { value: 'D:\\workspace\\absolute-project' } });
+    fireEvent.click(screen.getByRole('button', { name: '执行初始化' }));
+
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/projects', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('"workspace_path":"D:\\\\workspace\\\\absolute-project"'),
+    })));
   });
 });

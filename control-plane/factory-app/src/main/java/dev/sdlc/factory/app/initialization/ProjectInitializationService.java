@@ -3,7 +3,6 @@ package dev.sdlc.factory.app.initialization;
 import dev.sdlc.factory.common.ContentHash;
 import dev.sdlc.factory.persistence.ProjectInitializationRepository;
 import dev.sdlc.factory.runner.RunnerOutput;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -22,15 +21,11 @@ public final class ProjectInitializationService {
     private final ProjectInitializationRepository repository;
     private final NodeTemplateAdapter template;
     private final TransactionTemplate transactions;
-    private final Path workspaceRoot;
-
     public ProjectInitializationService(ProjectInitializationRepository repository, NodeTemplateAdapter template,
-                                        TransactionTemplate transactions,
-                                        @Value("${factory.workspace-root:${user.home}/sdlc-factory-projects}") String workspaceRoot) {
+                                        TransactionTemplate transactions) {
         this.repository = repository;
         this.template = template;
         this.transactions = transactions;
-        this.workspaceRoot = Path.of(workspaceRoot).toAbsolutePath().normalize();
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -53,23 +48,19 @@ public final class ProjectInitializationService {
         return detail;
     }
 
-    public Map<String, Object> initialize(String name, String directoryName, String templateId, String templateVersion) {
+    public Map<String, Object> initialize(String name, String workspacePath, String templateId, String templateVersion) {
         requireText(name, "project_name");
-        requireText(directoryName, "directory_name");
-        if (!directoryName.matches("[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}")) {
-            throw new IllegalArgumentException("directory_name 只能包含字母、数字、点、下划线和连字符");
-        }
+        requireText(workspacePath, "workspace_path");
         Map<String, Object> registration = repository.activeTemplate(templateId, templateVersion);
         if (!template.digest().equals(registration.get("digest"))) {
             throw new IllegalStateException("模板摘要与内置实现不一致，拒绝执行");
         }
-        Path workspace = workspaceRoot.resolve(directoryName).normalize();
-        if (!workspace.startsWith(workspaceRoot)) throw new IllegalArgumentException("目标目录越出 workspace root");
+        Path workspace = resolveWorkspace(workspacePath);
         if (Files.exists(workspace)) throw new IllegalArgumentException("目标目录已存在：" + workspace);
 
         String projectId = id("PRJ");
         String runId = id("RUN");
-        String parameterHash = ContentHash.ofSha256(name + "\n" + directoryName).canonical();
+        String parameterHash = ContentHash.ofSha256(name + "\n" + workspace).canonical();
         transactions.executeWithoutResult(ignored -> repository.createProject(projectId, name, runId,
                 workspace.toString(), parameterHash, templateId, templateVersion, template.digest()));
 
@@ -113,6 +104,23 @@ public final class ProjectInitializationService {
             repository.updateState(projectId, "FAILED", safeMessage(failure));
             throw new IllegalStateException("项目初始化失败，已保留恢复证据：" + projectId, failure);
         }
+    }
+
+    static Path resolveWorkspace(String workspacePath) {
+        final Path candidate;
+        try {
+            candidate = Path.of(workspacePath);
+        } catch (java.nio.file.InvalidPathException exception) {
+            throw new IllegalArgumentException("workspace_path 不是有效路径", exception);
+        }
+        if (!candidate.isAbsolute()) {
+            throw new IllegalArgumentException("workspace_path 必须是绝对路径，例如 D:\\workspace\\my-project");
+        }
+        Path normalized = candidate.normalize();
+        if (normalized.getParent() == null) {
+            throw new IllegalArgumentException("workspace_path 不能是文件系统根目录");
+        }
+        return normalized;
     }
 
     public Map<String, Object> approve(String projectId, String reviewer, String comments, String idempotencyKey) {

@@ -14,14 +14,14 @@ export const ProjectsPage = ({ projects, loading, error, onOpen, onCreate }: {
 }) => {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
-  const [directory, setDirectory] = useState('');
+  const [workspacePath, setWorkspacePath] = useState('');
   const [submitError, setSubmitError] = useState<string>();
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSubmitError(undefined);
     try {
-      const project = await onCreate({ project_name: name, directory_name: directory,
+      const project = await onCreate({ project_name: name, workspace_path: workspacePath,
         template_id: 'TPL-NODE-BASIC', template_version: '1.0.0' });
       setCreating(false); onOpen(project);
     } catch (cause) { setSubmitError(cause instanceof Error ? cause.message : '项目初始化失败'); }
@@ -34,7 +34,7 @@ export const ProjectsPage = ({ projects, loading, error, onOpen, onCreate }: {
     </header>
     {creating && <form className="create-project-form" onSubmit={submit}>
       <label>项目名称<input required value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <label>目录名<input required pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}" value={directory} onChange={(event) => setDirectory(event.target.value)} /></label>
+      <label>项目绝对路径<input required placeholder="D:\\workspace\\my-project" value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} /></label>
       <span>模板：TPL-NODE-BASIC@1.0.0</span><button className="primary-button">执行初始化</button>
       {submitError && <p>{submitError}</p>}
     </form>}

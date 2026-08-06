@@ -51,7 +51,7 @@ export type InitializationOperation = {
 
 export type CreateProjectInput = {
   project_name: string;
-  directory_name: string;
+  workspace_path: string;
   template_id: string;
   template_version: string;
 };

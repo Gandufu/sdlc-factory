@@ -41,7 +41,7 @@ public class ProjectInitializationController {
 
     @PostMapping("/projects")
     public Map<String, Object> create(@RequestBody CreateProjectRequest request) {
-        return service.initialize(request.projectName(), request.directoryName(),
+        return service.initialize(request.projectName(), request.workspacePath(),
                 request.templateId(), request.templateVersion());
     }
 

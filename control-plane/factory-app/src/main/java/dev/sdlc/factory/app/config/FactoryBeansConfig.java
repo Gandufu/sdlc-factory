@@ -65,10 +65,9 @@ public class FactoryBeansConfig {
     public ProjectInitializationService projectInitializationService(
             ProjectInitializationRepository repository,
             NodeTemplateAdapter template,
-            PlatformTransactionManager transactionManager,
-            @Value("${factory.workspace-root:${user.home}/sdlc-factory-projects}") String workspaceRoot) {
+            PlatformTransactionManager transactionManager) {
         return new ProjectInitializationService(repository, template,
-                new TransactionTemplate(transactionManager), workspaceRoot);
+                new TransactionTemplate(transactionManager));
     }
 
     @Bean
