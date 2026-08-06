@@ -26,11 +26,13 @@ export const useProjects = () => {
     return project;
   };
 
+  const get = (projectId: string) => controlPlaneClient.getProject(projectId);
+
   const approve = async (projectId: string) => {
     const project = await controlPlaneClient.approveInitialization(projectId);
     setProjects((current) => current.map((item) => item.project_id === projectId ? project : item));
     return project;
   };
 
-  return { projects, loading, error, refresh, create, approve };
+  return { projects, loading, error, refresh, create, get, approve };
 };

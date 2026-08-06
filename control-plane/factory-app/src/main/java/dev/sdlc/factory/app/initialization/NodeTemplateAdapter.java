@@ -12,6 +12,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** 固定版本的纯 Node 脚手架模板；命令由已发布模板定义，不接受请求方注入。 */
 public final class NodeTemplateAdapter {
@@ -19,6 +21,7 @@ public final class NodeTemplateAdapter {
     public static final String ID = "TPL-NODE-BASIC";
     public static final String VERSION = "1.0.0";
     private static final String DESCRIPTOR = "protocol=1.1;template=TPL-NODE-BASIC@1.0.0;runtime=node>=22";
+    private static final Pattern RUNTIME_RESULT = Pattern.compile(".*\\\"pid\\\":(\\d+).*\\\"port\\\":(\\d+).*", Pattern.DOTALL);
 
     private final ProjectRunner runner;
 
@@ -69,6 +72,15 @@ public final class NodeTemplateAdapter {
             throw new IllegalStateException(operation + " 失败：" + output.stderr());
         }
         return output;
+    }
+
+    public RuntimeCycleResult runtimeCycleResult(RunnerOutput output) {
+        Matcher matcher = RUNTIME_RESULT.matcher(requireSuccess("RUNTIME_CYCLE", output).stdout());
+        if (!matcher.matches()) throw new IllegalStateException("运行时循环没有返回 PID 和端口");
+        return new RuntimeCycleResult(Long.parseLong(matcher.group(1)), Integer.parseInt(matcher.group(2)));
+    }
+
+    public record RuntimeCycleResult(long processId, int port) {
     }
 
     private RunnerOutput run(Path workspace, List<String> command, Duration timeout) {
@@ -131,7 +143,7 @@ public final class NodeTemplateAdapter {
                 if (!response.ok || (await response.json()).status !== 'UP') throw new Error('readiness failed');
                 child.kill();
                 await new Promise(resolve => child.once('exit', resolve));
-                console.log(JSON.stringify({ start: 'SUCCEEDED', readiness: 'READY', stop: 'SUCCEEDED', port }));
+                console.log(JSON.stringify({ start: 'SUCCEEDED', readiness: 'READY', stop: 'SUCCEEDED', pid: child.pid, port }));
                 """;
     }
 }

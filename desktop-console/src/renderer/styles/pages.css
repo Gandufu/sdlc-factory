@@ -53,3 +53,7 @@
 .initialization-card dl div { display: grid; grid-template-columns: 160px 1fr; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .initialization-card dt { color: var(--muted); }
 .initialization-card dd { margin: 0; overflow-wrap: anywhere; font-family: "Cascadia Mono", monospace; }
+.initialization-operations { display: grid; gap: 8px; margin: 14px 0 24px; padding: 0; list-style: none; }
+.initialization-operations li { display: grid; grid-template-columns: 120px 90px 1fr; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.initialization-operations span { color: var(--green); font-weight: 700; }
+.initialization-operations small { overflow: hidden; color: var(--muted); font-family: "Cascadia Mono", monospace; text-overflow: ellipsis; }

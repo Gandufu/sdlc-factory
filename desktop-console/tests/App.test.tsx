@@ -9,14 +9,16 @@ beforeEach(() => {
       state: 'unavailable', checkedAt: '2026-08-06T00:00:00Z', detail: '测试环境未启动控制平面',
     }),
   };
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => [{
+  const project = {
       project_id: 'PRJ-REAL-1', name: 'M1 初始化项目', state: 'AWAITING_REVIEW',
       workspace_path: 'C:/factory/m1', template_id: 'TPL-NODE-BASIC', template_version: '1.0.0',
       updated_at: '2026-08-06T00:00:00Z', initial_git_revision: 'abc123',
-    }],
-  }));
+      operations: [{ operation: 'READINESS', status: 'SUCCEEDED', runtime_id: 'RTM-1' }],
+  };
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string) => ({
+    ok: true,
+    json: async () => input.endsWith('/PRJ-REAL-1') ? project : [project],
+  })));
 });
 
 describe('Factory Desktop Console', () => {
@@ -25,6 +27,7 @@ describe('Factory Desktop Console', () => {
     expect(screen.getByText('把交付事实放在一条线上。')).toBeInTheDocument();
     fireEvent.click(await screen.findByText('M1 初始化项目'));
     expect(await screen.findByText('项目初始化')).toBeInTheDocument();
+    expect(await screen.findByText('就绪检查')).toBeInTheDocument();
     expect(screen.getByText('批准初始化并形成基线')).toBeInTheDocument();
   });
 

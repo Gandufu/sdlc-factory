@@ -24,9 +24,13 @@ class NodeTemplateAdapterTest {
 
         template.instantiate(project, "初始化测试项目");
         template.requireSuccess("bootstrap", template.bootstrap(project));
-        template.validate(project).forEach(template::requireSuccess);
+        var results = template.validate(project);
+        results.forEach(template::requireSuccess);
+        var runtime = template.runtimeCycleResult(results.get("RUNTIME_CYCLE"));
 
         assertTrue(Files.exists(project.resolve("package.json")));
         assertFalse(template.revision(project).isBlank());
+        assertTrue(runtime.processId() > 0);
+        assertTrue(runtime.port() > 0);
     }
 }

@@ -48,7 +48,9 @@ public final class ProjectInitializationService {
     }
 
     public Map<String, Object> project(String projectId) {
-        return repository.project(projectId);
+        Map<String, Object> detail = new java.util.LinkedHashMap<>(repository.project(projectId));
+        detail.put("operations", repository.initializationOperations(projectId));
+        return detail;
     }
 
     public Map<String, Object> initialize(String name, String directoryName, String templateId, String templateVersion) {
@@ -92,6 +94,12 @@ public final class ProjectInitializationService {
                     repository.saveEvidence(projectId, id("EVD"), id("EXE"), operation, evidence.toString(),
                             hash, log.getBytes(StandardCharsets.UTF_8).length, output.exitCode(),
                             "{\"template_operation\":\"" + operation + "\"}");
+                } else if ("RUNTIME_CYCLE".equals(operation)) {
+                    NodeTemplateAdapter.RuntimeCycleResult runtime = template.runtimeCycleResult(output);
+                    repository.saveEvidenceOnly(projectId, id("EVD"), evidence.toString(), hash,
+                            log.getBytes(StandardCharsets.UTF_8).length);
+                    repository.saveRuntimeCycle(projectId, id("RTM"), runtime.processId(), runtime.port(),
+                            ContentHash.ofSha256(projectId + ":" + runtime.processId()).canonical());
                 } else {
                     repository.saveEvidenceOnly(projectId, id("EVD"), evidence.toString(), hash,
                             log.getBytes(StandardCharsets.UTF_8).length);
@@ -118,7 +126,7 @@ public final class ProjectInitializationService {
         String contentHash = ContentHash.ofSha256(current.toString()).canonical();
         transactions.executeWithoutResult(ignored -> repository.approve(projectId, reviewer, comments,
                 id("REV"), id("BLN"), contentHash, idempotencyKey));
-        return repository.project(projectId);
+        return project(projectId);
     }
 
     private void saveTextEvidence(String projectId, String operation, Path workspace, String content) throws IOException {

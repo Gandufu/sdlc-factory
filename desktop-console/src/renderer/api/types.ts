@@ -36,6 +36,17 @@ export type ProjectSummary = {
   initial_git_revision?: string;
   template_digest?: string;
   failure_detail?: string;
+  operations?: InitializationOperation[];
+};
+
+export type InitializationOperation = {
+  operation: string;
+  status: string;
+  test_outcome?: string;
+  exit_code?: number;
+  runtime_id?: string;
+  content_hash?: string;
+  completed_at?: string;
 };
 
 export type CreateProjectInput = {

@@ -2,9 +2,10 @@ package dev.sdlc.factory.persistence;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.sql.Timestamp;
-import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /** M1 初始化聚合的显式 SQL 存储；跨表写入由应用层事务边界协调。 */
@@ -97,6 +98,52 @@ public final class ProjectInitializationRepository {
                 """, evidenceId, runId(projectId), storageRef, hash, bytes);
     }
 
+    public void saveRuntimeCycle(String projectId, String runtimeId, long processId, int port, String cleanupHash) {
+        String runId = runId(projectId);
+        jdbc.update("""
+                INSERT INTO runtime_lease(runtime_id, owner_run_id, process_handles, endpoints, allocated_ports,
+                    started_at, readiness_status, lease_expires_at, cleanup_token_hash)
+                VALUES (?, ?, ?::jsonb, ?::jsonb, ?::jsonb, now(), 'STOPPED', now(), ?)
+                """, runtimeId, runId, "[" + processId + "]",
+                "{\"http\":\"http://127.0.0.1:" + port + "\"}", "[" + port + "]", cleanupHash);
+        for (String operation : List.of("START", "READINESS", "STOP")) {
+            jdbc.update("""
+                    INSERT INTO execution_result(execution_id, run_id, operation, operation_status, exit_code,
+                        runtime_id, payload, started_at, completed_at)
+                    VALUES (?, ?, ?, 'SUCCEEDED', 0, ?, ?::jsonb, now(), now())
+                    """, generatedId("EXE"), runId, operation, runtimeId,
+                    "{\"process_id\":" + processId + ",\"port\":" + port + "}");
+        }
+    }
+
+    public List<Map<String, Object>> initializationOperations(String projectId) {
+        String runId = runId(projectId);
+        List<Map<String, Object>> results = new ArrayList<>(jdbc.queryForList("""
+                SELECT operation, operation_status AS status, test_outcome, exit_code,
+                       runtime_id, payload::text AS payload, started_at, completed_at
+                FROM execution_result WHERE run_id = ?
+                ORDER BY CASE operation WHEN 'INSTANTIATE' THEN 1 WHEN 'COMPILE' THEN 2 WHEN 'BUILD' THEN 3
+                    WHEN 'TEST' THEN 4 WHEN 'START' THEN 5 WHEN 'READINESS' THEN 6 WHEN 'STOP' THEN 7 ELSE 99 END
+                """, runId));
+        java.util.Set<String> formal = results.stream()
+                .map(row -> row.get("operation").toString()).collect(java.util.stream.Collectors.toSet());
+        for (Map<String, Object> evidence : jdbc.queryForList(
+                "SELECT storage_ref, content_hash, produced_at FROM evidence WHERE run_id = ? ORDER BY produced_at", runId)) {
+            String filename = java.nio.file.Path.of(evidence.get("storage_ref").toString()).getFileName().toString();
+            String operation = filename.replaceFirst("\\.log$", "").toUpperCase(Locale.ROOT);
+            if (!formal.contains(operation) && !"RUNTIME_CYCLE".equals(operation)) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("operation", operation);
+                row.put("status", "SUCCEEDED");
+                row.put("content_hash", evidence.get("content_hash"));
+                row.put("completed_at", evidence.get("produced_at"));
+                results.add(row);
+            }
+        }
+        results.sort(java.util.Comparator.comparingInt(row -> operationOrder(row.get("operation").toString())));
+        return results;
+    }
+
     public List<Map<String, Object>> projects() {
         return jdbc.queryForList("""
                 SELECT p.project_id, p.name, i.state, i.workspace_path, i.initial_git_revision, i.updated_at,
@@ -158,5 +205,25 @@ public final class ProjectInitializationRepository {
 
     private String runId(String projectId) {
         return jdbc.queryForObject("SELECT run_id FROM project_initialization WHERE project_id=?", String.class, projectId);
+    }
+
+    private static String generatedId(String prefix) {
+        return prefix + "-" + java.util.UUID.randomUUID().toString().replace("-", "")
+                .substring(0, 16).toUpperCase(Locale.ROOT);
+    }
+
+    private static int operationOrder(String operation) {
+        return switch (operation) {
+            case "INSTANTIATE" -> 1;
+            case "BOOTSTRAP" -> 2;
+            case "VALIDATE" -> 3;
+            case "COMPILE" -> 4;
+            case "BUILD" -> 5;
+            case "TEST" -> 6;
+            case "START" -> 7;
+            case "READINESS" -> 8;
+            case "STOP" -> 9;
+            default -> 99;
+        };
     }
 }

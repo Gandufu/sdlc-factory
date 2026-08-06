@@ -25,9 +25,10 @@ export const App = () => {
     setView('workspace');
   };
 
-  const openInitialization = (project: ProjectSummary) => {
+  const openInitialization = async (project: ProjectSummary) => {
     setSelectedProject(project);
     setView('initialization');
+    setSelectedProject(await projectCatalog.get(project.project_id));
   };
 
   const approveInitialization = async (nextProjectId: string) => {

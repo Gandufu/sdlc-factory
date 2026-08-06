@@ -21,6 +21,7 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
 export const controlPlaneClient = {
   getCapacityBoard: () => request<CapacityBoard>('/api/capacity/board'),
   getProjects: () => request<ProjectSummary[]>('/api/projects'),
+  getProject: (projectId: string) => request<ProjectSummary>(`/api/projects/${projectId}`),
   createProject: (input: CreateProjectInput) => request<ProjectSummary>('/api/projects', {
     method: 'POST', body: JSON.stringify(input),
   }),
