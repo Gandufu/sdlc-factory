@@ -1,0 +1,120 @@
+<h2>第 6 节：命令驱动，阶段只提醒不拦截</h2>
+<p class="subtitle">对话保持原生、连续和平铺。用户调用流程命令时，Core 只读取当前阶段和执行状态；顺序不合适就显示提醒，最终仍由用户决定。</p>
+
+<div class="mockup">
+  <div class="mockup-header" style="display:flex;justify-content:space-between;align-items:center">
+    <span>订单中心项目</span>
+    <span style="display:flex;gap:6px;font-size:12px"><span style="padding:5px 8px;border:1px solid #d4a94e;border-radius:7px">当前阶段：规格工作中</span><span style="padding:5px 8px;border:1px solid #667485;border-radius:7px">显示右侧栏</span></span>
+  </div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:210px minmax(470px,1fr) 285px;gap:10px;min-height:690px">
+    <div style="border:1px solid #667485;border-radius:9px;padding:10px;display:grid;align-content:start;gap:9px">
+      <strong>项目导航</strong>
+      <div style="padding:8px;border-radius:7px;background:#26364a">新建订单幂等处理</div>
+      <div style="padding:8px;border:1px solid #667485;border-radius:7px">接口约束分析</div>
+      <div style="padding:8px;border:1px solid #667485;border-radius:7px">库存预占讨论</div>
+      <div style="padding:8px;border:1px solid #667485;border-radius:7px">并发缺陷修复</div>
+      <div style="margin-top:5px"><strong>项目文件</strong></div>
+      <div style="font-size:12px;padding:7px;border-left:3px solid #6687b5">需求说明.md<br>总体设计.md<br>接口约束.pdf<br>src / tests</div>
+      <div style="margin-top:5px"><strong>快捷命令</strong></div>
+      <div style="font-size:12px;display:grid;gap:6px">
+        <span>/sdlc-spec</span><span>/sdlc-code</span><span>/sdlc-test</span><span>/sdlc-review</span>
+      </div>
+    </div>
+
+    <div style="border:1px solid #667485;border-radius:9px;padding:10px;display:grid;grid-template-rows:auto 1fr auto;gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #4c5968;padding-bottom:8px">
+        <div><strong>连续对话</strong><br><small>运行时：Codex · 模型和推理强度按次选择</small></div>
+        <div style="display:flex;gap:5px;font-size:12px"><span style="padding:5px 8px;border:1px solid #667485;border-radius:6px">查看变更</span><span style="padding:5px 8px;border:1px solid #987fc8;border-radius:6px">发起审核</span></div>
+      </div>
+
+      <div style="display:grid;align-content:start;gap:11px">
+        <div style="justify-self:end;max-width:78%;padding:9px;border-radius:9px;background:#294e47"><strong>用户</strong><br>先梳理订单重复请求的业务规则。</div>
+        <div style="max-width:91%;padding:9px;border:1px solid #6687b5;border-radius:9px">
+          <div style="display:flex;justify-content:space-between"><strong>智能体回复</strong><small>本次调用已结束</small></div>
+          <p style="margin:7px 0">规格工作已经整理到接口幂等语义，仍有并发冲突返回值需要确认。</p>
+          <details><summary>读取与分析过程（5）</summary><div style="font-size:12px;padding:7px">读取项目文件、搜索源码、检查数据库约束……</div></details>
+        </div>
+
+        <div style="justify-self:end;max-width:78%;padding:9px;border-radius:9px;background:#294e47"><strong>用户</strong><br>/sdlc-code 实现订单幂等创建</div>
+
+        <div style="max-width:94%;padding:10px;border:1px solid #d4a94e;border-radius:10px;background:#302b20">
+          <div style="display:flex;justify-content:space-between;align-items:center"><strong>阶段提醒</strong><small>来自 Core</small></div>
+          <p style="margin:8px 0">当前仍处于“规格工作中”，并且还有 1 个未确认问题。建议先继续执行 <strong>/sdlc-spec</strong>。</p>
+          <div style="display:flex;gap:7px;justify-content:flex-end;font-size:12px"><span style="padding:6px 9px;border:1px solid #667485;border-radius:6px">取消</span><span style="padding:6px 9px;border:1px solid #d4a94e;border-radius:6px">仍然执行 /sdlc-code</span></div>
+        </div>
+
+        <div style="max-width:91%;padding:9px;border:1px solid #667485;border-radius:9px;opacity:.82">
+          <div style="display:flex;justify-content:space-between"><strong>不会自动发生</strong><small>仅说明</small></div>
+          <p style="margin:7px 0;font-size:13px">系统不会切换对话、绑定流程、阻止命令，也不会把一次智能体回复结束解释成阶段完成。</p>
+        </div>
+      </div>
+
+      <div style="display:grid;gap:7px">
+        <div style="border:1px solid #6687b5;border-radius:9px;padding:8px;background:#202a36;font-size:12px">
+          <strong>命令建议</strong>　/sdlc-spec　/sdlc-code　/sdlc-test　/sdlc-review
+        </div>
+        <div style="border:1px solid #667485;border-radius:10px;padding:9px;background:#1f252d">
+          <div style="min-height:52px;padding:9px;border:1px solid #4c5968;border-radius:8px;color:#aeb8c5">输入消息，或键入 / 调用流程命令……</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="padding:5px 8px;border:1px solid #667485;border-radius:6px">＋ 文件</span><span style="padding:5px 8px;border:1px solid #667485;border-radius:6px">模型：当前模型　⌄</span><span style="padding:5px 8px;border:1px solid #667485;border-radius:6px">推理强度：高　⌄</span></div>
+            <span style="padding:6px 9px;border-radius:999px;background:#6687b5">发送</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border:1px solid #667485;border-radius:12px;padding:10px;display:grid;grid-template-rows:auto auto 1fr;gap:10px;background:#23262b">
+      <div style="display:flex;justify-content:space-between"><strong>项目上下文</strong><span>—　×</span></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;font-size:12px"><span style="padding:5px 7px;border-bottom:2px solid #d4a94e">概览</span><span style="padding:5px 7px">文件</span><span style="padding:5px 7px">变更</span><span style="padding:5px 7px">审核</span><span style="padding:5px 7px">基线</span></div>
+      <div style="display:grid;align-content:start;gap:10px;font-size:13px">
+        <div style="padding:9px;border:1px solid #d4a94e;border-radius:8px"><strong>当前提示</strong><br><small>规格工作中<br>上次 /sdlc-spec 已结束<br>仍有 1 个未确认问题</small></div>
+        <div style="padding:9px;border:1px solid #6687b5;border-radius:8px"><strong>最近执行</strong><br><small>/sdlc-spec · 已结束<br>耗时 6 分 42 秒</small></div>
+        <div style="padding:9px;border:1px solid #667485;border-radius:8px"><strong>项目文件</strong><br><small>需求说明.md<br>接口约束.pdf<br>示例请求.json</small></div>
+        <div style="padding:9px;border:1px solid #48b98a;border-radius:8px"><strong>工作区</strong><br><small>分支：main<br>3 个文件有未提交变更</small></div>
+        <div style="padding:9px;border:1px solid #987fc8;border-radius:8px"><strong>审核与基线</strong><br><small>当前没有待审核版本<br>最新基线：初始化基线 1</small></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="split" style="margin-top:18px">
+  <div class="mockup">
+    <div class="mockup-header">只保留的流程机制</div>
+    <div class="mockup-body" style="display:grid;gap:8px;font-size:13px">
+      <div>① Slash 命令负责调用对应流程 Skill。</div>
+      <div>② 执行前读取当前阶段、最近执行状态和明显缺口。</div>
+      <div>③ 顺序不合适时只提醒，并提供“仍然执行”。</div>
+      <div>④ 本次命令结束只更新执行状态，不自动推进阶段。</div>
+      <div>⑤ 正式审核通过后才生成并启用基线。</div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">明确删除的复杂度</div>
+    <div class="mockup-body" style="display:grid;gap:8px;font-size:13px">
+      <div>× 对话与流程绑定</div>
+      <div>× 消息工作上下文</div>
+      <div>× 自动推断用户正在执行哪个流程</div>
+      <div>× 强制阶段跳转门禁</div>
+      <div>× 泛化的流程分支和合并模型</div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:18px;border-color:#987fc8">
+  <div class="mockup-header">审核仍在对话中完成</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:9px;align-items:center">
+    <div style="padding:10px;border:1px solid #6687b5;border-radius:8px"><strong>/sdlc-review</strong><br><small>读取当前可以审核的工作内容。</small></div>
+    <div>→</div>
+    <div style="padding:10px;border:1px solid #987fc8;border-radius:8px"><strong>会话内审核卡</strong><br><small>展示待审核版本、差异、问题和证据。</small></div>
+    <div>→</div>
+    <div style="padding:10px;border:1px solid #48b98a;border-radius:8px"><strong>通过后生成基线</strong><br><small>只有这里形成正式审核决定和不可变基线。</small></div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:18px">
+  <div class="label">请核对这一处交互</div>
+  <div class="options">
+    <div class="option" data-choice="command-reminder-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>阶段提醒符合预期</h3><p>命令可以继续执行，Core 只提供提醒和当前信息。</p></div></div>
+    <div class="option" data-choice="command-reminder-revise" onclick="toggleSelect(this)"><div class="letter">改</div><div class="content"><h3>仍需调整</h3><p>点击后请在对话中说明需要删减或修改的位置。</p></div></div>
+  </div>
+</div>
