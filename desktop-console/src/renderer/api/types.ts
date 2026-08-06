@@ -84,6 +84,80 @@ export type InitializationApprovalInput = {
   comments: string;
 };
 
+export type LifecycleStageProjection = { stage: string; status: 'PENDING' | 'ACTIVE' | 'COMPLETED' };
+
+export type SessionSummary = {
+  session_id: string;
+  parent_session_id?: string;
+  run_ids: string[];
+  agent: string;
+  title: string;
+  state: 'ACTIVE' | 'WAITING' | 'COMPLETED' | 'BLOCKED';
+  current: boolean;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SessionMessage = {
+  message_id: string;
+  role: 'OPERATOR' | 'AGENT' | 'SYSTEM';
+  content: string;
+  run_id?: string;
+  created_at: string;
+};
+
+export type ArtifactReference = {
+  artifact_id: string;
+  artifact_type: string;
+  artifact_ref: string;
+  content_hash: string;
+  run_id?: string;
+  created_at?: string;
+};
+
+export type GateProjection = {
+  gate_id: string;
+  session_id: string;
+  run_id: string;
+  gate_type: string;
+  expected_version: number;
+  status: 'WAITING' | 'APPROVED' | 'CHANGES_REQUESTED';
+  candidate_artifacts: ArtifactReference[];
+  handoff?: { handoff_id: string; payload: string };
+  deterministic_checks: Array<Record<string, unknown>>;
+  environment_bindings: Array<Record<string, unknown>>;
+  open_questions: Array<Record<string, unknown>>;
+  evidence: ArtifactReference[];
+};
+
+export type WorkspaceConfiguration = {
+  agents: Array<Record<string, unknown>>;
+  runtime_bindings: Array<Record<string, unknown>>;
+  skills: Array<Record<string, unknown>>;
+  mcp: Array<Record<string, unknown>>;
+  plugins: Array<Record<string, unknown>>;
+  permission_policy: string;
+  health: string;
+};
+
+export type ProjectWorkspaceProjection = {
+  project: ProjectSummary & { initialization_state: string };
+  lifecycle: LifecycleStageProjection[];
+  sessions: SessionSummary[];
+  attention_count: number;
+  gates: GateProjection[];
+  baselines: Array<Record<string, unknown>>;
+  configuration: WorkspaceConfiguration;
+};
+
+export type SessionProjection = SessionSummary & {
+  messages: SessionMessage[];
+  artifacts: ArtifactReference[];
+  gates: GateProjection[];
+  runs: Array<{ run_id: string; status: string; created_at: string }>;
+};
+
 /**
  * 保留 HTTP 状态与机器错误信封，页面可给出可恢复提示，
  * 但不得从普通异常文本反推 retry 或生命周期动作。

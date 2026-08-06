@@ -98,7 +98,7 @@ public final class HostAcceptanceService {
             return facts;
         } catch (RuntimeException exception) {
             persistFailure(runId, invocationId, exception);
-            throw exception;
+            throw new HostExecutionException(runId, exception);
         }
     }
 

@@ -11,8 +11,10 @@ import dev.sdlc.factory.app.initialization.NodeTemplateAdapter;
 import dev.sdlc.factory.app.initialization.ProjectInitializationService;
 import dev.sdlc.factory.persistence.ProjectInitializationRepository;
 import dev.sdlc.factory.persistence.HostAcceptanceRepository;
+import dev.sdlc.factory.persistence.WorkspaceRepository;
 import dev.sdlc.factory.app.host.HostAcceptanceService;
 import dev.sdlc.factory.app.host.OpenCodeProcessAdapter;
+import dev.sdlc.factory.app.workspace.WorkspaceService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -94,5 +96,19 @@ public class FactoryBeansConfig {
             @Value("${factory.contracts-root:${user.dir}/../contracts/json-schema}") String contractsRoot) {
         return new HostAcceptanceService(repository, adapter, objectMapper,
                 new TransactionTemplate(transactionManager), Path.of(contractsRoot));
+    }
+
+    @Bean
+    public WorkspaceRepository workspaceRepository(JdbcTemplate jdbcTemplate,
+                                                   PlatformTransactionManager transactionManager) {
+        return new WorkspaceRepository(jdbcTemplate, new TransactionTemplate(transactionManager));
+    }
+
+    @Bean
+    public WorkspaceService workspaceService(WorkspaceRepository repository,
+                                             HostAcceptanceService hostAcceptanceService,
+                                             PlatformTransactionManager transactionManager) {
+        return new WorkspaceService(repository, hostAcceptanceService,
+                new TransactionTemplate(transactionManager));
     }
 }

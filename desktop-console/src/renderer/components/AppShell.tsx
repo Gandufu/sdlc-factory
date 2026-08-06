@@ -117,5 +117,3 @@ export const AppShell = ({
     </SidebarProvider>
   );
 };
-
-export const FixtureBadge = () => <Badge variant="outline">演示快照 · 不可执行</Badge>;

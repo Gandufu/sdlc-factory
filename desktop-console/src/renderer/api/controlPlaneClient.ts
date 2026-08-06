@@ -1,7 +1,7 @@
 import type { ControlPlaneStatus } from '../../shared/contracts';
 import { ControlPlaneError, type AttentionItem, type CapacityBoard, type CreateProjectInput,
   type ErrorEnvelope, type InitializationApprovalInput, type ProjectSummary, type RunEvent,
-  type RunProjection } from './types';
+  type ProjectWorkspaceProjection, type RunProjection, type SessionProjection } from './types';
 
 const productionOrigin = 'http://127.0.0.1:8420';
 const baseUrl = import.meta.env.DEV ? '' : productionOrigin;
@@ -24,6 +24,20 @@ export const controlPlaneClient = {
   getCapacityBoard: () => request<CapacityBoard>('/api/capacity/board'),
   getRunBoard: () => request<RunProjection[]>('/api/runs/board'),
   getAttention: () => request<AttentionItem[]>('/api/attention'),
+  getWorkspace: (projectId: string) => request<ProjectWorkspaceProjection>(`/api/projects/${projectId}/workspace`),
+  getSession: (projectId: string, sessionId: string) => request<SessionProjection>(`/api/projects/${projectId}/sessions/${sessionId}`),
+  createSession: (projectId: string, input: { parent_session_id?: string; agent: string; title: string }) =>
+    request<SessionProjection>(`/api/projects/${projectId}/sessions`, { method: 'POST', body: JSON.stringify(input) }),
+  archiveSession: (projectId: string, sessionId: string) => request<SessionProjection>(`/api/projects/${projectId}/sessions/${sessionId}/archive`, { method: 'POST' }),
+  sendSessionMessage: (projectId: string, sessionId: string, content: string) => request<SessionProjection>(`/api/projects/${projectId}/sessions/${sessionId}/messages`, {
+    method: 'POST', body: JSON.stringify({ content }),
+  }),
+  decideWorkspaceGate: (projectId: string, gateId: string, action: 'approve' | 'request-changes', expectedVersion: number, reviewer: string, comments: string) =>
+    request<ProjectWorkspaceProjection>(`/api/projects/${projectId}/gates/${gateId}/${action}`, { method: 'POST', body: JSON.stringify({
+      reviewer_identity: reviewer, comments, expected_version: expectedVersion,
+      idempotency_key: `GATE-${gateId}-${crypto.randomUUID()}`,
+    }) }),
+  recoverRun: (projectId: string, sessionId: string, runId: string) => request<SessionProjection>(`/api/projects/${projectId}/sessions/${sessionId}/runs/${runId}/recover`, { method: 'POST' }),
   getProjects: () => request<ProjectSummary[]>('/api/projects'),
   getProject: (projectId: string) => request<ProjectSummary>(`/api/projects/${projectId}`),
   createProject: (input: CreateProjectInput) => request<ProjectSummary>('/api/projects', {

@@ -4,18 +4,31 @@ import type { ProjectSummary } from '../src/renderer/api/types';
 
 const controlPlaneOrigin = 'http://127.0.0.1:8420';
 
-const loadPersistedProject = async (): Promise<ProjectSummary> => {
+const loadPersistedProject = async (): Promise<{ project: ProjectSummary; sessionTitle: string }> => {
   const requestedId = process.env.SDLC_FACTORY_E2E_PROJECT_ID;
   const response = await fetch(`${controlPlaneOrigin}/api/projects`);
   if (!response.ok) throw new Error(`控制平面项目查询失败：HTTP ${response.status}`);
   const projects = await response.json() as ProjectSummary[];
-  const project = requestedId ? projects.find((candidate) => candidate.project_id === requestedId) : projects[0];
+  const project = requestedId ? projects.find((candidate) => candidate.project_id === requestedId)
+    : projects.find((candidate) => candidate.state === 'APPROVED');
   if (!project) throw new Error('没有可用于 E2E 的持久化项目，请先完成一次真实项目初始化');
-  return project;
+  const workspaceResponse = await fetch(`${controlPlaneOrigin}/api/projects/${project.project_id}/workspace`);
+  if (!workspaceResponse.ok) throw new Error(`项目工作区查询失败：HTTP ${workspaceResponse.status}`);
+  const workspace = await workspaceResponse.json() as { sessions: Array<{ title: string }> };
+  let sessionTitle = workspace.sessions[0]?.title;
+  if (!sessionTitle) {
+    const createResponse = await fetch(`${controlPlaneOrigin}/api/projects/${project.project_id}/sessions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent: 'opencode-luna-max', title: 'Electron E2E 会话' }),
+    });
+    if (!createResponse.ok) throw new Error(`E2E 会话创建失败：HTTP ${createResponse.status}`);
+    sessionTitle = ((await createResponse.json()) as { title: string }).title;
+  }
+  return { project, sessionTitle };
 };
 
 test('Electron 从真实控制平面加载持久化项目目录', async () => {
-  const project = await loadPersistedProject();
+  const { project, sessionTitle } = await loadPersistedProject();
   const executablePath = path.join(process.cwd(), 'out', 'SDLC Factory-win32-x64', 'sdlc-factory.exe');
   let application: ElectronApplication | undefined;
   const rendererErrors: string[] = [];
@@ -32,6 +45,10 @@ test('Electron 从真实控制平面加载持久化项目目录', async () => {
 
     await expect(window.getByTestId(`project-${project.project_id}`)).toBeVisible();
     await expect(window.getByText(project.name, { exact: true })).toBeVisible();
+    await window.getByTestId(`project-${project.project_id}`).click();
+    await expect(window.getByText('权威项目工作区', { exact: true })).toBeVisible();
+    await expect(window.getByRole('heading', { name: sessionTitle, exact: true })).toBeVisible();
+    await expect(window.getByText('初始化', { exact: true })).toBeVisible();
     expect(rendererErrors).toEqual([]);
   } finally {
     await application?.close();
