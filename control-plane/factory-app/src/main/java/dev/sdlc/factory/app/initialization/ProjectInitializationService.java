@@ -56,7 +56,7 @@ public final class ProjectInitializationService {
             throw new IllegalStateException("模板摘要与内置实现不一致，拒绝执行");
         }
         Path workspace = resolveWorkspace(workspacePath);
-        if (Files.exists(workspace)) throw new IllegalArgumentException("目标目录已存在：" + workspace);
+        ensureWorkspaceAvailable(workspace);
 
         String projectId = id("PRJ");
         String runId = id("RUN");
@@ -121,6 +121,20 @@ public final class ProjectInitializationService {
             throw new IllegalArgumentException("workspace_path 不能是文件系统根目录");
         }
         return normalized;
+    }
+
+    static void ensureWorkspaceAvailable(Path workspace) {
+        if (!Files.exists(workspace)) return;
+        if (!Files.isDirectory(workspace)) {
+            throw new IllegalArgumentException("目标路径不是目录：" + workspace);
+        }
+        try (var entries = Files.list(workspace)) {
+            if (entries.findAny().isPresent()) {
+                throw new IllegalArgumentException("目标目录不是空目录：" + workspace);
+            }
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("无法检查目标目录：" + workspace, exception);
+        }
     }
 
     public Map<String, Object> approve(String projectId, String reviewer, String comments, String idempotencyKey) {

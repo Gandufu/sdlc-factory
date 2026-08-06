@@ -93,7 +93,7 @@ const ProjectCreateDialog = ({ open, onOpenChange, onCreate }: {
               <Label htmlFor="workspace-path">项目绝对路径</Label>
               <Input id="workspace-path" value={workspacePath} aria-invalid={Boolean(errors.workspacePath)}
                 onChange={(event) => setWorkspacePath(event.target.value)} placeholder="D:\workspace\my-project" />
-              <p className="field-help">必须是尚不存在的新目录；控制平面会验证路径、Git 状态和初始版本。</p>
+              <p className="field-help">必须是尚不存在或内容为空的绝对目录；控制平面会验证路径、Git 状态和初始版本。</p>
               {errors.workspacePath && <p className="field-error">{errors.workspacePath}</p>}
             </div>
           </div>}
