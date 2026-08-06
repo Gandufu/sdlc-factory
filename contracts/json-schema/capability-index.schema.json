@@ -9,7 +9,7 @@
     "capability_index_id": { "type": "string", "pattern": "^CI-[A-Z0-9][A-Z0-9-]*$" },
     "project_id": { "type": "string", "minLength": 1 },
     "run_id": { "type": "string", "minLength": 1 },
-    "stage": { "enum": ["REQUIREMENT", "DESIGN", "CODING", "TESTING", "SYSTEM_ACCEPTANCE"] },
+    "stage": { "enum": ["CODING", "TESTING", "SYSTEM_ACCEPTANCE"] },
     "entries": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/entry" } },
     "generated_at": { "type": "string", "format": "date-time" }
   },
@@ -21,7 +21,7 @@
       "required": ["entry_id", "kind", "name", "short_description", "source_ref", "version", "authority_class", "load_policy", "content_hash"],
       "properties": {
         "entry_id": { "type": "string", "minLength": 1 },
-        "kind": { "enum": ["INTERNAL_TOOL", "MCP_TOOL", "SKILL", "PLUGIN", "REFERENCE_SOURCE", "AUTHORITY_SOURCE"] },
+        "kind": { "enum": ["INTERNAL_TOOL", "MCP_TOOL", "PLUGIN", "REFERENCE_SOURCE", "AUTHORITY_SOURCE"] },
         "name": { "type": "string", "minLength": 1 },
         "short_description": { "type": "string", "minLength": 1, "maxLength": 300 },
         "source_ref": { "type": "string", "minLength": 1 },

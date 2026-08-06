@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc-factory.local/schemas/v1.2/stage-submission.schema.json",
+  "title": "StageSubmission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["submission_id", "project_id", "stage", "artifact_refs", "source_session_id", "source_message_id", "agent_role", "agent_definition_ref", "skill_refs", "model_ref", "status", "submitted_at"],
+  "properties": {
+    "submission_id": { "type": "string", "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$" },
+    "project_id": { "type": "string", "pattern": "^PRJ-[A-Z0-9][A-Z0-9-]*$" },
+    "stage": { "enum": ["REQUIREMENT", "DESIGN"] },
+    "artifact_refs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/artifactRef" } },
+    "source_session_id": { "type": "string", "pattern": "^SES-[A-Z0-9][A-Z0-9-]*$" },
+    "source_message_id": { "type": "string", "minLength": 1 },
+    "agent_role": { "enum": ["REQUIREMENT", "DESIGN"] },
+    "agent_definition_ref": { "$ref": "#/$defs/versionedRef" },
+    "skill_refs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/versionedRef" } },
+    "model_ref": { "type": "string", "minLength": 1 },
+    "supersedes_submission_id": { "type": "string", "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$" },
+    "status": { "enum": ["READY_FOR_REVIEW", "APPROVED", "CHANGES_REQUESTED", "SUPERSEDED"] },
+    "submitted_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "stage": { "const": "REQUIREMENT" } }, "required": ["stage"] },
+      "then": { "properties": { "agent_role": { "const": "REQUIREMENT" }, "artifact_refs": { "type": "array", "contains": { "type": "object", "properties": { "artifact_type": { "const": "SRS" } }, "required": ["artifact_type"] } } } }
+    },
+    {
+      "if": { "properties": { "stage": { "const": "DESIGN" } }, "required": ["stage"] },
+      "then": { "properties": { "agent_role": { "const": "DESIGN" }, "artifact_refs": { "type": "array", "allOf": [
+        { "type": "array", "contains": { "type": "object", "properties": { "artifact_type": { "const": "DESIGN_DOCUMENT" } }, "required": ["artifact_type"] } },
+        { "type": "array", "contains": { "type": "object", "properties": { "artifact_type": { "const": "CAPABILITY_MAP" } }, "required": ["artifact_type"] } }
+      ] } } }
+    }
+  ],
+  "$defs": {
+    "contentHash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "versionedRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "content_hash"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }, "content_hash": { "$ref": "#/$defs/contentHash" } }
+    },
+    "artifactRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_type", "artifact_ref", "content_hash"],
+      "properties": {
+        "artifact_type": { "enum": ["SRS", "DESIGN_DOCUMENT", "VALIDATION_CONTRACT", "CAPABILITY_MAP", "DESIGN_SLICE_MANIFEST"] },
+        "artifact_ref": { "type": "string", "minLength": 1 },
+        "content_hash": { "$ref": "#/$defs/contentHash" }
+      }
+    }
+  }
+}

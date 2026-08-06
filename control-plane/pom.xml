@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   AI 软件工厂控制平面 —— 聚合父 POM
-  依据 docs/v1.2/ai-software-factory-design-v1.2-final.md 第 12.2 节的模块划分。
+  依据 docs/v1.2/README.md 及其架构子文档的模块划分。
   模块依赖方向（自底向上，领域模块不依赖 Spring）：
     factory-common ← factory-contracts ← factory-lifecycle / factory-orchestration / factory-runner
                                         ← factory-gate ← factory-persistence ← factory-app

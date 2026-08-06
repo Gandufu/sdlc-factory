@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sdlc-factory.local/schemas/v1.2/run-request.schema.json",
-  "title": "RunRequest",
+  "title": "ExecutionRunRequest",
   "type": "object",
   "additionalProperties": false,
   "required": ["protocol_version", "run_id", "attempt_id", "project_id", "stage", "objective", "baseline_refs", "agent_definition_ref", "prompt_template_ref", "rule_set_ref", "budget", "idempotency_key", "requested_at"],
@@ -12,7 +12,7 @@
     "project_id": { "type": "string", "pattern": "^PRJ-[A-Z0-9][A-Z0-9-]*$" },
     "csci_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
     "cu_id": { "type": "string", "minLength": 1 },
-    "stage": { "enum": ["INITIALIZATION", "REQUIREMENT", "DESIGN", "CODING", "TESTING", "SYSTEM_ACCEPTANCE"] },
+    "stage": { "enum": ["INITIALIZATION", "CODING", "TESTING", "SYSTEM_ACCEPTANCE"] },
     "slice_id": { "type": "string", "minLength": 1 },
     "objective": { "type": "string", "minLength": 1 },
     "baseline_refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/versionedRef" } },

@@ -11,6 +11,17 @@ if ($schemas.Count -eq 0) {
     throw 'No JSON Schema files found.'
 }
 
+$requiredWorkflowContracts = @(
+    'factory-session.schema.json',
+    'skill-definition.schema.json',
+    'stage-submission.schema.json'
+)
+foreach ($requiredContract in $requiredWorkflowContracts) {
+    if (-not ($schemas.Name -contains $requiredContract)) {
+        throw "Missing workflow contract $requiredContract"
+    }
+}
+
 try {
     New-Item -ItemType Directory -Path $validationRoot | Out-Null
     & npm install --prefix $validationRoot --no-audit --no-fund ajv-cli@5 ajv-formats@3

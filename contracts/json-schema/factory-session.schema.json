@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdlc-factory.local/schemas/v1.2/factory-session.schema.json",
+  "title": "FactorySession",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "session_id", "project_id", "session_type", "opencode_session_id", "workspace_path", "state", "todo_authority", "created_at", "updated_at"],
+  "properties": {
+    "protocol_version": { "const": "1.0" },
+    "session_id": { "type": "string", "pattern": "^SES-[A-Z0-9][A-Z0-9-]*$" },
+    "project_id": { "type": "string", "pattern": "^PRJ-[A-Z0-9][A-Z0-9-]*$" },
+    "session_type": { "enum": ["PROJECT_MAIN", "CODING_CHILD", "TESTING_CHILD", "VALIDATOR_CHILD"] },
+    "parent_session_id": { "type": "string", "pattern": "^SES-[A-Z0-9][A-Z0-9-]*$" },
+    "opencode_session_id": { "type": "string", "minLength": 1 },
+    "workspace_path": { "type": "string", "minLength": 1 },
+    "stage": { "enum": ["REQUIREMENT", "DESIGN", "PLANNING", "CODING", "TESTING", "SYSTEM_ACCEPTANCE"] },
+    "cu_id": { "type": "string", "minLength": 1 },
+    "state": { "enum": ["ACTIVE", "WAITING_FOR_HUMAN", "BLOCKED", "COMPLETED", "ARCHIVED"] },
+    "todo_authority": { "const": "OPENCODE_NATIVE" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "session_type": { "enum": ["CODING_CHILD", "TESTING_CHILD", "VALIDATOR_CHILD"] } }, "required": ["session_type"] },
+      "then": { "required": ["parent_session_id", "cu_id", "stage"] }
+    }
+  ]
+}

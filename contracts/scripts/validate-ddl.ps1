@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $contractsRoot = Split-Path -Parent $PSScriptRoot
-$ddlPath = Join-Path $contractsRoot 'ddl\V1__v1_2_contract_baseline.sql'
+$ddlPaths = Get-ChildItem -LiteralPath (Join-Path $contractsRoot 'ddl') -Filter 'V*.sql' | Sort-Object Name
 $validationRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('sdlc-factory-pglite-' + [guid]::NewGuid().ToString('N'))
 
 try {
@@ -12,7 +12,8 @@ try {
     }
 
     $env:SDLC_PGLITE_MODULE = Join-Path $validationRoot 'node_modules\@electric-sql\pglite\dist\index.js'
-    $env:SDLC_DDL_PATH = (Resolve-Path -LiteralPath $ddlPath).Path
+    $env:SDLC_DDL_PATHS_JSON = ($ddlPaths.FullName | ConvertTo-Json -Compress)
+    $nodeErrorPath = Join-Path $validationRoot 'node-stderr.log'
 
     $ErrorActionPreference = 'Continue'
     $nodeOutput = @'
@@ -21,7 +22,9 @@ import { pathToFileURL } from "node:url";
 
 const { PGlite } = await import(pathToFileURL(process.env.SDLC_PGLITE_MODULE));
 const db = new PGlite();
-await db.exec(fs.readFileSync(process.env.SDLC_DDL_PATH, "utf8"));
+for (const ddlPath of JSON.parse(process.env.SDLC_DDL_PATHS_JSON)) {
+  await db.exec(fs.readFileSync(ddlPath, "utf8"));
+}
 
 const hashA = "sha256:" + "a".repeat(64);
 const hashB = "sha256:" + "b".repeat(64);
@@ -32,6 +35,18 @@ await db.query("insert into project(project_id,name) values ($1,$2)", ["PROJECT-
 await db.query("insert into run(run_id,project_id,attempt_id,status) values ($1,$2,$3,$4)", ["RUN-1", "PROJECT-1", "ATTEMPT-1", "SUCCEEDED"]);
 await db.query("insert into prompt_template(prompt_id,version,applicable_stage,content_ref,content_hash,status) values ($1,$2,$3,$4,$5,$6)", ["PRM-CODER", "1.0.0", "CODING", "prompts/coder.md", hashA, "DRAFT"]);
 await db.query("insert into agent_definition(agent_id,version,role,model_binding_ref,prompt_id,prompt_version,prompt_content_hash,content_hash,status) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)", ["AGT-CODER", "1.0.0", "CODER", "MODEL-1", "PRM-CODER", "1.0.0", hashA, hashB, "DRAFT"]);
+await db.query("insert into skill_definition(skill_id,version,description,source_ref,native_path,load_mode,content_hash,status) values ($1,$2,$3,$4,$5,$6,$7,$8)", ["factory-coding", "1.0.0", "coding", "factory:skills/factory-coding/1.0.0", ".opencode/skills/factory-coding/SKILL.md", "NATIVE_ON_DEMAND", hashC, "DRAFT"]);
+await db.query("insert into agent_skill_binding(agent_id,agent_version,skill_id,skill_version,skill_content_hash) values ($1,$2,$3,$4,$5)", ["AGT-CODER", "1.0.0", "factory-coding", "1.0.0", hashC]);
+await db.query("insert into skill_applicable_stage(skill_id,skill_version,stage_type) values ($1,$2,$3)", ["factory-coding", "1.0.0", "CODING"]);
+await db.query("insert into prompt_template(prompt_id,version,applicable_stage,content_ref,content_hash,status) values ($1,$2,$3,$4,$5,$6)", ["PRM-REQ", "1.0.0", "REQUIREMENT", "prompts/requirement.md", hashA, "DRAFT"]);
+await db.query("insert into agent_definition(agent_id,version,role,model_binding_ref,prompt_id,prompt_version,prompt_content_hash,content_hash,status) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)", ["AGT-REQ", "1.0.0", "REQUIREMENT", "MODEL-1", "PRM-REQ", "1.0.0", hashA, hashF, "DRAFT"]);
+await db.query("insert into skill_definition(skill_id,version,description,source_ref,native_path,load_mode,content_hash,status) values ($1,$2,$3,$4,$5,$6,$7,$8)", ["factory-requirement-grilling", "1.0.0", "requirement grilling", "factory:skills/factory-requirement-grilling/1.0.0", ".opencode/skills/factory-requirement-grilling/SKILL.md", "NATIVE_ON_DEMAND", hashB, "DRAFT"]);
+await db.query("insert into agent_skill_binding(agent_id,agent_version,skill_id,skill_version,skill_content_hash) values ($1,$2,$3,$4,$5)", ["AGT-REQ", "1.0.0", "factory-requirement-grilling", "1.0.0", hashB]);
+await db.query("insert into skill_applicable_stage(skill_id,skill_version,stage_type) values ($1,$2,$3)", ["factory-requirement-grilling", "1.0.0", "REQUIREMENT"]);
+await db.query("insert into factory_session(session_id,project_id,agent,title,state,current,session_type,opencode_session_id,todo_authority,stage_type) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", ["SES-1", "PROJECT-1", "AGT-REQ", "main", "ACTIVE", true, "PROJECT_MAIN", "oc-session-1", "OPENCODE_NATIVE", "REQUIREMENT"]);
+await db.query("insert into stage_submission(submission_id,project_id,stage_type,source_session_id,source_message_id,agent_role,agent_id,agent_version,agent_content_hash,model_ref,status,submitted_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now())", ["SUB-1", "PROJECT-1", "REQUIREMENT", "SES-1", "oc-message-1", "REQUIREMENT", "AGT-REQ", "1.0.0", hashF, "MODEL-1", "READY_FOR_REVIEW"]);
+await db.query("insert into stage_submission_artifact(submission_id,artifact_type,artifact_ref,content_hash) values ($1,$2,$3,$4)", ["SUB-1", "SRS", "docs/requirements/software-requirements-specification.md", hashA]);
+await db.query("insert into stage_submission_skill(submission_id,skill_id,skill_version,skill_content_hash) values ($1,$2,$3,$4)", ["SUB-1", "factory-requirement-grilling", "1.0.0", hashB]);
 await db.query("insert into rule_set(ruleset_id,version,applicable_stage,content_ref,content_hash,status) values ($1,$2,$3,$4,$5,$6)", ["RS-CODER", "1.0.0", "CODING", "rules/coder.md", hashC, "DRAFT"]);
 await db.query("insert into factory_trajectory_event(event_id,occurred_at,project_id,run_id,attempt_id,trace_id,agent_id,agent_version,agent_content_hash,prompt_id,prompt_version,prompt_content_hash,ruleset_id,ruleset_version,ruleset_content_hash,model_ref,tool_schema_version,context_bundle_hash,outcome,event_type) values ($1,now(),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)", ["TE-1", "PROJECT-1", "RUN-1", "ATTEMPT-1", "TRACE-1", "AGT-CODER", "1.0.0", hashB, "PRM-CODER", "1.0.0", hashA, "RS-CODER", "1.0.0", hashC, "MODEL-1", "1.0.0", hashF, "PASSED", "RUN_COMPLETED"]);
 await db.query("insert into review_record(review_id,scope_type,scope_id,stage_type,baseline_candidate_ref,reviewer_identity,reviewer_role,separation_policy,decision,comments,reviewed_at,idempotency_key) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),$11)", ["REVIEW-REQ-1", "PROJECT", "PROJECT-1", "REQUIREMENT", "ART-REQ-1", "reviewer-1", "REVIEWER", "ENFORCED", "APPROVED", "approved", "IDEMP-REQ-1"]);
@@ -67,23 +82,26 @@ let hostResultGuard = false;
 try { await db.query("insert into host_run_result(result_id,run_id,invocation_id,host_session_id,status,input_tokens,output_tokens,cost_usd,host_calls,completed_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())", ["HRS-1", "RUN-1", "INV-1", "session-1", "SUCCEEDED", 1, 1, 0, 1]); } catch { hostResultGuard = true; }
 
 const tables = await db.query("select count(*)::int as count from pg_tables where schemaname = 'public' and tablename not like 'pglite_%'");
-if (tables.rows[0].count !== 61 || !budgetGuard || !trajectoryGuard || !validatorGuard || !contextGuard || !hostEventGuard || !hostResultGuard) {
+if (tables.rows[0].count !== 72 || !budgetGuard || !trajectoryGuard || !validatorGuard || !contextGuard || !hostEventGuard || !hostResultGuard) {
   throw new Error(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard, validatorGuard, contextGuard, hostEventGuard, hostResultGuard }));
 }
 
 console.log(JSON.stringify({ contractTables: tables.rows[0].count, budgetGuard, trajectoryGuard, validatorGuard, contextGuard, hostEventGuard, hostResultGuard }));
-'@ | node --input-type=module 2>$null
+'@ | node --input-type=module 2> $nodeErrorPath
     $nodeExitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     $nodeOutput | Write-Output
 
     if ($nodeExitCode -ne 0) {
+        if (Test-Path -LiteralPath $nodeErrorPath) {
+            Get-Content -LiteralPath $nodeErrorPath | Write-Output
+        }
         throw 'PostgreSQL DDL validation failed.'
     }
 }
 finally {
     Remove-Item Env:SDLC_PGLITE_MODULE -ErrorAction SilentlyContinue
-    Remove-Item Env:SDLC_DDL_PATH -ErrorAction SilentlyContinue
+    Remove-Item Env:SDLC_DDL_PATHS_JSON -ErrorAction SilentlyContinue
 
     if (Test-Path -LiteralPath $validationRoot) {
         $resolved = [System.IO.Path]::GetFullPath($validationRoot)
