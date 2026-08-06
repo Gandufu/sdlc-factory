@@ -38,7 +38,8 @@ export const App = () => {
   };
 
   return (
-    <AppShell view={view} status={controlPlane.status} onNavigate={setView} onRefresh={controlPlane.refresh}>
+    <AppShell view={view} status={controlPlane.status} capacity={controlPlane.board}
+      onNavigate={setView} onRefresh={controlPlane.refresh}>
       {view === 'projects' && <ProjectsPage {...projectCatalog} onOpen={openInitialization} onCreate={projectCatalog.create} />}
       {view === 'attention' && <AttentionPage onOpen={openProject} />}
       {view === 'operations' && <OperationsPage {...controlPlane} onRefresh={controlPlane.refresh} />}

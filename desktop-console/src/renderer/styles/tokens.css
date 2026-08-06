@@ -1,47 +1,43 @@
 :root {
-  color: #17202a;
-  background: #edf1f5;
-  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: "Segoe UI Variable", "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
   font-synthesis: none;
-  --ink: #17202a;
-  --muted: #64707d;
-  --line: #d8dee5;
-  --surface: #ffffff;
-  --surface-soft: #f5f7f9;
-  --blue: #075ccf;
-  --blue-soft: #e8f1ff;
-  --amber: #b96200;
-  --red: #b42318;
-  --green: #16805d;
-  --nav: #101820;
-  --shadow: 0 14px 42px rgb(25 42 62 / 8%);
+  --ink: var(--foreground);
+  --line: var(--border);
+  --surface: var(--card);
+  --surface-soft: var(--muted);
+  --blue: #6d8dff;
+  --blue-soft: rgb(109 141 255 / 12%);
+  --amber: #f1b85b;
+  --red: #f17878;
+  --green: #5fd19b;
+  --nav: var(--sidebar);
+  --shadow: 0 20px 60px rgb(0 0 0 / 24%);
 }
-
 * { box-sizing: border-box; }
-/* Electron 的 1024px 外窗包含边框，内容视口需保留少量收缩余量，避免横向滚动。 */
-body { margin: 0; min-width: 900px; min-height: 720px; background: #edf1f5; }
+html, body, #root { min-width: 0; min-height: 100%; }
+body { margin: 0; min-height: 720px; overflow-x: hidden; color: var(--foreground); background: var(--background); }
 button { color: inherit; font: inherit; }
-button:focus-visible { outline: 3px solid rgb(7 92 207 / 28%); outline-offset: 2px; }
+button:focus-visible { outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: .48; }
 h1, h2, h3, p { margin-top: 0; }
 .panel-kicker, .command-label, .section-heading span {
-  color: var(--muted); font-family: "Cascadia Mono", Consolas, monospace;
+  color: var(--muted-foreground); font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 11px; font-weight: 700; letter-spacing: .11em;
 }
-.primary-button, .secondary-button {
-  border: 0; border-radius: 9px; padding: 10px 16px; font-weight: 680; cursor: pointer;
-}
-.primary-button { color: white; background: var(--blue); }
-.secondary-button { border: 1px solid var(--line); background: var(--surface); }
+.primary-button, .secondary-button { border: 0; border-radius: 9px; padding: 10px 16px; font-weight: 680; cursor: pointer; }
+.primary-button { color: var(--primary-foreground); background: var(--primary); }
+.secondary-button { border: 1px solid var(--border); background: var(--card); }
 .fixture-badge, .live-badge {
-  display: inline-flex; align-items: center; gap: 7px; border-radius: 99px; padding: 5px 9px;
-  color: #596673; background: #e8edf2; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 99px; padding: 5px 9px;
+  color: var(--muted-foreground); background: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .04em;
 }
-.live-badge { color: #0c674b; background: #e1f4ed; }
+.live-badge { color: #74dbae; border-color: rgb(16 185 129 / 25%); background: rgb(16 185 129 / 9%); }
 .live-badge i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
-.state-chip { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.state-chip { display: inline-flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: 12px; font-weight: 700; white-space: nowrap; }
 .state-chip i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .state-chip.running { color: var(--blue); }
 .state-chip.review { color: var(--amber); }
 .state-chip.blocked { color: var(--red); }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
