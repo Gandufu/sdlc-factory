@@ -134,6 +134,24 @@ public final class ProjectInitializationRepository {
                     content_hash, source_revision, review_record_id, validity_status)
                 VALUES (?, 'PROJECT', ?, 'INITIALIZATION', 1, ?, ?, ?, 'VALID')
                 """, baselineId, projectId, contentHash, project.get("initial_git_revision"), reviewId);
+        jdbc.update("""
+                INSERT INTO baseline_item(baseline_id, artifact_type, artifact_ref, content_hash)
+                SELECT ?, 'INITIALIZATION_EVIDENCE', evidence_id, content_hash FROM evidence
+                WHERE run_id = ?
+                """, baselineId, runId(projectId));
+        jdbc.update("""
+                INSERT INTO baseline_item(baseline_id, artifact_type, artifact_ref, content_hash)
+                VALUES (?, 'TEMPLATE_DESCRIPTOR', ?, ?),
+                       (?, 'TEMPLATE_PARAMETERS', 'parameters',
+                        (SELECT template_parameters_hash FROM project_initialization WHERE project_id = ?)),
+                       (?, 'PROJECT_MANIFEST', 'project-manifest', ?)
+                """, baselineId, project.get("template_id") + "@" + project.get("template_version"),
+                project.get("template_digest"), baselineId, projectId, baselineId, contentHash);
+        jdbc.update("""
+                INSERT INTO baseline_reference_binding(baseline_id, reference_binding_ref)
+                VALUES (?, ?)
+                """, baselineId, "template:" + project.get("template_id") + "@"
+                + project.get("template_version") + ":" + project.get("template_digest"));
         jdbc.update("UPDATE project_initialization SET state='APPROVED', version=version+1, updated_at=now() WHERE project_id=?", projectId);
         jdbc.update("UPDATE run SET status='SUCCEEDED' WHERE run_id=?", runId(projectId));
     }
