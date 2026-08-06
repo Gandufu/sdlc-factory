@@ -9,6 +9,9 @@ export type HostInvocation = {
   directory: string;
   objective: string;
   modelRef: string;
+  system?: string;
+  parts?: Array<{ type: 'text'; text: string }>;
+  outputFormat?: { type: 'json_schema'; schema: Record<string, unknown>; retryCount: number };
 };
 
 export type OpenCodeInvocationResult = {
@@ -19,6 +22,7 @@ export type OpenCodeInvocationResult = {
   modelRef: string;
   finish: string;
   text: string;
+  structured?: unknown;
   cost: number;
   tokens: { input: number; output: number; reasoning: number };
 };
@@ -37,6 +41,7 @@ type SdkRuntime = {
           providerID: string;
           modelID: string;
           variant?: string;
+          structured?: unknown;
           cost: number;
           tokens: { input: number; output: number; reasoning: number };
         };
@@ -89,7 +94,9 @@ export class OpenCodeHostAdapter {
         model: { providerID: model.providerId, modelID: model.modelId },
         variant: model.variant,
         tools: { bash: false, edit: false, write: false, patch: false },
-        parts: [{ type: 'text', text: invocation.objective }],
+        system: invocation.system,
+        format: invocation.outputFormat,
+        parts: invocation.parts ?? [{ type: 'text', text: invocation.objective }],
       }, { throwOnError: true }));
       if (response.info.error) throw new Error(`OpenCode 模型执行失败：${JSON.stringify(response.info.error)}`);
       if (response.info.providerID !== model.providerId || response.info.modelID !== model.modelId
@@ -97,7 +104,9 @@ export class OpenCodeHostAdapter {
         throw new Error(`OpenCode 实际模型与固定绑定不一致：${response.info.providerID}/${response.info.modelID}#${response.info.variant ?? 'none'}`);
       }
       const text = response.parts.filter((part) => part.type === 'text').map((part) => part.text ?? '').join('\n').trim();
-      if (!text) throw new Error('OpenCode 模型没有返回文本结果');
+      if (!text && response.info.structured === undefined) {
+        throw new Error('OpenCode 模型没有返回文本或结构化结果');
+      }
 
       return {
         invocationId: invocation.invocationId,
@@ -107,6 +116,7 @@ export class OpenCodeHostAdapter {
         modelRef: invocation.modelRef,
         finish: response.info.finish ?? 'unknown',
         text,
+        structured: response.info.structured,
         cost: response.info.cost,
         tokens: response.info.tokens,
       };

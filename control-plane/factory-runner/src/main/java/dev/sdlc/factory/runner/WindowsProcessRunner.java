@@ -41,6 +41,11 @@ public final class WindowsProcessRunner implements ProjectRunner {
 
         try {
             Process process = builder.start();
+            try (var input = process.getOutputStream()) {
+                if (command.standardInput() != null) {
+                    input.write(command.standardInput().getBytes(StandardCharsets.UTF_8));
+                }
+            }
             // stdout/stderr 必须并发消费；readAllBytes 会等待 EOF，不能放在超时判断之前
             try (ExecutorService readers = Executors.newVirtualThreadPerTaskExecutor()) {
                 Future<byte[]> stdoutReader = readers.submit(process.getInputStream()::readAllBytes);

@@ -2,7 +2,7 @@
 
 独立 Node.js/TypeScript 进程模块。它是 Factory 合同与 `@opencode-ai/sdk` 之间的 Adapter；Spring Boot Java Core 不依赖 OpenCode SDK 类型。
 
-首个切片提供一个深接口：`OpenCodeHostAdapter.invoke`。接口接收固定 `provider/model#variant` 的模型引用，模块内部负责启动本地 OpenCode Server、版本握手、Session、模型调用和清理。
+模块提供两个窄接口：`OpenCodeHostAdapter.invoke` 封装 SDK 与 Session 生命周期；`factory-bridge` 从标准输入接收正式 `AgentInvocation` JSON，输出经过本地 JSON Schema 校验的 Handoff 与宿主用量。Java Core 通过受控子进程调用 Bridge，再持久化正式 `HostRunResult`。
 
 当前固定版本与模型：
 
@@ -16,4 +16,6 @@ pnpm test
 pnpm smoke:model
 ```
 
-此切片只返回 Adapter 内部的 `OpenCodeInvocationResult`，尚未接入 Spring Boot 的 Run 编排和持久化，也不冒充 Factory 正式 `HostRunResult`。下一步由控制平面通过 Factory 自有 `AgentInvocation` 合同启动该进程；只有结构化 Handoff 经本地 Schema 二次校验并持久化后，才能形成成功的 `HostRunResult`。
+本地控制平面的验收入口是 `POST /api/projects/{projectId}/host-acceptance`。它创建独立验收 Run，不推进 CODING Gate；成功条件是 AgentInvocation、Handoff 与 HostRunResult 在同一 Run 上形成完整关联。Handoff 的标识、Run 关联、角色和提交时间由 Adapter 覆盖为 Factory 事实，模型不能决定这些字段；未授权的变更路径或证据引用会使 Run 失败。
+
+`cost_usd` 当前保存 OpenCode SDK 返回值；它不是账单证据，返回 `0` 时不得解释为已确认免费。

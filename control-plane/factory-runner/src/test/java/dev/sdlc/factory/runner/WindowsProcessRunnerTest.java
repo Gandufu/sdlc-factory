@@ -47,4 +47,16 @@ class WindowsProcessRunnerTest {
 
         assertTrue(output.timedOut());
     }
+
+    @Test
+    void shouldWriteStandardInputAndCloseStream() {
+        RunnerCommand command = new RunnerCommand(
+                List.of("powershell", "-NoProfile", "-Command", "$input | Write-Output"),
+                workDir, null, Duration.ofSeconds(30), "factory-input");
+
+        RunnerOutput output = runner.execute(command);
+
+        assertEquals(0, output.exitCode());
+        assertTrue(output.stdout().contains("factory-input"));
+    }
 }

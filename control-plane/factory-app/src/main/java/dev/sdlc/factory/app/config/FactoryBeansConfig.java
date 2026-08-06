@@ -10,12 +10,19 @@ import dev.sdlc.factory.runner.WindowsProcessRunner;
 import dev.sdlc.factory.app.initialization.NodeTemplateAdapter;
 import dev.sdlc.factory.app.initialization.ProjectInitializationService;
 import dev.sdlc.factory.persistence.ProjectInitializationRepository;
+import dev.sdlc.factory.persistence.HostAcceptanceRepository;
+import dev.sdlc.factory.app.host.HostAcceptanceService;
+import dev.sdlc.factory.app.host.OpenCodeProcessAdapter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.ObjectMapper;
+
+import java.nio.file.Path;
+import java.time.Duration;
 
 /**
  * 领域 Bean 装配。
@@ -62,5 +69,31 @@ public class FactoryBeansConfig {
             @Value("${factory.workspace-root:${user.home}/sdlc-factory-projects}") String workspaceRoot) {
         return new ProjectInitializationService(repository, template,
                 new TransactionTemplate(transactionManager), workspaceRoot);
+    }
+
+    @Bean
+    public HostAcceptanceRepository hostAcceptanceRepository(JdbcTemplate jdbcTemplate) {
+        return new HostAcceptanceRepository(jdbcTemplate);
+    }
+
+    @Bean
+    public OpenCodeProcessAdapter openCodeProcessAdapter(
+            WindowsProcessRunner runner,
+            ObjectMapper objectMapper,
+            @Value("${factory.opencode-adapter-root:${user.dir}/../agent-adapters/opencode}") String adapterRoot,
+            @Value("${factory.contracts-root:${user.dir}/../contracts/json-schema}") String contractsRoot) {
+        return new OpenCodeProcessAdapter(runner, objectMapper, Path.of(adapterRoot),
+                Path.of(contractsRoot), Duration.ofMinutes(5));
+    }
+
+    @Bean
+    public HostAcceptanceService hostAcceptanceService(
+            HostAcceptanceRepository repository,
+            OpenCodeProcessAdapter adapter,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager,
+            @Value("${factory.contracts-root:${user.dir}/../contracts/json-schema}") String contractsRoot) {
+        return new HostAcceptanceService(repository, adapter, objectMapper,
+                new TransactionTemplate(transactionManager), Path.of(contractsRoot));
     }
 }

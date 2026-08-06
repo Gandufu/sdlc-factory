@@ -16,12 +16,19 @@ import java.util.Objects;
  * @param workingDirectory 规范化工作目录
  * @param environment   附加环境变量（Secret 通过运行时通道注入，不落日志）
  * @param timeout       单次运行超时
+ * @param standardInput 写入子进程标准输入的 UTF-8 文本；null 表示立即关闭输入流
  */
 public record RunnerCommand(
         List<String> arguments,
         Path workingDirectory,
         Map<String, String> environment,
-        Duration timeout) {
+        Duration timeout,
+        String standardInput) {
+
+    public RunnerCommand(List<String> arguments, Path workingDirectory,
+                         Map<String, String> environment, Duration timeout) {
+        this(arguments, workingDirectory, environment, timeout, null);
+    }
 
     public RunnerCommand {
         Objects.requireNonNull(arguments, "arguments 不能为空");
