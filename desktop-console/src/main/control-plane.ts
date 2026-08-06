@@ -10,7 +10,7 @@ const HEALTH_URL = 'http://127.0.0.1:8420/actuator/health';
 export const inspectControlPlane = async (): Promise<ControlPlaneStatus> => {
   const checkedAt = new Date().toISOString();
   try {
-    const response = await net.fetch(HEALTH_URL, { signal: AbortSignal.timeout(1500) });
+    const response = await net.fetch(HEALTH_URL, { signal: AbortSignal.timeout(3000) });
     if (!response.ok) {
       return { state: 'unavailable', checkedAt, detail: `健康检查返回 HTTP ${response.status}` };
     }

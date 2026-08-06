@@ -15,6 +15,15 @@ Electron Forge + React + Vite + TypeScript 的 M0 生产骨架。Renderer 通过
 pnpm install
 pnpm start
 pnpm verify
+pnpm test:e2e
 ```
 
 控制平面默认监听 `127.0.0.1:8420`。未启动时控制台会显示可恢复的未连接状态。
+
+`test:e2e` 会生成仅用于测试的 Electron 包，并只读验证项目目录到初始化证据详情的主链。运行前需要：
+
+- PostgreSQL 和控制平面已启动；
+- 数据库中至少存在一个含 `START`、`READINESS`、`STOP` 运行证据的已批准项目；
+- 如需指定项目，设置 `SDLC_FACTORY_E2E_PROJECT_ID`。
+
+生产包继续禁用 Node CLI 调试参数；只有 `SDLC_FACTORY_E2E=true` 的临时测试包会开启 Playwright 所需的 Electron 调试通道。

@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "types": ["node", "vite/client", "vitest/globals"]
   },
-  "include": ["src", "tests", "*.ts"]
+  "include": ["src", "tests", "e2e", "*.ts"]
 }

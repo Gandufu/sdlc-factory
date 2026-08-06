@@ -35,7 +35,7 @@ export const AppShell = ({
     <section className="app-body">
       <header className="command-bar">
         <div><span className="command-label">CONTROL PLANE</span><strong>本地控制平面</strong></div>
-        <button className={`health ${status.state}`} onClick={onRefresh}>
+        <button className={`health ${status.state}`} data-testid="control-plane-health" onClick={onRefresh}>
           <i />{status.state === 'ready' ? '已就绪' : '未连接'}<span>重新检查</span>
         </button>
       </header>

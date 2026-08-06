@@ -15,7 +15,7 @@ export const InitializationPage = ({ project, onBack, onApprove }: {
     {project.failure_detail && <p>{project.failure_detail}</p>}
     <h3>初始化运行证据</h3>
     <ol className="initialization-operations">
-      {(project.operations ?? []).map((operation) => <li key={`${operation.operation}-${operation.runtime_id ?? operation.content_hash ?? ''}`}>
+      {(project.operations ?? []).map((operation) => <li data-testid={`initialization-operation-${operation.operation}`} key={`${operation.operation}-${operation.runtime_id ?? operation.content_hash ?? ''}`}>
         <strong>{operationLabel(operation.operation)}</strong>
         <span>{operation.test_outcome ?? operation.status}</span>
         <small>{operation.runtime_id ?? operation.content_hash ?? 'ExecutionResult'}</small>

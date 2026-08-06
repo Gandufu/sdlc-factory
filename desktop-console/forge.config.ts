@@ -4,6 +4,8 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
+const e2ePackage = process.env.SDLC_FACTORY_E2E === 'true';
+
 const config: ForgeConfig = {
   packagerConfig: { asar: true, executableName: 'sdlc-factory' },
   makers: [new MakerSquirrel({ name: 'sdlc_factory', setupExe: 'SDLCFactorySetup.exe' })],
@@ -20,7 +22,7 @@ const config: ForgeConfig = {
       [FuseV1Options.RunAsNode]: false,
       [FuseV1Options.EnableCookieEncryption]: true,
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
-      [FuseV1Options.EnableNodeCliInspectArguments]: false,
+      [FuseV1Options.EnableNodeCliInspectArguments]: e2ePackage,
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),

@@ -44,7 +44,7 @@ export const ProjectsPage = ({ projects, loading, error, onOpen, onCreate }: {
       <p>Project、TemplateBinding 和初始化状态均来自控制平面。</p></section>
     <div className="section-heading"><div><span>PROJECT CATALOG</span><h2>真实项目</h2></div></div>
     {loading && <p>正在加载项目目录…</p>}{error && <p className="data-note">{error}</p>}
-    <section className="project-list">{projects.map((project) => <button className="project-row" key={project.project_id} onClick={() => onOpen(project)}>
+    <section className="project-list">{projects.map((project) => <button className="project-row" data-testid={`project-${project.project_id}`} key={project.project_id} onClick={() => onOpen(project)}>
       <span className="project-avatar">{project.name.slice(0, 1)}</span>
       <span className="project-identity"><strong>{project.name}</strong><small>{project.project_id}</small></span>
       <span className="project-stage"><small>模板</small><strong>{project.template_id}@{project.template_version}</strong></span>
