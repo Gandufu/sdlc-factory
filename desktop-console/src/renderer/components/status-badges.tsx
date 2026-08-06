@@ -37,8 +37,8 @@ export const ControlPlaneStatusBadge = ({ status }: { status: ControlPlaneStatus
 );
 
 export const RunStatusBadge = ({ state }: { state: string }) => {
-  const tone: Tone = state === 'RUNNING' ? 'running' : state === 'COMPLETED' ? 'ready'
-    : state === 'WAITING_FOR_HUMAN' || state === 'READY' ? 'waiting' : state === 'BLOCKED' ? 'blocked' : 'muted';
+  const tone: Tone = state === 'RUNNING' ? 'running' : state === 'COMPLETED' || state === 'READY' ? 'ready'
+    : state === 'WAITING_FOR_HUMAN' ? 'waiting' : state === 'BLOCKED' ? 'blocked' : 'muted';
   return <StatusBadge label={state} tone={tone} />;
 };
 

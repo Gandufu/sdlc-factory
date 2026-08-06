@@ -20,6 +20,15 @@
 .command-context span { color: var(--muted-foreground); font: 700 10px "Cascadia Mono", Consolas, monospace; letter-spacing: .12em; }
 .command-context strong { margin-top: 2px; color: var(--foreground); font-size: 13px; }
 .command-actions svg { width: 15px; height: 15px; }
+.capacity-drawer { padding: 18px; }
+.capacity-drawer dl { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; overflow: hidden; margin: 8px 0 0; border: 1px solid var(--border); border-radius: 10px; background: var(--border); }
+.capacity-drawer dl div { display: grid; gap: 6px; padding: 14px; background: var(--card); }
+.capacity-drawer dt { color: var(--muted-foreground); font-size: 11px; }
+.capacity-drawer dd { margin: 0; font: 700 20px "Cascadia Mono", Consolas, monospace; }
+.capacity-drawer-queue { margin-top: 10px; }
+.capacity-drawer-queue ol { display: grid; gap: 8px; margin: 12px 0; padding: 0; list-style: none; }
+.capacity-drawer-queue li { padding: 10px; border: 1px solid var(--border); border-radius: 8px; font: 11px "Cascadia Mono", Consolas, monospace; }
+.capacity-drawer-queue p { color: var(--muted-foreground); font-size: 12px; }
 .evidence-rail { display: grid; margin: 0; padding: 0; list-style: none; }
 .evidence-rail li { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; min-height: 58px; }
 .evidence-rail li:not(:last-child)::after { content: ""; position: absolute; top: 27px; bottom: -3px; left: 14px; width: 1px; background: var(--border); }

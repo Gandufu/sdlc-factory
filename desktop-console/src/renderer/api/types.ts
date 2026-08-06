@@ -25,6 +25,29 @@ export type RunEvent = {
   [key: string]: unknown;
 };
 
+export type RunProjection = {
+  run_id: string;
+  project_id: string;
+  project_name: string;
+  scope: string;
+  authoritative_status: string;
+  lane: 'READY' | 'RUNNING' | 'WAITING_FOR_HUMAN' | 'BLOCKED' | 'COMPLETED';
+  created_at: string;
+};
+
+export type AttentionItem = {
+  attention_id: string;
+  project_id: string;
+  run_id?: string;
+  scope: string;
+  category: 'REVIEW' | 'BLOCKED' | 'INTERVENTION';
+  title: string;
+  summary: string;
+  occurred_at: string;
+  target_type: 'INITIALIZATION' | 'STAGE' | 'RUN';
+  target_id: string;
+};
+
 export type ProjectSummary = {
   project_id: string;
   name: string;

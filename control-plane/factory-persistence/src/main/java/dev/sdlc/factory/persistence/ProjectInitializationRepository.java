@@ -165,6 +165,56 @@ public final class ProjectInitializationRepository {
                 """, projectId);
     }
 
+    /** 运行中心只读投影；展示状态由数据库 Run 状态确定，客户端不得改写。 */
+    public List<Map<String, Object>> runBoard() {
+        return jdbc.queryForList("""
+                SELECT r.run_id, r.project_id, p.name AS project_name,
+                       COALESCE(r.cu_id, 'PROJECT') AS scope, r.status AS authoritative_status,
+                       CASE r.status
+                           WHEN 'QUEUED_FOR_CAPACITY' THEN 'READY'
+                           WHEN 'RUNNING' THEN 'RUNNING'
+                           WHEN 'NEEDS_REVIEW' THEN 'WAITING_FOR_HUMAN'
+                           WHEN 'BLOCKED' THEN 'BLOCKED'
+                           WHEN 'FAILED' THEN 'BLOCKED'
+                           WHEN 'TIMED_OUT' THEN 'BLOCKED'
+                           ELSE 'COMPLETED'
+                       END AS lane, r.created_at
+                FROM run r JOIN project p USING(project_id)
+                ORDER BY r.created_at DESC, r.run_id
+                LIMIT 100
+                """);
+    }
+
+    /** 由待审核、阻塞和已停止自动重试的权威事实派生待处理事项。 */
+    public List<Map<String, Object>> attentionItems() {
+        return jdbc.queryForList("""
+                SELECT 'ATT-INIT-REVIEW-' || i.project_id AS attention_id, i.project_id,
+                       i.run_id, '项目初始化' AS scope, 'REVIEW' AS category,
+                       '初始化等待人工审核' AS title,
+                       '核对模板、Git 修订和执行证据后形成初始化基线。' AS summary,
+                       i.updated_at AS occurred_at, 'INITIALIZATION' AS target_type,
+                       i.project_id AS target_id
+                FROM project_initialization i WHERE i.state = 'AWAITING_REVIEW'
+                UNION ALL
+                SELECT 'ATT-INIT-FAILED-' || i.project_id, i.project_id, i.run_id,
+                       '项目初始化', 'INTERVENTION', '初始化执行失败',
+                       COALESCE(NULLIF(i.failure_detail, ''), '控制平面未提供失败详情。'),
+                       i.updated_at, 'INITIALIZATION', i.project_id
+                FROM project_initialization i WHERE i.state = 'FAILED'
+                UNION ALL
+                SELECT 'ATT-RUN-' || r.run_id, r.project_id, r.run_id,
+                       COALESCE(r.cu_id, '项目级运行'),
+                       CASE WHEN r.status = 'BLOCKED' THEN 'BLOCKED' ELSE 'INTERVENTION' END,
+                       CASE WHEN r.status = 'BLOCKED' THEN 'Run 已阻塞' ELSE 'Run 已停止自动重试' END,
+                       '权威状态：' || r.status || '。进入 Run 上下文查看失败证据。',
+                       r.created_at, 'RUN', r.run_id
+                FROM run r
+                WHERE r.status IN ('BLOCKED','FAILED','TIMED_OUT')
+                  AND NOT EXISTS (SELECT 1 FROM project_initialization i WHERE i.run_id = r.run_id)
+                ORDER BY occurred_at DESC, attention_id
+                """);
+    }
+
     public void approve(String projectId, String reviewer, String comments, String reviewId,
                         String baselineId, String contentHash, String idempotencyKey) {
         Map<String, Object> project = project(projectId);

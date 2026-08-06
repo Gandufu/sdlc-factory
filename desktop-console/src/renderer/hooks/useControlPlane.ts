@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ControlPlaneStatus } from '../../shared/contracts';
 import { controlPlaneClient, inspectControlPlaneStatus, subscribeRunEvents } from '../api/controlPlaneClient';
-import type { CapacityBoard, RunEvent } from '../api/types';
+import type { AttentionItem, CapacityBoard, RunEvent, RunProjection } from '../api/types';
 
 const unavailable: ControlPlaneStatus = { state: 'unavailable', checkedAt: '', detail: '尚未检查' };
 
@@ -11,14 +11,21 @@ export const useControlPlane = () => {
   const [board, setBoard] = useState<CapacityBoard | null>(null);
   const [error, setError] = useState<string>();
   const [events, setEvents] = useState<RunEvent[]>([]);
+  const [runs, setRuns] = useState<RunProjection[]>([]);
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
   const [streamConnected, setStreamConnected] = useState(false);
 
   const refresh = useCallback(async () => {
     const nextStatus = await inspectControlPlaneStatus();
     setStatus(nextStatus);
-    if (nextStatus.state !== 'ready') { setBoard(null); return; }
+    if (nextStatus.state !== 'ready') return;
     try {
-      setBoard(await controlPlaneClient.getCapacityBoard());
+      const [nextBoard, nextRuns, nextAttention] = await Promise.all([
+        controlPlaneClient.getCapacityBoard(), controlPlaneClient.getRunBoard(), controlPlaneClient.getAttention(),
+      ]);
+      setBoard(nextBoard);
+      setRuns(nextRuns);
+      setAttention(nextAttention);
       setError(undefined);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '容量看板加载失败');
@@ -35,5 +42,5 @@ export const useControlPlane = () => {
     );
   }, [status.state]);
 
-  return { status, board, error, events, streamConnected, refresh };
+  return { status, board, error, events, runs, attention, streamConnected, refresh };
 };

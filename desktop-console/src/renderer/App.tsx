@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AppShell, type View } from './components/AppShell';
 import { useControlPlane } from './hooks/useControlPlane';
 import { useProjects } from './hooks/useProjects';
-import type { InitializationApprovalInput, ProjectSummary } from './api/types';
+import type { AttentionItem, InitializationApprovalInput, ProjectSummary } from './api/types';
 import { AttentionPage } from './pages/AttentionPage';
 import { OperationsPage } from './pages/OperationsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -42,12 +42,21 @@ export const App = () => {
     return project;
   };
 
+  const openAttention = async (item: AttentionItem) => {
+    if (item.target_type === 'INITIALIZATION') {
+      await openInitialization(await projectCatalog.get(item.project_id));
+      return;
+    }
+    openProject(item.project_id);
+  };
+
   return (
     <AppShell view={view} status={controlPlane.status} capacity={controlPlane.board}
       onNavigate={setView} onRefresh={controlPlane.refresh}>
       {view === 'projects' && <ProjectsPage {...projectCatalog} onRefresh={projectCatalog.refresh}
         onOpen={openCatalogProject} onCreate={projectCatalog.create} />}
-      {view === 'attention' && <AttentionPage onOpen={openProject} />}
+      {view === 'attention' && <AttentionPage status={controlPlane.status} items={controlPlane.attention}
+        error={controlPlane.error} onRefresh={controlPlane.refresh} onOpen={(item) => void openAttention(item)} />}
       {view === 'operations' && <OperationsPage {...controlPlane} onRefresh={controlPlane.refresh} />}
       {view === 'workspace' && <WorkspacePage projectId={projectId} onBack={() => setView('projects')} />}
       {view === 'initialization' && selectedProject && <InitializationPage project={selectedProject}

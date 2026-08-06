@@ -41,6 +41,7 @@
 .attention-list p { margin: 0; }
 .attention-list em { color: var(--muted-foreground); font-size: 11px; font-style: normal; }
 .attention-signal { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--amber); background: #fff0d7; font-weight: 900; }
+.attention-signal svg { width: 16px; height: 16px; }
 .attention-signal.blocked { color: var(--red); background: #ffebe8; }
 .data-note { margin-top: 14px; color: var(--muted-foreground); font-size: 11px; }
 .create-project-form { display: grid; grid-template-columns: 1fr 1fr auto auto; align-items: end; gap: 14px; margin: -18px 0 28px; padding: 18px; border: 1px solid var(--line); border-radius: 13px; background: var(--card); }

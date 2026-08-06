@@ -1,6 +1,7 @@
 import type { ControlPlaneStatus } from '../../shared/contracts';
-import { ControlPlaneError, type CapacityBoard, type CreateProjectInput, type ErrorEnvelope,
-  type InitializationApprovalInput, type ProjectSummary, type RunEvent } from './types';
+import { ControlPlaneError, type AttentionItem, type CapacityBoard, type CreateProjectInput,
+  type ErrorEnvelope, type InitializationApprovalInput, type ProjectSummary, type RunEvent,
+  type RunProjection } from './types';
 
 const productionOrigin = 'http://127.0.0.1:8420';
 const baseUrl = import.meta.env.DEV ? '' : productionOrigin;
@@ -21,6 +22,8 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
 
 export const controlPlaneClient = {
   getCapacityBoard: () => request<CapacityBoard>('/api/capacity/board'),
+  getRunBoard: () => request<RunProjection[]>('/api/runs/board'),
+  getAttention: () => request<AttentionItem[]>('/api/attention'),
   getProjects: () => request<ProjectSummary[]>('/api/projects'),
   getProject: (projectId: string) => request<ProjectSummary>(`/api/projects/${projectId}`),
   createProject: (input: CreateProjectInput) => request<ProjectSummary>('/api/projects', {
