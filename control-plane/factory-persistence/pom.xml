@@ -32,10 +32,10 @@
             <groupId>dev.sdlc.factory</groupId>
             <artifactId>factory-gate</artifactId>
         </dependency>
-        <!-- MyBatis-Plus：Boot3 starter 坐标，Boot 4 兼容性以调研结论为准 -->
+        <!-- MyBatis-Plus 官方 Boot 4 Starter：简单 CRUD 继续使用 BaseMapper。 -->
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -14,8 +14,7 @@ spring:
   # 全局 JSON 采用 snake_case，与机器合同字段命名一致
   jackson:
     property-naming-strategy: SNAKE_CASE
-    serialization:
-      write-dates-as-timestamps: false
+    # Boot 4 / Jackson 3 默认以 ISO-8601 输出时间；旧 WRITE_DATES_AS_TIMESTAMPS 特性已移除。
   datasource:
     # 连接参数通过环境变量注入；Secret 不落配置文件明文
     url: ${FACTORY_DB_URL:jdbc:postgresql://localhost:5432/sdlc_factory}

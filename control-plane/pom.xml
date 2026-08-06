@@ -30,8 +30,8 @@
         <!-- JDK 25（LTS）：启用 records、sealed、模式匹配、虚拟线程等已定型特性 -->
         <java.version>25</java.version>
         <maven.compiler.release>25</maven.compiler.release>
-        <!-- MyBatis-Plus 版本：待 Boot 4 兼容性调研结论确认后可能升级或更换 starter 坐标 -->
-        <mybatis-plus.version>3.5.7</mybatis-plus.version>
+        <!-- MyBatis-Plus 3.5.13 起提供官方 Boot 4 Starter；固定已验证版本避免自动装配漂移。 -->
+        <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -84,10 +84,10 @@
                 <artifactId>factory-persistence</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- MyBatis-Plus：复杂多表 SQL 放在 XML Mapper（见 factory-persistence/resources/mapper） -->
+            <!-- MyBatis-Plus Boot 4 Starter：复杂多表 SQL 仍放在 XML Mapper。 -->
             <dependency>
                 <groupId>com.baomidou</groupId>
-                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
         </dependencies>
