@@ -26,7 +26,7 @@ describe('Factory Desktop Console', () => {
     render(<App />);
     expect(screen.getByText('把交付事实放在一条线上。')).toBeInTheDocument();
     fireEvent.click(await screen.findByText('M1 初始化项目'));
-    expect(await screen.findByText('项目初始化')).toBeInTheDocument();
+    expect(await screen.findByText('初始化绑定')).toBeInTheDocument();
     expect(await screen.findByText('就绪检查')).toBeInTheDocument();
     expect(screen.getByText('批准初始化并形成基线')).toBeInTheDocument();
   });
@@ -58,6 +58,20 @@ describe('Factory Desktop Console', () => {
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/projects', expect.objectContaining({
       method: 'POST',
       body: expect.stringContaining('"workspace_path":"D:\\\\workspace\\\\absolute-project"'),
+    })));
+  });
+
+  it('人工审核提交审核身份、说明和客户端幂等键', async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByText('M1 初始化项目'));
+    fireEvent.click(await screen.findByRole('button', { name: '批准初始化并形成基线' }));
+    fireEvent.change(screen.getByLabelText('审核人'), { target: { value: 'reviewer-01' } });
+    fireEvent.change(screen.getByLabelText('审核说明'), { target: { value: '已核对全部初始化证据' } });
+    fireEvent.click(screen.getByRole('button', { name: '确认批准并形成基线' }));
+
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/projects/PRJ-REAL-1/initialization/approve', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringMatching(/"reviewer_identity":"reviewer-01".*"comments":"已核对全部初始化证据".*"idempotency_key":"[^"]+"/),
     })));
   });
 });

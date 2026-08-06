@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { controlPlaneClient } from '../api/controlPlaneClient';
-import type { CreateProjectInput, ProjectSummary } from '../api/types';
+import type { CreateProjectInput, InitializationApprovalInput, ProjectSummary } from '../api/types';
 
 /** 项目目录只读取控制平面权威投影，不保留本地 fixture。 */
 export const useProjects = () => {
@@ -28,8 +28,8 @@ export const useProjects = () => {
 
   const get = (projectId: string) => controlPlaneClient.getProject(projectId);
 
-  const approve = async (projectId: string) => {
-    const project = await controlPlaneClient.approveInitialization(projectId);
+  const approve = async (projectId: string, input: InitializationApprovalInput) => {
+    const project = await controlPlaneClient.approveInitialization(projectId, input);
     setProjects((current) => current.map((item) => item.project_id === projectId ? project : item));
     return project;
   };

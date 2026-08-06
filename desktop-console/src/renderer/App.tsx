@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AppShell, type View } from './components/AppShell';
 import { useControlPlane } from './hooks/useControlPlane';
 import { useProjects } from './hooks/useProjects';
-import type { ProjectSummary } from './api/types';
+import type { InitializationApprovalInput, ProjectSummary } from './api/types';
 import { AttentionPage } from './pages/AttentionPage';
 import { OperationsPage } from './pages/OperationsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -36,8 +36,8 @@ export const App = () => {
     else void openInitialization(project);
   };
 
-  const approveInitialization = async (nextProjectId: string) => {
-    const project = await projectCatalog.approve(nextProjectId);
+  const approveInitialization = async (nextProjectId: string, input: InitializationApprovalInput) => {
+    const project = await projectCatalog.approve(nextProjectId, input);
     setSelectedProject(project);
     return project;
   };

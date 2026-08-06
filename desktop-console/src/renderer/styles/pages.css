@@ -48,7 +48,11 @@
 .create-project-form input { min-width: 160px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px; }
 .create-project-form > span { padding-bottom: 9px; color: var(--muted-foreground); font-size: 11px; }
 .create-project-form p { grid-column: 1 / -1; margin: 0; color: var(--red); }
-.initialization-card { max-width: 860px; padding: 26px; border: 1px solid var(--line); border-radius: 13px; background: var(--card); box-shadow: var(--shadow); }
+.initialization-layout { display: grid; grid-template-columns: minmax(300px, .8fr) minmax(420px, 1.2fr); gap: 18px; }
+.initialization-card { min-width: 0; padding: 26px; border: 1px solid var(--line); border-radius: 13px; background: var(--card); box-shadow: var(--shadow); }
+.initialization-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.initialization-card > header h2 { margin: 5px 0 0; font-size: 19px; }
+.initialization-card > header > svg { width: 20px; color: var(--muted-foreground); }
 .initialization-card dl { display: grid; gap: 0; margin: 18px 0 24px; }
 .initialization-card dl div { display: grid; grid-template-columns: 160px 1fr; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .initialization-card dt { color: var(--muted-foreground); }
@@ -57,6 +61,16 @@
 .initialization-operations li { display: grid; grid-template-columns: 120px 90px 1fr; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
 .initialization-operations span { color: var(--green); font-weight: 700; }
 .initialization-operations small { overflow: hidden; color: var(--muted-foreground); font-family: "Cascadia Mono", monospace; text-overflow: ellipsis; }
+.evidence-card .evidence-rail { margin-top: 22px; }
+.evidence-card .evidence-rail small { overflow-wrap: anywhere; line-height: 1.5; }
+.initialization-decision { display: flex; align-items: center; justify-content: space-between; gap: 32px; margin-top: 18px; padding: 24px 26px; border: 1px solid var(--line); border-radius: 13px; background: color-mix(in oklab, var(--card) 88%, var(--amber)); }
+.initialization-decision h2 { margin: 5px 0 6px; font-size: 19px; }
+.initialization-decision p { max-width: 720px; margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.6; }
+.initialization-decision > [role="alert"] { flex: 1; }
+#review-comments { min-height: 104px; resize: vertical; padding: 10px 12px; border: 1px solid var(--input); border-radius: calc(var(--radius) - 2px); color: var(--foreground); background: transparent; font-size: 14px; line-height: 1.5; outline: none; }
+#review-comments:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 28%, transparent); }
+#review-comments:disabled { cursor: not-allowed; opacity: .5; }
+.baseline-success { border-color: rgb(16 185 129 / 32%); background: rgb(16 185 129 / 8%); }
 .live-badge svg { width: 13px; height: 13px; }
 .create-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 2px; padding: 0; list-style: none; }
 .create-steps li { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 12px; }
@@ -88,6 +102,8 @@
 .empty-projects p { color: var(--muted-foreground); }
 @media (max-width: 1040px) {
   .page { padding-inline: 28px; }
+  .initialization-layout { grid-template-columns: minmax(0, 1fr); }
+  .initialization-decision { align-items: flex-start; flex-direction: column; }
   .project-row { grid-template-columns: 40px minmax(150px, 1fr) minmax(130px, .8fr) minmax(150px, .8fr) auto; }
   .project-row .row-arrow { display: none; }
 }

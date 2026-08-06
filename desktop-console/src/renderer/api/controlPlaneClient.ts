@@ -1,5 +1,6 @@
 import type { ControlPlaneStatus } from '../../shared/contracts';
-import { ControlPlaneError, type CapacityBoard, type CreateProjectInput, type ErrorEnvelope, type ProjectSummary, type RunEvent } from './types';
+import { ControlPlaneError, type CapacityBoard, type CreateProjectInput, type ErrorEnvelope,
+  type InitializationApprovalInput, type ProjectSummary, type RunEvent } from './types';
 
 const productionOrigin = 'http://127.0.0.1:8420';
 const baseUrl = import.meta.env.DEV ? '' : productionOrigin;
@@ -25,10 +26,9 @@ export const controlPlaneClient = {
   createProject: (input: CreateProjectInput) => request<ProjectSummary>('/api/projects', {
     method: 'POST', body: JSON.stringify(input),
   }),
-  approveInitialization: (projectId: string) => request<ProjectSummary>(`/api/projects/${projectId}/initialization/approve`, {
+  approveInitialization: (projectId: string, input: InitializationApprovalInput) => request<ProjectSummary>(`/api/projects/${projectId}/initialization/approve`, {
     method: 'POST', body: JSON.stringify({
-      reviewer_identity: 'gandaofu',
-      comments: '已核对模板、Git 修订和全部初始化运行证据。',
+      ...input,
       idempotency_key: `INIT-${projectId}-${crypto.randomUUID()}`,
     }),
   }),
