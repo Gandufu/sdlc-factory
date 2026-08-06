@@ -48,10 +48,12 @@ describe('Factory Desktop Console', () => {
 
   it('创建项目时提交绝对工作区路径', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '＋ 创建项目' }));
+    fireEvent.click(screen.getByRole('button', { name: '创建项目' }));
     fireEvent.change(screen.getByLabelText('项目名称'), { target: { value: '绝对路径项目' } });
     fireEvent.change(screen.getByLabelText('项目绝对路径'), { target: { value: 'D:\\workspace\\absolute-project' } });
-    fireEvent.click(screen.getByRole('button', { name: '执行初始化' }));
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+    fireEvent.click(screen.getByRole('button', { name: '继续' }));
+    fireEvent.click(screen.getByRole('button', { name: '开始初始化' }));
 
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/projects', expect.objectContaining({
       method: 'POST',

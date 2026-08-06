@@ -31,6 +31,11 @@ export const App = () => {
     setSelectedProject(await projectCatalog.get(project.project_id));
   };
 
+  const openCatalogProject = (project: ProjectSummary) => {
+    if (project.state === 'APPROVED') openProject(project.project_id);
+    else void openInitialization(project);
+  };
+
   const approveInitialization = async (nextProjectId: string) => {
     const project = await projectCatalog.approve(nextProjectId);
     setSelectedProject(project);
@@ -40,7 +45,8 @@ export const App = () => {
   return (
     <AppShell view={view} status={controlPlane.status} capacity={controlPlane.board}
       onNavigate={setView} onRefresh={controlPlane.refresh}>
-      {view === 'projects' && <ProjectsPage {...projectCatalog} onOpen={openInitialization} onCreate={projectCatalog.create} />}
+      {view === 'projects' && <ProjectsPage {...projectCatalog} onRefresh={projectCatalog.refresh}
+        onOpen={openCatalogProject} onCreate={projectCatalog.create} />}
       {view === 'attention' && <AttentionPage onOpen={openProject} />}
       {view === 'operations' && <OperationsPage {...controlPlane} onRefresh={controlPlane.refresh} />}
       {view === 'workspace' && <WorkspacePage projectId={projectId} onBack={() => setView('projects')} />}
