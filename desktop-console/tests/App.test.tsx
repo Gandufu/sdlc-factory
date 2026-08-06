@@ -74,4 +74,24 @@ describe('Factory Desktop Console', () => {
       body: expect.stringMatching(/"reviewer_identity":"reviewer-01".*"comments":"已核对全部初始化证据".*"idempotency_key":"[^"]+"/),
     })));
   });
+
+  it('切换项目时不会复用前一个项目的工作区投影', async () => {
+    const projects = ['A', 'B'].map((suffix) => ({ project_id: `PRJ-${suffix}`, name: `项目${suffix}`, state: 'APPROVED',
+      workspace_path: `D:/workspace/${suffix}`, template_id: 'TPL', template_version: '1.0.0', updated_at: '' }));
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string) => {
+      const project = projects.find((item) => input.includes(item.project_id));
+      return { ok: true, json: async () => input.endsWith('/api/projects') ? projects : {
+        project: { ...project, initialization_state: 'APPROVED' }, lifecycle: [], sessions: [], attention_count: 0,
+        gates: [], baselines: [], configuration: { agents: [], runtime_bindings: [], skills: [], mcp: [], plugins: [], permission_policy: 'deny-all', health: 'SUPPORTED_READ_ONLY' },
+      } };
+    }));
+    render(<App />);
+    fireEvent.click(await screen.findByText('项目A'));
+    expect(await screen.findByRole('heading', { name: '项目A' })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: '项目' })[0]);
+    fireEvent.click(await screen.findByText('项目B'));
+
+    expect(await screen.findByRole('heading', { name: '项目B' })).toBeInTheDocument();
+    expect(screen.queryByText('D:/workspace/A')).not.toBeInTheDocument();
+  });
 });

@@ -155,6 +155,14 @@ public final class WorkspaceRepository {
         });
     }
 
+    public void reopenAfterRecoveryCheck(String sessionId) {
+        int changed = jdbc.update("""
+                UPDATE factory_session SET state='ACTIVE', updated_at=now()
+                WHERE session_id=? AND state='BLOCKED' AND current AND NOT archived
+                """, sessionId);
+        if (changed == 0) throw new IllegalStateException("阻塞会话不可恢复或已不再是当前会话");
+    }
+
     public void createGate(String projectId, String sessionId, String runId, String gateId,
                            String handoffId) {
         jdbc.update("""

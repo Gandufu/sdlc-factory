@@ -36,11 +36,13 @@ test('Electron 从真实控制平面加载持久化项目目录', async () => {
   try {
     application = await electron.launch({ executablePath, cwd: path.dirname(executablePath) });
     const window = await application.firstWindow();
+    await window.setViewportSize({ width: 1024, height: 720 });
+    await window.emulateMedia({ reducedMotion: 'reduce' });
     window.on('console', (message) => { if (message.type() === 'error') rendererErrors.push(message.text()); });
     window.on('pageerror', (error) => rendererErrors.push(error.message));
 
     await expect(window).toHaveTitle('SDLC Factory');
-    await expect(window.getByText('本地控制平面', { exact: true })).toBeVisible();
+    await expect(window.getByText('本地控制平面', { exact: true })).toBeAttached();
     await expect(window.getByTestId('control-plane-health')).toContainText('已就绪');
 
     await expect(window.getByTestId(`project-${project.project_id}`)).toBeVisible();
@@ -49,6 +51,17 @@ test('Electron 从真实控制平面加载持久化项目目录', async () => {
     await expect(window.getByText('权威项目工作区', { exact: true })).toBeVisible();
     await expect(window.getByRole('heading', { name: sessionTitle, exact: true })).toBeVisible();
     await expect(window.getByText('初始化', { exact: true })).toBeVisible();
+    const viewport = await window.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    }));
+    expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.clientWidth);
+    expect(viewport.reducedMotion).toBe(true);
+
+    await window.locator('body').click({ position: { x: 1000, y: 700 } });
+    await window.keyboard.press('Tab');
+    expect(await window.evaluate(() => document.activeElement?.tagName)).toBe('BUTTON');
     expect(rendererErrors).toEqual([]);
   } finally {
     await application?.close();

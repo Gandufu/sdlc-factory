@@ -54,4 +54,8 @@
 .workspace-gate details pre { max-height: 180px; overflow: auto; white-space: pre-wrap; font: 9px/1.5 "Cascadia Mono", Consolas, monospace; }.workspace-gate summary { cursor: pointer; font-size: 11px; }
 .gate-decision-form { display: grid; grid-template-columns: 180px 1fr; gap: 10px; }.gate-decision-form > div { display: grid; gap: 6px; }.gate-decision-form textarea { min-height: 64px; }.gate-decision-form footer { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 8px; }
 @media (max-width: 1180px) { .continuous-workspace-grid { grid-template-columns: 200px minmax(390px, 1fr) 270px; } }
-@media (max-width: 1040px) { .workspace-page { padding-inline: 18px; }.continuous-workspace-grid { grid-template-columns: 190px minmax(410px, 1fr); }.workspace-context { display: none; } }
+@media (max-width: 1040px) {
+  .workspace-page { padding-inline: 18px; }
+  .continuous-workspace-grid { grid-template-columns: 190px minmax(410px, 1fr); }
+  .workspace-context { display: block; grid-column: 1 / -1; border-top: 1px solid var(--border); border-left: 0; }
+}

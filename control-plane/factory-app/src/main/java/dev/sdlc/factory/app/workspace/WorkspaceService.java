@@ -121,6 +121,7 @@ public final class WorkspaceService {
         if (!List.of("BLOCKED", "FAILED", "TIMED_OUT").contains(oldRun.get("status"))) {
             throw new IllegalStateException("只有阻塞或失败终态 Run 可以复检恢复");
         }
+        repository.reopenAfterRecoveryCheck(sessionId);
         return send(projectId, sessionId,
                 "已完成阻塞复检。保持旧 Run " + oldRunId + " 的终态，创建新 Run 继续执行。");
     }
