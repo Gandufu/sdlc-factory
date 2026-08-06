@@ -1,0 +1,23 @@
+{
+  "name": "@sdlc-factory/opencode-host-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "pnpm build && node --test dist/test/*.test.js",
+    "smoke:model": "pnpm build && node dist/src/model-smoke.js"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "1.18.14"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=10.34.5 <12"
+  },
+  "packageManager": "pnpm@11.17.0"
+}

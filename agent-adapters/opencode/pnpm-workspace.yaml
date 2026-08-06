@@ -1,0 +1,3 @@
+# 与本机 OpenCode CLI 固定同版，兼容 Smoke 已覆盖该例外。
+minimumReleaseAgeExclude:
+  - '@opencode-ai/sdk@1.18.14'
