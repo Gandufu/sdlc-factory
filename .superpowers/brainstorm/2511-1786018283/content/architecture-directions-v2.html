@@ -1,0 +1,48 @@
+<h2>SDLC Factory 重构方向</h2>
+<p class="subtitle">共同前提：本地单操作者、TypeScript daemon + SQLite、项目级固定 Runtime、三种 CLI、受治理 Skill 注入、强治理优先。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;display:grid;gap:8px">
+      <div style="padding:10px;border:1px solid #6885aa;border-radius:8px;text-align:center">Open Design daemon fork</div>
+      <div style="text-align:center">↓ 嵌入</div>
+      <div style="padding:10px;border:1px solid #c58b50;border-radius:8px;text-align:center">Factory Governance</div>
+      <div style="text-align:center;color:#8895a6">复用整个产品核心</div>
+    </div>
+    <div class="card-body"><h3>A. 整体 Fork</h3><p>演示最快，但弱治理、权限默认值和产品耦合一起继承；上游升级与许可证审计面最大。</p></div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="border-color:#35a26f">
+    <div class="card-image" style="padding:16px;display:grid;gap:8px;background:rgba(53,162,111,.08)">
+      <div style="padding:9px;border:1px solid #48b98a;border-radius:8px;text-align:center">Electron Workspace</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div style="padding:8px;border:1px solid #48b98a;border-radius:7px;text-align:center">Conversation</div>
+        <div style="padding:8px;border:1px solid #d4a94e;border-radius:7px;text-align:center">Governance</div>
+        <div style="padding:8px;border:1px solid #987fc8;border-radius:7px;text-align:center">Resources</div>
+      </div>
+      <div style="padding:9px;border:1px solid #6085b2;border-radius:8px;text-align:center">Runtime Kernel seam<br><small>Registry · Probe · Resume · Events</small></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div style="padding:7px;border:1px solid #657386;border-radius:7px;text-align:center">OpenCode</div>
+        <div style="padding:7px;border:1px solid #657386;border-radius:7px;text-align:center">Codex</div>
+        <div style="padding:7px;border:1px solid #657386;border-radius:7px;text-align:center">Claude</div>
+      </div>
+      <div style="padding:8px;border:1px solid #657386;border-radius:8px;text-align:center">SQLite + content-addressed blobs</div>
+    </div>
+    <div class="card-body"><h3>B. 提炼 Kernel，重建 Core</h3><p>复用 Registry、Adapter、Resume Guard、安全 staging/解包与测试向量；Factory 自己拥有 Conversation、Gate、Baseline、Evidence、Memory 和权限事实。</p></div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;display:grid;gap:8px">
+      <div style="padding:10px;border:1px solid #b279c2;border-radius:8px;text-align:center">Factory daemon + SQLite</div>
+      <div style="text-align:center">↓ Sidecar interface</div>
+      <div style="padding:10px;border:1px solid #6885aa;border-radius:8px;text-align:center">Open Design daemon + SQLite</div>
+      <div style="text-align:center;color:#8895a6">双 daemon / 双数据库</div>
+    </div>
+    <div class="card-body"><h3>C. 双 daemon Sidecar</h3><p>最少改官方源码，但产生双权威投影；内部 API、权限与审计链难以稳定。</p></div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px;padding:15px;border:1px solid #35a26f;border-radius:10px;background:rgba(53,162,111,.08)">
+  <div class="label">推荐方案</div><h3>B — 提炼机制，不 Fork 产品</h3>
+  <p>删除 Runtime Kernel 后，复杂度会重新散落到三个 Adapter 和所有调用方，说明这个深模块真正提供了 leverage；而 Factory 治理不会被 Open Design 的 permissive Pipeline、全局 Memory 和权限 bypass 污染。</p>
+</div>

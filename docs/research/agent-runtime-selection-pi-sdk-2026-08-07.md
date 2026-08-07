@@ -1,14 +1,18 @@
 # Agent 运行时选型与 Pi SDK 研究记录
 
+> 决策状态：**历史研究，Pi 首版选型结论已被替代**
+>
+> 2026-08-07 后续明确决定：MVP0 使用纯 OpenCode 项目级 Plugin 验证需求、设计和文档闭环；MVP1 使用 OpenCode SDK 集成 Electron、会话管理、遥测和项目工厂。Pi 因仍需 Factory 自行解决沙箱及文件、进程、网络和凭据权限，暂不集成。当前方案见[根 README](../../README.md)。
+>
 > 研究日期：2026-08-07
 >
 > 研究范围：Open Design、Multica、Pi 官方仓库、官方文档、许可证及公开 Issue
 >
-> 用途：说明 SDLC Factory 首版运行时选型依据，不替代后续性能纵切和安全测试
+> 用途：保留当时对 Pi、Open Design 和 Multica 的技术研究事实，不再作为当前运行时实现依据
 
-## 1. 结论
+## 1. 原研究结论（已替代）
 
-SDLC Factory 首版采用 **Pi SDK 进程内集成**，不采用 Open Design 式多 CLI 运行层，也不采用 Multica 作为底层运行时。
+当时的研究结论是：SDLC Factory 首版采用 **Pi SDK 进程内集成**，不采用 Open Design 式多 CLI 运行层，也不采用 Multica 作为底层运行时。该结论现已被文首所述后续决策替代。
 
 组合关系固定为：
 
@@ -222,10 +226,17 @@ Pi 仍处于快速迭代期。Factory 必须锁定经过验证的精确版本和
 
 如果纵切失败，应修正 Pi 集成边界或暂停实现，不回退为首版多 CLI 产品设计。
 
-## 8. 最终选型
+## 8. 原最终选型（已替代）
 
 - **采用：** Pi SDK 进程内 `AgentSession`，由 `PiRuntimeHost` 隔离。
 - **不采用：** Multica 核心或源码嵌入。
 - **不采用：** Open Design 多 CLI daemon 和运行时适配层。
 - **保留参考：** Open Design 桌面对话交互；Claude Code Game Studios 的显式命令和非强制阶段提醒。
 - **延期：** Codex、OpenCode、Claude Code CLI 兼容运行时；只有未来出现明确用户需求和测量收益时才重新立项。
+
+## 9. 后续正式方向
+
+- **MVP0：** 纯 OpenCode 项目级 Plugin，在 OpenCode TUI/CLI 中验证需求分析、总体设计、柔性流程引导、候选、人工审核和 Baseline；
+- **MVP1：** Electron + TypeScript Harness，通过 OpenCode SDK 管理项目、Conversation、原生 Session、事件和本地遥测；
+- **Pi：** 暂不集成。只有具备经验证的沙箱、权限、审计和 Windows 生命周期方案后，才作为实验性 Runtime Adapter 重新评估；
+- **本文其余章节：** 只保留研究过程和技术事实，不得用其中“采用 Pi”的表述覆盖根 README。

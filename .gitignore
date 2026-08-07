@@ -1,0 +1,5 @@
+# Superpowers brainstorming runtime state may contain local access keys,
+# process IDs, ports, logs, and machine-specific absolute paths.
+.superpowers/brainstorm/.last-port
+.superpowers/brainstorm/.last-token
+.superpowers/brainstorm/**/state/

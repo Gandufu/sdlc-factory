@@ -1,0 +1,10 @@
+$ electron-forge start
+
+[43m[30m WARN [39m[49m [36minlineDynamicImports[39m option is deprecated, please use [36mcodeSplitting: false[39m instead.
+
+[2m17:19:45[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/runs/events[39m
+Error: read ECONNRESET
+    at TCP.onStreamRead (node:internal/stream_base_commons:216:20)
+[2m17:19:47[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/projects/PRJ-C789C38570BB40EF/sessions/SES-525B2DC9062646019B39/messages[39m
+Error: connect ECONNREFUSED 127.0.0.1:8420
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1636:16)

@@ -1,0 +1,35 @@
+[33m>[39m Checking your system
+[33m>[39m Checking package manager version
+[32m√[39m Found pnpm@11.17.0
+[32m√[39m Checking your system
+[?25h[33m>[39m Locating application
+[32m√[39m Locating application
+[33m>[39m Loading configuration
+[32m√[39m Loading configuration
+[33m>[39m Preparing native dependencies
+[32m√[39m Preparing native dependencies
+[33m>[39m Running generateAssets hook
+[32m√[39m Running generateAssets hook
+[33m>[39m Running preStart hook
+[33m>[39m [plugin-vite] Preparing Vite bundles
+[33m>[39m Launching Vite dev servers for renderer process code...
+[33m>[39m Target main_window
+[2m17:11:18[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because vite config has changed
+›   ➜  Local:   http://127.0.0.1:5173/
+➜  Network: use --host to expose
+[32m√[39m Target main_window
+[32m√[39m Launched Vite dev servers for renderer process code
+[33m>[39m Building main process and preload bundles...
+[33m>[39m Building src/main/main.ts target
+[33m>[39m Building src/preload/preload.ts target
+17:11:18 [@electron-forge/plugin-vite] target built src/preload/preload.ts
+[32m√[39m Building src/preload/preload.ts target
+17:11:18 [@electron-forge/plugin-vite] target built src/main/main.ts
+[32m√[39m Building src/main/main.ts target
+[32m√[39m Built main process and preload bundles
+[32m√[39m [plugin-vite] Preparing Vite bundles
+[32m√[39m Running preStart hook
+[32m√[39m Launched Electron app. Type rs in terminal to restart main process.
+[?25h
+
+[2m17:18:29[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/renderer/pages/ProjectsPage.tsx, /src/renderer/styles/globals.css[22m
