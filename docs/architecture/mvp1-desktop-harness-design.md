@@ -10,7 +10,7 @@
 
 ## 1. 设计目标
 
-MVP1 不重新设计需求与总体设计流程，而是把 MVP0 已验证的 Plugin、Skills、候选和 Baseline 合同集成成桌面项目工厂。
+MVP1 不重新设计研发流程，而是把 MVP0 已验证的 Plugin、Skills、CU、ExecutionPlan、执行记录、候选和 Baseline 合同集成成桌面项目工厂。
 
 MVP1 必须回答：
 
@@ -33,8 +33,8 @@ MVP1 必须回答：
 - 多轮消息、附件、工具、权限、错误和停止事件；
 - SQLite 项目、对话、事件与本地遥测索引；
 - 项目创建、导入、打开、Plugin 安装、版本锁定和健康检查；
-- MVP0 的 `/sdlc-init`、`/sdlc-spec`、`/sdlc-review`、`/sdlc-status`；
-- SRS、总体设计、候选、ReviewRecord 和 Baseline 的桌面展示与人工审核；
+- MVP0 的 `/sdlc-init`、`/sdlc-spec`、`/sdlc-design`、`/sdlc-code`、`/sdlc-test`、`/sdlc-review`、`/sdlc-status`；
+- SRS、总体设计、CU、ExecutionPlan、代码 Diff、测试证据、候选、ReviewRecord 和 Baseline 的桌面展示与人工审核；
 - Windows 进程停止、崩溃恢复和应用重启恢复。
 
 ### 2.2 不包含
@@ -44,7 +44,7 @@ MVP1 必须回答：
 - 云端控制面、远程执行和多用户协作；
 - 通用工作流引擎、强制阶段状态机或自动推进；
 - 把每轮聊天包装成 Factory 领域任务；
-- 未经单独确认的完整编码、测试和发布工厂；
+- 发布、部署和制品分发工厂；
 - Plugin 市场、通用记忆平台和企业组织权限；
 - 将 OpenCode 权限描述为 OS 级强隔离沙箱。
 
@@ -63,7 +63,7 @@ flowchart TB
     SERVER["OpenCode Server"]
     PLUGIN["SDLC Factory Plugin"]
     MODEL["模型服务"]
-    WORKSPACE["项目工作区\n文档 · 候选 · Baseline"]
+    WORKSPACE["项目工作区\n文档 · CU · Plan · Run · Candidate · Baseline"]
     DB["SQLite\n项目 · 对话 · 事件 · 遥测投影"]
     KEYCHAIN["操作系统凭据存储"]
 
@@ -121,23 +121,23 @@ OpenCode SDK 类型不得进入 Renderer、Plugin Artifact 合同和审核/Basel
 
 ### 4.4 SDLC Factory Plugin
 
-MVP1 继续使用 MVP0 的 Plugin 作为项目内流程与文档事实边界：
+MVP1 继续使用 MVP0 的 Plugin 作为项目内研发流程与事实边界：
 
 - Commands/Skills 仍由 OpenCode 原生加载；
-- 候选、ReviewRecord 和 Baseline 仍按项目本地合同生成；
+- CU、ExecutionPlan、ExecutionRecord、Candidate、ReviewRecord 和 Baseline 仍按项目本地合同生成；
 - 柔性引导规则不因桌面集成而变成 Harness 命令拦截；
 - Harness 通过 SDK 调用同一确定性工具，不复制一份审核实现；
 - Plugin 包版本和内容 Hash 绑定到项目。
 
 ### 4.5 项目工作区与 SQLite
 
-项目工作区是原始资料、工作文档、候选和 Baseline 的可移植事实源。SQLite 保存：
+项目工作区是原始资料、工作文档、CU、ExecutionPlan、执行记录、候选和 Baseline 的可移植事实源。SQLite 保存：
 
 - Project 和本地目录；
 - Conversation、Message 和 OpenCode Session 绑定；
 - 附件引用和消息来源；
 - 事件索引、运行状态和本地遥测；
-- 文件、Candidate、ReviewRecord 和 Baseline 的可查询投影；
+- 文件、CU、ExecutionPlan、ExecutionRecord、Candidate、ReviewRecord 和 Baseline 的可查询投影；
 - Plugin 版本和健康检查结果。
 
 SQLite 不保存另一份可独立修改的正式文档正文，也不能绕过 Plugin 直接制造 Baseline。
@@ -176,7 +176,7 @@ Harness 负责：
 
 - Plugin 和 Runtime 健康；
 - 最近 Conversation 和运行状态；
-- 原始资料、SRS、总体设计和开放问题；
+- 原始资料、SRS、总体设计、CU、ExecutionPlan 和开放问题；
 - 当前候选、待审核项和 Baseline；
 - 最近错误、权限请求和恢复结果；
 - 当前建议工作位置和一个推荐命令。
@@ -339,10 +339,10 @@ MVP1 默认只在本机记录：
 → 用户确认安装或升级 Plugin
 → Harness 启动或连接 OpenCode Server
 → 创建或恢复 Conversation / OpenCode Session
-→ 用户显式执行 /sdlc-init 或 /sdlc-spec
+→ 用户显式执行一条 /sdlc-* 命令
 → Plugin 返回项目事实，AI 提供柔性提示
-→ 用户持续完成需求和设计工作
-→ /sdlc-review 固定候选
+→ 用户持续完成需求、设计、CU 编码、测试和系统验收
+→ /sdlc-review 固定当前文档、CU Code/Test 或系统验收候选
 → 用户在桌面审核
 → Plugin 生成 ReviewRecord / Baseline
 → Harness 更新项目、会话和遥测投影
@@ -357,7 +357,7 @@ MVP1 必须真实演示：
 2. 通过 SDK 创建 OpenCode Session，持续多轮对话并停止一次运行；
 3. 应用重启后恢复项目、Conversation 和兼容的原生 Session；
 4. 原生恢复不安全时明确降级，经用户确认后建立新 Session；
-5. 运行 MVP0 的需求、设计、候选和审核闭环；
+5. 运行 MVP0 的需求、设计、ExecutionPlan、逐 CU 编码测试和系统验收闭环；
 6. 设计未确认时执行后续工作，只提示风险，不因阶段顺序禁用命令；
 7. 会话卡和右侧面板展示同一文件、Candidate、ReviewRecord 和 Baseline；
 8. SQLite 删除可重建的投影后，可以从项目事实恢复正式产物索引；
@@ -368,4 +368,4 @@ MVP1 必须真实演示：
 
 ## 15. 后续扩展条件
 
-编码、测试、发布、远程执行、多用户和第二 Runtime 都必须单独提出需求、形成正式 Markdown 设计并经用户确认。MVP1 的项目、Conversation、RuntimeHost 和 Plugin 合同可以支持后续扩展，但不得提前实现未确认能力。
+发布、部署、制品分发、远程执行、多用户和第二 Runtime 都必须单独提出需求、形成正式 Markdown 设计并经用户确认。MVP1 的项目、Conversation、RuntimeHost 和 Plugin 合同可以支持后续扩展，但不得提前实现未确认能力。

@@ -5,7 +5,7 @@
 日期：2026-08-07
 首选运行时：OpenCode
 
-SDLC Factory 是一个本地优先的 AI 软件研发工作台。它以真实项目和持续多轮对话为基础，通过显式 `/sdlc-*` 命令完成需求分析、总体设计、文档审核和后续研发工作；AI 负责分析与生成候选，用户负责正式审核，系统负责保存可追溯、不可伪造的项目事实。
+SDLC Factory 是一个本地优先的 AI 软件研发工作台。它以真实项目和持续多轮对话为基础，通过显式 `/sdlc-*` 命令完成需求分析、总体设计、能力单元规划、编码、测试和系统验收；AI 负责分析与生成候选，用户负责正式审核，系统负责保存可追溯、不可伪造的项目事实。
 
 本文是项目主题入口和总体需求的唯一权威来源。本文及其 MVP0/MVP1 子文档已经用户明确确认，具有规范效力；研究、旧版归档和 brainstorming 产物不能自行升级为需求。
 
@@ -16,7 +16,7 @@ SDLC Factory 是一个本地优先的 AI 软件研发工作台。它以真实项
 以下内容来自用户当前明确指令，不依赖 brainstorming HTML：
 
 1. 最终采用 OpenCode；Pi 因需要 Factory 自行处理沙箱而延期，后续再评估集成；
-2. MVP0 以 OpenCode Plugin 方式快速验证需求分析、总体设计和所需文档；
+2. MVP0 以 OpenCode Plugin 方式快速验证从需求、总体设计、能力单元拆分到编码、测试和系统验收的完整流程；
 3. MVP1 在 MVP0 Plugin 基础上集成桌面端，建设会话管理、遥测、Factory 自有 Harness、项目管理和项目工厂；
 4. Claude Code Game Studios 只参考“引导而不是强制冻结”的流程方式，并且该方式必须进入 MVP0；
 5. 根 README 描述整体需求、MVP0/MVP1 流程和边界；子文档分别描述 MVP0 与 MVP1 实现细节；
@@ -67,14 +67,16 @@ SDLC Factory 是一个本地优先的 AI 软件研发工作台。它以真实项
 
 “上一项工作尚未全部结束”本身不能成为拒绝原因。
 
-### 1.3 需求与设计文档
+### 1.3 研发正式产物
 
-首个产品闭环只要求两份正式主文档：
+MVP0 保留四份用户可读的正式工作文档：
 
 1. `docs/requirements/software-requirements-specification.md`：需求规格说明书；
-2. `docs/design/software-design-description.md`：总体设计说明书，内含 Capability Map、能力单元边界和验证覆盖。
+2. `docs/design/software-design-description.md`：总体设计说明书，内含 Capability Map、正式能力单元边界和验证覆盖；
+3. `docs/development/implementation-plan.md`：版本化 ExecutionPlan 的用户可读投影；
+4. `docs/verification/verification-report.md`：逐 CU 测试和系统验收的用户可读汇总。
 
-原始输入和 AI 生成内容必须分离：AI 不能覆盖原始材料，也不能把未确认假设写成既定事实。需求与设计允许跨多轮持续修订，不要求一次完成。
+原始输入和 AI 生成内容必须分离：AI 不能覆盖原始材料，也不能把未确认假设写成既定事实。需求、设计、开发和测试允许跨多轮持续工作，不要求一次完成。
 
 ### 1.4 候选、审核与 Baseline
 
@@ -84,6 +86,8 @@ SDLC Factory 是一个本地优先的 AI 软件研发工作台。它以真实项
 - 只有显式人工通过才能生成 ReviewRecord 和 Baseline；
 - AI 回复“已通过”、工具成功、Session 空闲或文件存在，都不能代替人工审核；
 - 冻结的是被审核的精确版本，不是项目阶段。用户始终可以继续工作并提交新版本。
+
+MVP0 的正式 Baseline 包括 RequirementBaseline、DesignBaseline、逐 CU CodeBaseline、逐 CU TestBaseline 和最终 SystemAcceptanceBaseline。ExecutionPlan 本身版本化但不是 Baseline；系统验收绑定其精确版本和所有参与 CU 的当前有效 Baseline。
 
 ### 1.5 最终桌面体验
 
@@ -109,10 +113,10 @@ Pi 暂不集成。只有未来具备经过验证的沙箱、文件/进程/网络
 ```mermaid
 flowchart LR
     INPUT["真实项目资料"]
-    MVP0["MVP0\nOpenCode Plugin\n需求与设计文档闭环"]
-    GATE["MVP0 验收\n质量 · 审核 · 恢复 · 权限"]
+    MVP0["MVP0\nOpenCode Plugin\n需求 · 设计 · CU · 编码 · 测试"]
+    GATE["MVP0 验收\n全流程 · 质量 · 审核 · 恢复 · 权限"]
     MVP1["MVP1\nElectron + OpenCode SDK\n会话 · 遥测 · 项目工厂"]
-    PRODUCT["桌面文档项目工厂"]
+    PRODUCT["桌面研发项目工厂"]
 
     INPUT --> MVP0 --> GATE --> MVP1 --> PRODUCT
 ```
@@ -125,15 +129,18 @@ MVP0 先验证最核心、风险最高的智能体工作流程。MVP0 未通过�
 
 在现有 OpenCode TUI/CLI 中安装项目级 Plugin，用真实项目资料验证：
 
-> 项目初始化 → 项目事实与缺口提示 → 多轮需求分析 → SRS 候选与人工审核 → 多轮总体设计 → 设计候选与人工审核 → 两类 Baseline。
+> 项目初始化 → 多轮需求分析 → RequirementBaseline → 总体设计与 CU 拆分 → DesignBaseline → ExecutionPlan → 按 CU 编码与 CodeBaseline → 按 CU 测试与 TestBaseline → 系统集成测试与 SystemAcceptanceBaseline。
 
-这是一条推荐工作路径，不是强制阶段锁。用户可以直接执行 `/sdlc-spec` 继续设计；如果需求尚未确认，AI 必须说明风险和建议动作，但不能仅因阶段顺序拒绝执行。
+这是一条推荐工作路径，不是强制阶段锁。系统只显示一个主要建议、一个 OpenCode Todo 和一条完整命令；用户必须再次输入命令才会执行。用户可以显式选择非推荐 CU，AI 必须说明依赖缺口和风险，但不能仅因阶段顺序拒绝执行。
 
 ### 3.2 MVP0 命令
 
 - `/sdlc-init`：初始化项目规则、来源登记和本地状态；
-- `/sdlc-spec`：根据用户目标和现有产物开展需求分析或总体设计；
-- `/sdlc-review`：固定候选并请求人工决定；
+- `/sdlc-spec`：开展需求分析并维护需求规格说明书；
+- `/sdlc-design`：开展总体设计、正式 CU 拆分，并结合 OpenCode Todo 形成 ExecutionPlan；
+- `/sdlc-code <CU名称>`：显式执行指定 CU 的编码工作；
+- `/sdlc-test <CU名称>`：显式执行指定 CU 的测试工作；`/sdlc-test system` 显式执行系统集成测试；
+- `/sdlc-review [CU名称]`：固定当前候选并请求人工决定；CU 名称用于定位 Code/Test Candidate；
 - `/sdlc-status`：显示建议工作位置、已确认产物、主要缺口和推荐命令。
 
 命令之间只通过文件事实、状态查询、推荐文本和用户再次输入衔接，不自动串行运行。
@@ -144,18 +151,21 @@ MVP0 包含：
 
 - OpenCode 项目级 Plugin、Commands 和原生 Skills；
 - 项目资料登记与确定性状态查询；
-- 需求分析、总体设计和两份主文档；
-- 候选、Hash、人工 ReviewRecord 和 Baseline；
+- 需求分析、总体设计、正式 CU、ExecutionPlan 和四份用户可读文档；
+- 按 CU 编码、测试、返工和失效传播；
+- 系统集成测试与系统验收；
+- Requirement、Design、CU Code、CU Test 和 System Acceptance 的候选、Hash、人工 ReviewRecord 和 Baseline；
 - 柔性缺口提示、失败保真和重启恢复；
 - 真实目标项目端到端验证。
 
 MVP0 不包含：
 
-- Electron、React 和桌面工作台；
+- Factory 自身的 Electron、React 和桌面工作台；目标项目可以采用 Electron 或其他技术栈；
 - `@opencode-ai/sdk` 驱动和 Factory 自有 Harness；
 - Factory 自有会话管理、SQLite 和遥测；
 - 多项目目录、模板市场和远程项目；
-- 编码、测试、发布和通用工作流引擎；
+- StageTask、Coding/Testing Child Session、容量队列和通用工作流引擎；
+- 发布、部署和制品分发工厂；
 - Pi 或多运行时适配；
 - OS 级沙箱已经完成的结论。
 
@@ -165,7 +175,7 @@ MVP0 不包含：
 
 ### 4.1 目标
 
-在 MVP0 已验证的 Plugin 和文档合同上建设桌面产品：
+在 MVP0 已验证的 Plugin、全流程合同和项目事实格式上建设桌面产品：
 
 > 创建或导入项目 → 安装并校验 Plugin → 通过 OpenCode SDK 创建或恢复 Session → 在三栏工作台持续对话 → 聚合事件与遥测 → 审核候选 → 形成并展示 Baseline。
 
@@ -180,7 +190,7 @@ MVP1 包含：
 - 对话账本、附件、事件索引、错误恢复和本地 SQLite；
 - 本地遥测：耗时、Token、工具、权限、停止、错误和恢复结果；
 - 桌面审核、Diff、ReviewRecord 和 Baseline 投影；
-- MVP0 两份主文档的完整桌面闭环。
+- MVP0 需求、设计、CU、ExecutionPlan、编码、测试和系统验收的完整桌面投影。
 
 MVP1 不包含：
 
@@ -188,7 +198,7 @@ MVP1 不包含：
 - 云端控制面、多用户协作和远程执行；
 - 可配置生命周期和自动阶段推进；
 - 把聊天轮次包装成 Factory 领域任务；
-- 未经单独确认的完整编码、测试和发布工厂。
+- 发布、部署和制品分发工厂。
 
 详细设计见[《MVP1 桌面 Harness 实现设计》](docs/architecture/mvp1-desktop-harness-design.md)。
 
@@ -198,7 +208,7 @@ MVP1 不包含：
 | --- | --- | --- |
 | 用户 | 原始意图、风险接受、正式审核决定 | 伪造执行证据 |
 | OpenCode | 模型、Agent Loop、原生 Session、工具和权限交互 | Factory 项目、审核和 Baseline 真相 |
-| Factory Plugin | 项目事实查询、候选、Hash、ReviewRecord、Baseline 和路径边界 | 桌面会话目录与跨项目管理 |
+| Factory Plugin | 项目事实查询、CU、ExecutionPlan、执行记录、候选、Hash、ReviewRecord、Baseline 和路径边界 | 桌面会话目录与跨项目管理 |
 | Factory Harness | 项目目录、OpenCode 进程、Session 绑定、事件、遥测和桌面投影 | 改写 Plugin 已固定的文档事实 |
 | 项目工作区 | 原始资料、工作文档、候选快照和 Baseline 的可移植事实 | 会话运行状态 |
 | SQLite | MVP1 的项目、对话和遥测索引 | 成为第二套文档权威源 |
@@ -209,11 +219,15 @@ MVP1 不包含：
 
 1. 在真实目标项目中完成实际 OpenCode Plugin 流程；
 2. SRS 和总体设计经过人工审阅，内容质量达到可继续研发的水平；
-3. 未知信息、假设和缺失证据没有被伪装成事实或通过；
-4. 错误 Hash、过期候选、重复审核和 AI 自行批准会被拒绝；
-5. OpenCode 重启后可以恢复工作文档、候选和审核状态；
-6. 柔性引导得到验证：提示缺口但不因阶段顺序强制冻结命令；
-7. Plugin 的路径和权限边界通过负向验证。
+3. DesignBaseline 包含可独立编码、独立测试且有稳定名称的正式 CU；
+4. ExecutionPlan、一个主要建议和一个 Todo 的边界得到验证，任何推荐命令都不会自动执行；
+5. 每个验收范围内的 CU 具有当前有效 CodeBaseline 和 TestBaseline；
+6. 跨 CU 系统场景完成真实验证并形成 SystemAcceptanceBaseline；
+7. 未知信息、假设和缺失证据没有被伪装成事实或通过；
+8. 错误 Hash、过期候选、重复审核和 AI 自行批准会被拒绝；
+9. OpenCode 重启后可以从项目事实恢复 ExecutionPlan、当前 CU、候选和审核状态；
+10. 柔性引导得到验证：提示缺口但不因阶段顺序强制冻结命令；
+11. Plugin 的路径和权限边界通过负向验证。
 
 ## 7. 文档与历史证据
 
@@ -233,6 +247,6 @@ MVP1 不包含：
 
 ## 8. 当前状态
 
-已经明确的方向是：采用 OpenCode；MVP0 以 Plugin 验证需求、设计和文档闭环；MVP1 集成桌面端、会话管理、遥测、Harness 项目管理和项目工厂；流程引导不能演变成强制阶段冻结。
+已经明确的方向是：采用 OpenCode；MVP0 以 Plugin 验证需求、设计、正式 CU、ExecutionPlan、编码、测试和系统验收完整闭环；MVP1 集成桌面端、会话管理、遥测、Harness 项目管理和项目工厂；流程引导不能演变成强制阶段冻结。
 
 本文及 MVP0/MVP1 子文档已经用户确认，构成当前正式约定。实现代码、机器合同和实施计划尚未制定；任何历史代码、HTML、原型或已归档实现都不能被描述为新方案已经实现。
