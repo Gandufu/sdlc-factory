@@ -1,13 +1,37 @@
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { tool, type Plugin } from "@opencode-ai/plugin";
 
+import { CandidateService } from "./candidate-service.js";
+import { validateExecutionPlan } from "./execution-plan.js";
 import { ProjectStore } from "./project-store.js";
+import { ReviewService } from "./review-service.js";
 import { SourceService } from "./source-service.js";
 
-export const SdlcFactoryPlugin: Plugin = async ({ directory }) => ({
+export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
+  const runtime = {
+    id: randomUUID,
+    now: () => new Date().toISOString(),
+  };
+  const sessionMessages = {
+    async latestUserText(sessionId: string): Promise<string> {
+      const response = await client.session.messages({
+        path: { id: sessionId },
+        query: { directory },
+      });
+      const latest = [...(response.data ?? [])].reverse().find((message) => message.info.role === "user");
+      if (!latest) throw new Error(`No user message found in session: ${sessionId}`);
+      return latest.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("");
+    },
+  };
+
+  return ({
   tool: {
     sdlc_init: tool({
       description: "Initialize deterministic SDLC Factory project state.",
@@ -97,11 +121,82 @@ export const SdlcFactoryPlugin: Plugin = async ({ directory }) => ({
             });
         }
         const store = new ProjectStore(directory);
-        const sources = await store.listJson<{ sourceId: string; sha256: string }>("sources");
-        return JSON.stringify(sources.length > 0
-          ? { initialized: true, registeredSources: sources.map(({ sourceId, sha256 }) => ({ sourceId, sha256 })) }
-          : { initialized: true });
+        const [sources, candidates, baselines, plans] = await Promise.all([
+          store.listJson<{ sourceId: string; sha256: string }>("sources"),
+          store.listJson<{ candidateId: string; kind: string; contentHash: string }>("candidates"),
+          store.listJson<{ baselineId: string; candidateId: string; candidateHash: string }>("baselines"),
+          store.listJson<{ planVersion: number; designBaselineId: string; designHash: string; units: unknown[] }>("plans"),
+        ]);
+        const status: Record<string, unknown> = { initialized: true };
+        if (sources.length > 0) {
+          status.registeredSources = sources.map(({ sourceId, sha256 }) => ({ sourceId, sha256 }));
+        }
+        if (candidates.length > 0) status.candidates = candidates;
+        if (baselines.length > 0) status.baselines = baselines;
+        if (plans.length > 0) status.executionPlans = plans;
+        return JSON.stringify(status);
+      },
+    }),
+    sdlc_candidate_create: tool({
+      description: "Create an immutable candidate from exact workspace document bytes.",
+      args: {
+        kind: tool.schema.enum(["REQUIREMENT", "DESIGN", "CODE", "TEST", "SYSTEM_ACCEPTANCE"]),
+        subjectPaths: tool.schema.array(tool.schema.string().min(1)).min(1),
+      },
+      async execute(args) {
+        const candidate = await new CandidateService(
+          new ProjectStore(directory),
+          directory,
+          runtime,
+        ).createDocumentCandidate(args.kind, args.subjectPaths);
+        return JSON.stringify(candidate);
+      },
+    }),
+    sdlc_review_apply: tool({
+      description: "Apply a review only when tool arguments match the current session's direct user message and candidate hash.",
+      args: {
+        candidateId: tool.schema.string().min(1),
+        candidateHash: tool.schema.string().regex(/^[a-f0-9]{64}$/u),
+        decision: tool.schema.enum(["APPROVE", "REVISE", "HOLD"]),
+      },
+      async execute(args, context) {
+        const result = await new ReviewService(
+          new ProjectStore(directory),
+          sessionMessages,
+          runtime,
+        ).apply(context.sessionID, args);
+        return JSON.stringify(result);
+      },
+    }),
+    sdlc_plan_save: tool({
+      description: "Validate and save an immutable CU execution plan against an approved design baseline.",
+      args: {
+        planVersion: tool.schema.number().int().positive(),
+        designBaselineId: tool.schema.string().min(1),
+        designHash: tool.schema.string().regex(/^[a-f0-9]{64}$/u),
+        units: tool.schema.array(tool.schema.object({
+          cuId: tool.schema.string().min(1),
+          cuName: tool.schema.string().min(1),
+          dependencies: tool.schema.array(tool.schema.string().min(1)),
+        })).min(1),
+      },
+      async execute(args) {
+        const store = new ProjectStore(directory);
+        const baseline = await store.readJson<{ candidateHash: string }>("baselines", args.designBaselineId);
+        if (baseline.candidateHash !== args.designHash) {
+          throw new Error("ExecutionPlan design hash does not match its approved DesignBaseline");
+        }
+        const plan = {
+          planVersion: args.planVersion,
+          designBaselineId: args.designBaselineId,
+          designHash: args.designHash,
+          units: args.units,
+        };
+        validateExecutionPlan(plan);
+        await store.writeImmutable("plans", `execution-plan-v${args.planVersion}`, plan);
+        return JSON.stringify(plan);
       },
     }),
   },
-});
+  });
+};

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SdlcFactoryPlugin } from "../src/plugin.js";
+import { ProjectStore } from "../src/project-store.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -105,5 +106,90 @@ describe("SdlcFactoryPlugin", () => {
 
     expect(first).toMatchObject({ content: "0123", offset: 0, nextOffset: 4, complete: false });
     expect(second).toMatchObject({ content: "4567", offset: 4, nextOffset: 8, complete: false });
+  });
+
+  it("creates a candidate and approves it only from the current session user message", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    await writeFile(path.join(directory, "requirements.md"), "正式需求\n", "utf8");
+    let latestUserText = "";
+    const client = {
+      session: {
+        messages: async () => ({
+          data: [
+            {
+              info: { role: "user" },
+              parts: [{ type: "text", text: latestUserText }],
+            },
+          ],
+        }),
+      },
+    };
+    const hooks = await SdlcFactoryPlugin({ directory, client } as never);
+    await hooks.tool!.sdlc_init!.execute(
+      { projectName: "直升机会议终端", allowedReadRoots: [] },
+      { sessionID: "session-review" } as never,
+    );
+
+    const candidate = JSON.parse(await hooks.tool!.sdlc_candidate_create!.execute(
+      { kind: "REQUIREMENT", subjectPaths: ["requirements.md"] },
+      { sessionID: "session-review" } as never,
+    ) as string);
+    latestUserText = `通过 ${candidate.candidateId} ${candidate.contentHash}`;
+    const approved = JSON.parse(await hooks.tool!.sdlc_review_apply!.execute(
+      {
+        candidateId: candidate.candidateId,
+        candidateHash: candidate.contentHash,
+        decision: "APPROVE",
+      },
+      { sessionID: "session-review" } as never,
+    ) as string);
+    const status = JSON.parse(await hooks.tool!.sdlc_status!.execute(
+      {},
+      { sessionID: "session-review" } as never,
+    ) as string);
+
+    expect(candidate).toMatchObject({
+      kind: "REQUIREMENT",
+      contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+    expect(approved).toMatchObject({
+      reviewId: expect.any(String),
+      baselineId: `requirement-${candidate.candidateId}`,
+    });
+    expect(status).toMatchObject({
+      candidates: [{ candidateId: candidate.candidateId, contentHash: candidate.contentHash }],
+      baselines: [{ baselineId: approved.baselineId, candidateHash: candidate.contentHash }],
+    });
+  });
+
+  it("saves an execution plan only against its approved design baseline hash", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const designHash = "d".repeat(64);
+    await new ProjectStore(directory).writeImmutable("baselines", "design-candidate-1", {
+      baselineId: "design-candidate-1",
+      candidateHash: designHash,
+    });
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+
+    const result = JSON.parse(await hooks.tool!.sdlc_plan_save!.execute(
+      {
+        planVersion: 1,
+        designBaselineId: "design-candidate-1",
+        designHash,
+        units: [
+          { cuId: "cu-home", cuName: "首页高保真与设置入口", dependencies: [] },
+          { cuId: "cu-device", cuName: "设备鉴权与系统信息", dependencies: ["cu-home"] },
+        ],
+      },
+      { sessionID: "session-design" } as never,
+    ) as string);
+
+    expect(result).toMatchObject({
+      planVersion: 1,
+      designBaselineId: "design-candidate-1",
+      designHash,
+    });
   });
 });
