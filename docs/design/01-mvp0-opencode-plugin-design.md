@@ -1,5 +1,7 @@
 # MVP0 OpenCode Plugin 实现设计
 
+文档编号：DESIGN-01
+
 状态：正式设计，用户已确认
 
 日期：2026-08-07
@@ -20,11 +22,10 @@ MVP0 不建设桌面产品，先在真实 OpenCode 中验证最关键的不确�
 
 MVP0 的成功标准不是“生成了几个文件”，而是在真实目标项目中完成从需求到系统验收的完整流程，用户认可文档和实现质量，且所有审核、Hash、来源、代码、测试和恢复行为都来自真实执行证据。
 
-## 2. 历史材料使用边界
+## 2. 研究证据使用边界
 
-| 历史来源 | 可以提供什么 | 不能代表什么 |
+| 研究来源 | 可以提供什么 | 不能代表什么 |
 | --- | --- | --- |
-| [brainstorming 记录](../design-records/2026-08-06-to-07-reconstruction/README.md) | 解释探索过哪些方向、界面和取舍 | HTML 未经过正式 Markdown 审阅确认，不是需求、设计或约定 |
 | [Claude Code Game Studios 审计](../research/claude-code-game-studios-workflow-guidance-audit-2026-08-06.md) | 证明其真实实现是柔性引导而非统一硬门禁 | 审计结论不是 Factory 需求；只有根 README 明确采用的原则才生效 |
 | [Open Design 源码审计](../research/open-design-official-source-audit-2026-08-06.md) | 提供 OpenCode Session、Plugin、权限和桌面交互的事实参考 | 不代表 Factory 已决定复制 Open Design 的产品或代码 |
 
@@ -212,7 +213,7 @@ Plugin 或 Skill 只能因为以下原因停止当前命令：
 
 ## 7. 需求分析
 
-`/sdlc-spec` 的最终流程、Grilling、精简 SRS 结构、Context Assembly 和 RequirementCandidate 就绪条件，以 [MVP0 `/sdlc-spec` 最终设计](./mvp0-sdlc-spec-design.md) 为准。
+`/sdlc-spec` 的最终流程、Grilling、精简 SRS 结构、Context Assembly 和 RequirementCandidate 就绪条件，以 [DESIGN-02《MVP0 `/sdlc-spec` 最终设计》](./02-mvp0-sdlc-spec-design.md) 为准。
 
 ### 7.1 输入真实性
 

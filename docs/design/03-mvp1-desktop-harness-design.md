@@ -1,12 +1,14 @@
 # MVP1 桌面 Harness 实现设计
 
+文档编号：DESIGN-03
+
 状态：正式设计，用户已确认
 
 日期：2026-08-07
 
 上位需求：[SDLC Factory 总体需求与分阶段方案](../../README.md)
 
-前置条件：[MVP0 OpenCode Plugin 实现设计](mvp0-opencode-plugin-design.md)通过验收
+前置条件：[DESIGN-01《MVP0 OpenCode Plugin 实现设计》](./01-mvp0-opencode-plugin-design.md)通过验收
 
 ## 1. 设计目标
 

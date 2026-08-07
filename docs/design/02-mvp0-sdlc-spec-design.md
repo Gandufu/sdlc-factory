@@ -1,14 +1,14 @@
 # MVP0 `/sdlc-spec` 最终设计
 
-状态：正式设计，待用户文档审阅
+文档编号：DESIGN-02
+
+状态：正式设计
 
 日期：2026-08-07
 
 适用范围：MVP0 OpenCode Plugin 的需求资料分析、Grilling、精简软件需求规格说明书（SRS）生成、需求质量评审和 RequirementCandidate 创建
 
-上位设计：[MVP0 OpenCode Plugin 实现设计](./mvp0-opencode-plugin-design.md)
-
-文档结构来源：[MVP0 精简 SRS 与 SDD 文档设计](./mvp0-lean-srs-sdd-ai-harness-design.md)
+上位设计：[DESIGN-01《MVP0 OpenCode Plugin 实现设计》](./01-mvp0-opencode-plugin-design.md)
 
 流程参考：[Claude Code Game Studios 流程引导机制源码审计](../research/claude-code-game-studios-workflow-guidance-audit-2026-08-06.md)
 
@@ -36,8 +36,7 @@
 
 本文件是 MVP0 `/sdlc-spec` 行为、SRS 结构和 RequirementCandidate 就绪条件的权威设计。与以下文档发生冲突时，本文件只在需求分析和 SRS 范围内优先：
 
-- [MVP0 OpenCode Plugin 实现设计](./mvp0-opencode-plugin-design.md)；
-- [MVP0 精简 SRS 与 SDD 文档设计](./mvp0-lean-srs-sdd-ai-harness-design.md)；
+- [DESIGN-01《MVP0 OpenCode Plugin 实现设计》](./01-mvp0-opencode-plugin-design.md)；
 - 当前 `sdlc-requirement-analysis/SKILL.md` 实现。
 
 原始资料和用户明确决定高于 AI 生成的工作 SRS。工作 SRS 高于聊天摘要。RequirementCandidate 固定实际 SRS 文件字节和 Hash。只有人工审核可以创建 RequirementBaseline。
@@ -860,4 +859,4 @@ SRS 不需要提前提供组件、类、表结构或总体架构图；这些由 
 11. RequirementCandidate 后才推荐 `/sdlc-review`；
 12. 增加相应确定性测试和真实 OpenCode 压力验证。
 
-本文件批准后，才进入实现计划、Skill 修改和 Plugin 校验器扩展。
+本文件是 `/sdlc-spec` Skill 修改、Plugin 校验器扩展和验证计划的正式实现依据。

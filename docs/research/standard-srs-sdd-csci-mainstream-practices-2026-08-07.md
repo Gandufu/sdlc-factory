@@ -2,7 +2,7 @@
 
 > 日期：2026-08-07
 >
-> 状态：研究结论，待转化为 MVP0 Plugin 的正式设计约束
+> 状态：研究结论，已转化为 [DESIGN-02《MVP0 `/sdlc-spec` 最终设计》](../design/02-mvp0-sdlc-spec-design.md)
 >
 > 范围：需求分析、软件需求规格说明书（SRS）、软件设计说明（SDD/SwDD）、CapabilityUnit（CU）、ExecutionPlan 与 OpenCode Todo 的关系
 
