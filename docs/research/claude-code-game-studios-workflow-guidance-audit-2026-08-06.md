@@ -1,5 +1,7 @@
 # Claude Code Game Studios 流程引导机制源码审计
 
+> 状态：源码事实保留。文中早期面向单一需求文档和旧执行单位的采用建议已经被当前模块化需求、模块化设计和分层测试方案替代；当前正式方案见 [DESIGN-02](../design/02-mvp0-sdlc-spec-design.md) 和 [DESIGN-03](../design/03-mvp0-sdlc-design-test-design.md)。
+
 ## 1. 审计范围
 
 - 审计日期：2026-08-06

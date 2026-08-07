@@ -2,9 +2,9 @@
 
 > 日期：2026-08-07
 >
-> 状态：研究结论，已转化为 [DESIGN-02《MVP0 `/sdlc-spec` 最终设计》](../design/02-mvp0-sdlc-spec-design.md)
+> 状态：历史研究证据。文中关于单一需求文档、能力单元和旧实施计划的采用结论已经废止；当前正式方案见 [DESIGN-02《`/sdlc-spec` 模块化需求设计》](../design/02-mvp0-sdlc-spec-design.md) 和 [DESIGN-03《`/sdlc-design` 与测试验证设计》](../design/03-mvp0-sdlc-design-test-design.md)。标准名称和旧术语仅为忠实记录研究来源，不具有当前规范效力。
 >
-> 范围：需求分析、软件需求规格说明书（SRS）、软件设计说明（SDD/SwDD）、CapabilityUnit（CU）、ExecutionPlan 与 OpenCode Todo 的关系
+> 范围：需求分析、软件需求说明、软件设计说明以及历史拆分方法的标准资料
 
 ## 1. 结论摘要
 
