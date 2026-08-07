@@ -192,4 +192,43 @@ describe("SdlcFactoryPlugin", () => {
       designHash,
     });
   });
+
+  it("resolves a run by CU name and cannot hide a captured command failure", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const store = new ProjectStore(directory);
+    const designHash = "d".repeat(64);
+    await store.writeImmutable("baselines", "design-candidate-1", {
+      baselineId: "design-candidate-1",
+      candidateHash: designHash,
+    });
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks.tool!.sdlc_plan_save!.execute(
+      {
+        planVersion: 1,
+        designBaselineId: "design-candidate-1",
+        designHash,
+        units: [{ cuId: "cu-home", cuName: "首页高保真与设置入口", dependencies: [] }],
+      },
+      { sessionID: "session-code" } as never,
+    );
+
+    const run = JSON.parse(await hooks.tool!.sdlc_run_start!.execute(
+      {
+        command: "/sdlc-code 首页高保真与设置入口",
+        cuName: "首页高保真与设置入口",
+        gitBase: "abc123",
+      },
+      { sessionID: "session-code" } as never,
+    ) as string);
+    await hooks.tool!.sdlc_run_record_result!.execute(
+      { runId: run.runId, tool: "bash", exitCode: 1, outputHash: "f".repeat(64) },
+      { sessionID: "session-code" } as never,
+    );
+
+    await expect(hooks.tool!.sdlc_run_finish!.execute(
+      { runId: run.runId, state: "SUCCEEDED" },
+      { sessionID: "session-code" } as never,
+    )).rejects.toThrow("failing command evidence");
+  });
 });

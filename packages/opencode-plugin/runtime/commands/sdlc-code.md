@@ -10,4 +10,4 @@ The requested CU name is:
 
 Require one exact CU name from the approved ExecutionPlan. Resolve its internal ID through project facts; never require the user to enter an ID. Work only on that CU and do not auto-run `/sdlc-test`, `/sdlc-review` or the next CU.
 
-End with one recommendation, one Todo and one complete `/sdlc-*` command; never execute it.
+End with one recommendation, one Todo exactly matching the plain text `执行 <recommended command>` without backticks, and one complete `/sdlc-*` command; never execute it.

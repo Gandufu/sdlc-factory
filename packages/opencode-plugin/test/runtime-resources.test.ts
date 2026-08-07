@@ -24,4 +24,17 @@ describe("OpenCode runtime resources", () => {
 
     await expect(access(skill)).resolves.toBeUndefined();
   });
+
+  it("ships the CU coding skill", async () => {
+    const skill = path.resolve(
+      import.meta.dirname,
+      "..",
+      "runtime",
+      "skills",
+      "sdlc-cu-coding",
+      "SKILL.md",
+    );
+
+    await expect(access(skill)).resolves.toBeUndefined();
+  });
 });

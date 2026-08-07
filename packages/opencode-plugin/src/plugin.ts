@@ -9,6 +9,7 @@ import { CandidateService } from "./candidate-service.js";
 import { validateExecutionPlan } from "./execution-plan.js";
 import { ProjectStore } from "./project-store.js";
 import { ReviewService } from "./review-service.js";
+import { RunService } from "./run-service.js";
 import { SourceService } from "./source-service.js";
 
 export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
@@ -195,6 +196,67 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         validateExecutionPlan(plan);
         await store.writeImmutable("plans", `execution-plan-v${args.planVersion}`, plan);
         return JSON.stringify(plan);
+      },
+    }),
+    sdlc_run_start: tool({
+      description: "Start a journaled CU run by exact user-readable CU name from the latest ExecutionPlan.",
+      args: {
+        command: tool.schema.string().min(1),
+        cuName: tool.schema.string().min(1),
+        gitBase: tool.schema.string().min(1),
+      },
+      async execute(args, context) {
+        const store = new ProjectStore(directory);
+        const plans = await store.listJson<{
+          planVersion: number;
+          units: Array<{ cuId: string; cuName: string }>;
+        }>("plans");
+        const latest = plans.sort((left, right) => right.planVersion - left.planVersion)[0];
+        if (!latest) throw new Error("No ExecutionPlan exists");
+        const unit = latest.units.find((candidate) => candidate.cuName === args.cuName);
+        if (!unit) throw new Error(`CU name is not in the latest ExecutionPlan: ${args.cuName}`);
+        const allowedCommands = [`/sdlc-code ${args.cuName}`, `/sdlc-test ${args.cuName}`];
+        if (!allowedCommands.includes(args.command)) {
+          throw new Error("Run command must contain the exact CU name from the latest ExecutionPlan");
+        }
+        const result = await new RunService(store, runtime).start({
+          command: args.command,
+          sessionId: context.sessionID,
+          cuId: unit.cuId,
+          gitBase: args.gitBase,
+        });
+        return JSON.stringify({ ...result, cuId: unit.cuId, cuName: unit.cuName, planVersion: latest.planVersion });
+      },
+    }),
+    sdlc_run_record_result: tool({
+      description: "Append exact command evidence to a journaled run.",
+      args: {
+        runId: tool.schema.string().min(1),
+        tool: tool.schema.string().min(1),
+        exitCode: tool.schema.number().int(),
+        outputHash: tool.schema.string().regex(/^[a-f0-9]{64}$/u),
+      },
+      async execute(args) {
+        const service = new RunService(new ProjectStore(directory), runtime);
+        await service.recordToolResult(args.runId, {
+          tool: args.tool,
+          exitCode: args.exitCode,
+          outputHash: args.outputHash,
+        });
+        return JSON.stringify({ recorded: true, runId: args.runId });
+      },
+    }),
+    sdlc_run_finish: tool({
+      description: "Finish a journaled run; a run with captured failing evidence cannot succeed.",
+      args: {
+        runId: tool.schema.string().min(1),
+        state: tool.schema.enum(["SUCCEEDED", "FAILED", "BLOCKED"]),
+      },
+      async execute(args) {
+        return JSON.stringify(await new RunService(
+          new ProjectStore(directory),
+          runtime,
+        ).finish(args.runId, args.state));
       },
     }),
   },
