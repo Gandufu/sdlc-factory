@@ -14,11 +14,20 @@ export class ProjectStore {
   async writeImmutable(collection: string, id: string, value: unknown): Promise<string> {
     const directory = path.join(this.stateRoot, collection);
     const target = path.join(directory, `${id}.json`);
-    const temporary = path.join(directory, `.${id}.${randomUUID()}.tmp`);
+    return this.writeImmutableTarget(target, value);
+  }
+
+  async writeManifest(value: unknown): Promise<string> {
+    return this.writeImmutableTarget(path.join(this.stateRoot, "manifest.json"), value);
+  }
+
+  private async writeImmutableTarget(target: string, value: unknown): Promise<string> {
+    const directory = path.dirname(target);
+    const temporary = path.join(directory, `.${path.basename(target)}.${randomUUID()}.tmp`);
     await mkdir(directory, { recursive: true });
     const handle = await open(temporary, "wx");
     try {
-      await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+      await handle.writeFile(JSON.stringify(value, null, 2) + "\n", "utf8");
       await handle.sync();
     } finally {
       await handle.close();
@@ -30,7 +39,7 @@ export class ProjectStore {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "EEXIST") {
-        throw new ImmutableRecordError(`Immutable record already exists: ${collection}/${id}`);
+        throw new ImmutableRecordError(`Immutable record already exists: ${target}`);
       }
       throw error;
     } finally {
@@ -42,11 +51,15 @@ export class ProjectStore {
     return JSON.parse(await readFile(path.join(this.stateRoot, collection, `${id}.json`), "utf8")) as T;
   }
 
+  async readManifest<T>(): Promise<T> {
+    return JSON.parse(await readFile(path.join(this.stateRoot, "manifest.json"), "utf8")) as T;
+  }
+
   async appendJournal(event: unknown): Promise<void> {
     await mkdir(this.stateRoot, { recursive: true });
     const handle = await open(path.join(this.stateRoot, "journal.jsonl"), "a");
     try {
-      await handle.writeFile(`${JSON.stringify(event)}\n`, "utf8");
+      await handle.writeFile(JSON.stringify(event) + "\n", "utf8");
       await handle.sync();
     } finally {
       await handle.close();

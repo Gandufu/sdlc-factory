@@ -41,4 +41,3 @@
 - Mock HTTPS 测试与真实设备证据分开记录；localhost 不计入真实设备验收。
 - 密码和 Token 不进入源码、日志、Evidence、截图或 Git。
 - 只有真实设备验收和人工审核都通过时才形成 SystemAcceptanceBaseline。
-
