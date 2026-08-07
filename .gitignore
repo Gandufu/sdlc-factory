@@ -3,3 +3,7 @@
 .superpowers/brainstorm/.last-port
 .superpowers/brainstorm/.last-token
 .superpowers/brainstorm/**/state/
+
+# Local Node.js install and generated Plugin bundles.
+**/node_modules/
+packages/opencode-plugin/dist/
