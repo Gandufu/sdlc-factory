@@ -1,1 +1,0 @@
-{"event_id":"HEV-1","run_id":"RUN-1","invocation_id":"INV-1","host_session_id":"ses_123","sequence":0,"event_type":"SESSION_STARTED","occurred_at":"2026-08-05T10:00:00Z","payload":{"sanitized":true,"host_version":"1.18.10"}}

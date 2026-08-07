@@ -222,7 +222,7 @@ Cline Kanban 最适合作为“ExecutionPlan / Queue 的视觉投影”，OpenHa
 
 ## 5. 对齐 SDLC Factory v1.2 的最佳设计
 
-本建议以 [v1.2 历史设计索引](../../archive/legacy-v1.2/docs/v1.2/README.md) 为当时的研究边界。竞品只能提供界面模式，不能改写以下领域约束：
+本建议形成时以当时的 v1.2 历史设计为研究边界；该历史归档现已从仓库删除。竞品只能提供界面模式，不能改写以下领域约束：
 
 - Project Requirement / Design 是项目级阶段；Coding / Testing 是 CU 级阶段；
 - 每阶段形成正式 Artifact、确定性 Evidence 与人工审核记录；

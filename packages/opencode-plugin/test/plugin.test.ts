@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -106,6 +106,59 @@ describe("SdlcFactoryPlugin", () => {
 
     expect(first).toMatchObject({ content: "0123", offset: 0, nextOffset: 4, complete: false });
     expect(second).toMatchObject({ content: "4567", offset: 4, nextOffset: 8, complete: false });
+  });
+
+  it("materializes an exact binary source snapshot inside the target workspace", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    const sourceRoot = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-source-"));
+    temporaryDirectories.push(directory, sourceRoot);
+    const sourcePath = path.join(sourceRoot, "icon.png");
+    await writeFile(sourcePath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks.tool!.sdlc_init!.execute(
+      { projectName: "直升机会议终端", allowedReadRoots: [sourceRoot] },
+      { sessionID: "session-1" } as never,
+    );
+    await hooks.tool!.sdlc_source_snapshot!.execute(
+      { sourceId: "asset-icon", sourcePath },
+      { sessionID: "session-1" } as never,
+    );
+
+    const result = JSON.parse(await hooks.tool!.sdlc_source_materialize!.execute(
+      { sourceId: "asset-icon", targetPath: "assets/icon.png" },
+      { sessionID: "session-1" } as never,
+    ) as string);
+
+    expect(result).toMatchObject({ sourceId: "asset-icon", targetPath: "assets/icon.png" });
+    await expect(readFile(path.join(directory, "assets", "icon.png")))
+      .resolves.toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
+  });
+
+  it("writes lifecycle documents atomically but rejects paths outside docs", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+
+    const result = JSON.parse(await hooks.tool!.sdlc_document_write!.execute(
+      {
+        targetPath: "docs/requirements/software-requirements-specification.md",
+        content: "# 整体产品需求\n",
+      },
+      { sessionID: "session-spec" } as never,
+    ) as string);
+
+    expect(result).toMatchObject({
+      targetPath: "docs/requirements/software-requirements-specification.md",
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+    await expect(readFile(
+      path.join(directory, "docs", "requirements", "software-requirements-specification.md"),
+      "utf8",
+    )).resolves.toBe("# 整体产品需求\n");
+    await expect(hooks.tool!.sdlc_document_write!.execute(
+      { targetPath: "src/app.ts", content: "越权\n" },
+      { sessionID: "session-spec" } as never,
+    )).rejects.toThrow("docs directory");
   });
 
   it("creates a candidate and approves it only from the current session user message", async () => {

@@ -1,16 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { tool, type Plugin } from "@opencode-ai/plugin";
 
 import { CandidateService } from "./candidate-service.js";
 import { validateExecutionPlan } from "./execution-plan.js";
+import { sha256 } from "./hash.js";
 import { ProjectStore } from "./project-store.js";
 import { ReviewService } from "./review-service.js";
 import { RunService } from "./run-service.js";
 import { SourceService } from "./source-service.js";
+import { resolveWorkspacePath } from "./workspace-path.js";
 
 export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
   const runtime = {
@@ -106,6 +108,68 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         });
       },
     }),
+    sdlc_source_materialize: tool({
+      description: "Copy exact bytes from an immutable source snapshot into a bounded target workspace path.",
+      args: {
+        sourceId: tool.schema.string().min(1),
+        targetPath: tool.schema.string().min(1),
+      },
+      async execute(args) {
+        const store = new ProjectStore(directory);
+        const snapshot = await store.readJson<{
+          sourceId: string;
+          snapshotPath: string;
+          sha256: string;
+        }>("sources", args.sourceId);
+        const target = await resolveWorkspacePath(directory, args.targetPath);
+        await mkdir(path.dirname(target), { recursive: true });
+        await copyFile(snapshot.snapshotPath, target);
+        const actualHash = sha256(await readFile(target));
+        if (actualHash !== snapshot.sha256) {
+          throw new Error(`Materialized source hash mismatch: ${args.sourceId}`);
+        }
+        return JSON.stringify({
+          sourceId: args.sourceId,
+          targetPath: args.targetPath,
+          sha256: actualHash,
+        });
+      },
+    }),
+    sdlc_document_write: tool({
+      description: "Atomically write a UTF-8 Markdown lifecycle document below the workspace docs directory.",
+      args: {
+        targetPath: tool.schema.string().min(1),
+        content: tool.schema.string(),
+      },
+      async execute(args) {
+        const target = await resolveWorkspacePath(directory, args.targetPath);
+        const docsRoot = path.resolve(directory, "docs");
+        const relativeToDocs = path.relative(docsRoot, target);
+        if (
+          relativeToDocs === ".."
+          || relativeToDocs.startsWith(`..${path.sep}`)
+          || path.isAbsolute(relativeToDocs)
+          || path.extname(target).toLowerCase() !== ".md"
+        ) {
+          throw new Error("Lifecycle documents must be Markdown files inside the docs directory");
+        }
+        await mkdir(path.dirname(target), { recursive: true });
+        const temporary = path.join(
+          path.dirname(target),
+          `.${path.basename(target)}.${randomUUID()}.tmp`,
+        );
+        try {
+          await writeFile(temporary, args.content, { encoding: "utf8", flag: "wx" });
+          await rename(temporary, target);
+        } finally {
+          await rm(temporary, { force: true });
+        }
+        return JSON.stringify({
+          targetPath: args.targetPath,
+          sha256: sha256(Buffer.from(args.content, "utf8")),
+        });
+      },
+    }),
     sdlc_status: tool({
       description: "Read deterministic SDLC Factory project status.",
       args: {},
@@ -143,13 +207,34 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       args: {
         kind: tool.schema.enum(["REQUIREMENT", "DESIGN", "CODE", "TEST", "SYSTEM_ACCEPTANCE"]),
         subjectPaths: tool.schema.array(tool.schema.string().min(1)).min(1),
+        runId: tool.schema.string().min(1).optional(),
+        gitBase: tool.schema.string().min(1).optional(),
+        cuName: tool.schema.string().min(1).optional(),
+        inputBaselineIds: tool.schema.array(tool.schema.string().min(1)).optional(),
       },
       async execute(args) {
+        const requiresProvenance = ["CODE", "TEST", "SYSTEM_ACCEPTANCE"].includes(args.kind);
+        if (requiresProvenance && (
+          !args.runId
+          || !args.gitBase
+          || !args.cuName
+          || !args.inputBaselineIds?.length
+        )) {
+          throw new Error(`${args.kind} Candidate requires Run, Git base, CU name and input Baselines`);
+        }
+        const provenance = args.runId && args.gitBase && args.cuName && args.inputBaselineIds?.length
+          ? {
+              runId: args.runId,
+              gitBase: args.gitBase,
+              cuName: args.cuName,
+              inputBaselineIds: args.inputBaselineIds,
+            }
+          : undefined;
         const candidate = await new CandidateService(
           new ProjectStore(directory),
           directory,
           runtime,
-        ).createDocumentCandidate(args.kind, args.subjectPaths);
+        ).createDocumentCandidate(args.kind, args.subjectPaths, provenance);
         return JSON.stringify(candidate);
       },
     }),

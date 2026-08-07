@@ -12,7 +12,15 @@ type Candidate = {
   contentHash: string;
   subjectPaths: string[];
   subjects: Array<{ path: string; sha256: string; size: number }>;
+  provenance?: CandidateProvenance;
   createdAt: string;
+};
+
+export type CandidateProvenance = {
+  runId: string;
+  gitBase: string;
+  cuName: string;
+  inputBaselineIds: string[];
 };
 
 type RuntimeValues = {
@@ -27,7 +35,11 @@ export class CandidateService {
     private readonly runtime: RuntimeValues,
   ) {}
 
-  async createDocumentCandidate(kind: CandidateKind, subjectPaths: string[]): Promise<Candidate> {
+  async createDocumentCandidate(
+    kind: CandidateKind,
+    subjectPaths: string[],
+    provenance?: CandidateProvenance,
+  ): Promise<Candidate> {
     if (subjectPaths.length === 0) {
       throw new Error("A document candidate requires at least one subject path");
     }
@@ -39,7 +51,9 @@ export class CandidateService {
         return { path: subjectPath, sha256: sha256(bytes), size: bytes.byteLength };
       }),
     );
-    const contentHash = subjects.length === 1
+    const contentHash = provenance
+      ? sha256(Buffer.from(JSON.stringify({ subjects, provenance }), "utf8"))
+      : subjects.length === 1
       ? subjects[0]!.sha256
       : sha256(Buffer.from(JSON.stringify(subjects), "utf8"));
     const candidate: Candidate = {
@@ -48,6 +62,7 @@ export class CandidateService {
       contentHash,
       subjectPaths,
       subjects,
+      ...(provenance ? { provenance } : {}),
       createdAt: this.runtime.now(),
     };
     await this.store.writeImmutable("candidates", candidate.candidateId, candidate);

@@ -1,1 +1,0 @@
-{"execution_id":"EXE-1","run_id":"RUN-1","operation":"TEST","operation_status":"SUCCEEDED","test_outcome":"PASSED","exit_code":0,"base_revision":"abc123","working_revision":"def456","started_at":"2026-08-05T10:02:00Z","completed_at":"2026-08-05T10:04:00Z","evidence_refs":["EVD-1"]}

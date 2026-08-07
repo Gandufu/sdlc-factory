@@ -34,4 +34,29 @@ describe("CandidateService", () => {
     ) as { contentHash: string };
     expect(stored.contentHash).toBe(candidate.contentHash);
   });
+
+  it("binds executable candidates to run, git base, CU and input baselines", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-candidate-"));
+    temporaryDirectories.push(workspace);
+    await writeFile(path.join(workspace, "main.ts"), "export const value = 1;\n", "utf8");
+    const service = new CandidateService(new ProjectStore(workspace), workspace, {
+      id: () => "candidate-code-1",
+      now: () => "2026-08-07T05:00:00.000Z",
+    });
+
+    const candidate = await service.createDocumentCandidate("CODE", ["main.ts"], {
+      runId: "run-1",
+      gitBase: "abc123",
+      cuName: "首页高保真与设置入口",
+      inputBaselineIds: ["design-1"],
+    });
+
+    expect(candidate.provenance).toEqual({
+      runId: "run-1",
+      gitBase: "abc123",
+      cuName: "首页高保真与设置入口",
+      inputBaselineIds: ["design-1"],
+    });
+    expect(candidate.contentHash).not.toBe(candidate.subjects[0]!.sha256);
+  });
 });

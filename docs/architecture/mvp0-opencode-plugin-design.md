@@ -24,7 +24,6 @@ MVP0 的成功标准不是“生成了几个文件”，而是在真实目标项
 
 | 历史来源 | 可以提供什么 | 不能代表什么 |
 | --- | --- | --- |
-| [legacy v1.2 需求与总体设计](../../archive/legacy-v1.2/docs/v1.2/03-requirement-and-design.md) | 原始输入真实性、Grilling、稳定条目 ID、候选、人工审核和 Baseline 的历史设计参考 | 旧版内容不会自动进入 MVP0；Spring Boot 和强制阶段门禁不再生效 |
 | [brainstorming 记录](../design-records/2026-08-06-to-07-reconstruction/README.md) | 解释探索过哪些方向、界面和取舍 | HTML 未经过正式 Markdown 审阅确认，不是需求、设计或约定 |
 | [Claude Code Game Studios 审计](../research/claude-code-game-studios-workflow-guidance-audit-2026-08-06.md) | 证明其真实实现是柔性引导而非统一硬门禁 | 审计结论不是 Factory 需求；只有根 README 明确采用的原则才生效 |
 | [Open Design 源码审计](../research/open-design-official-source-audit-2026-08-06.md) | 提供 OpenCode Session、Plugin、权限和桌面交互的事实参考 | 不代表 Factory 已决定复制 Open Design 的产品或代码 |

@@ -1,1 +1,0 @@
-{"runtime_id":"RTM-1","owner_run_id":"RUN-1","process_handles":["pid:1234"],"endpoints":["http://127.0.0.1:8080/health"],"allocated_ports":[8080],"started_at":"2026-08-05T10:02:00Z","readiness_status":"READY","lease_expires_at":"2026-08-05T10:12:00Z","cleanup_token_hash":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}

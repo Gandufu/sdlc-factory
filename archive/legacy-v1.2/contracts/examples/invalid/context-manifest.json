@@ -1,1 +1,0 @@
-{"manifest_id":"CTX-1","run_id":"RUN-1","attempt_id":"ATT-1","entries":[{"order":-1,"source_class":"BASELINE","authority_class":"APPROVED_BASELINE","source_ref":"baselines/BL-1.md","source_version":"1.0.0","content_hash":"bad","estimated_tokens":-1,"redacted":false,"load_reason":""}],"total_estimated_tokens":-1,"assembled_at":"2026-08-05T10:00:00Z","content_hash":"bad"}

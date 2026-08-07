@@ -32,8 +32,7 @@ SDLC Factory 是一个本地优先的 AI 软件研发工作台。它以真实项
 2. 经用户明确审阅确认的本 README；
 3. 经用户明确审阅确认的 MVP0/MVP1 实现设计子文档；
 4. 官方源码审计和技术研究，仅提供事实证据；
-5. `archive/legacy-v1.2`，仅提供历史设计参考；
-6. `docs/design-records/**/visuals/*.html` 等 brainstorming 产物，仅记录探索过程，不是需求、方案或正式约定。
+5. `docs/design-records/**/visuals/*.html` 等 brainstorming 产物，仅记录探索过程，不是需求、方案或正式约定。
 
 正式化必须经过“Markdown 成稿 → 用户审阅 → 用户明确确认 → 标记正式状态”四步。展示过、生成过或进入 Git 都不能单独代表用户已确认。
 
@@ -229,7 +228,7 @@ MVP1 不包含：
 10. 柔性引导得到验证：提示缺口但不因阶段顺序强制冻结命令；
 11. Plugin 的路径和权限边界通过负向验证。
 
-## 7. 文档与历史证据
+## 7. 文档与研究证据
 
 当前实现依据：
 
@@ -243,10 +242,8 @@ MVP1 不包含：
 - [Open Design 官方源码审计](docs/research/open-design-official-source-audit-2026-08-06.md)
 - [Agent 运行时选型与 Pi SDK 研究记录](docs/research/agent-runtime-selection-pi-sdk-2026-08-07.md)——研究事实保留，Pi 首版结论已被本方案替代。
 
-[archive/legacy-v1.2](archive/legacy-v1.2/ARCHIVE-NOTICE.md) 保存历史实现和合同快照。其中原始输入真实性、Requirement/Design Grilling、候选、人工审核和 Baseline 原则被本方案继承；强制阶段门禁、Spring Boot 控制平面和旧合同复杂度不再生效。
-
 ## 8. 当前状态
 
 已经明确的方向是：采用 OpenCode；MVP0 以 Plugin 验证需求、设计、正式 CU、ExecutionPlan、编码、测试和系统验收完整闭环；MVP1 集成桌面端、会话管理、遥测、Harness 项目管理和项目工厂；流程引导不能演变成强制阶段冻结。
 
-本文及 MVP0/MVP1 子文档已经用户确认，构成当前正式约定。实现代码、机器合同和实施计划尚未制定；任何历史代码、HTML、原型或已归档实现都不能被描述为新方案已经实现。
+本文及 MVP0/MVP1 子文档构成当前正式约定。MVP0 Plugin 已具备 Commands、Skills、来源快照、文档写入、候选审核、Baseline、ExecutionPlan 和 CU Run 等基础实现及自动化测试；最终版 `/sdlc-spec` 的 S0–S9 需求论证流程、真实目标项目全流程验收和 MVP1 仍未完成。任何历史 HTML 或已删除原型都不能被描述为当前方案已经实现。

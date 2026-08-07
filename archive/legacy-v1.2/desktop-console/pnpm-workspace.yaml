@@ -1,8 +1,0 @@
-# Electron Forge 7 的 @electron/rebuild 依赖官方 Git 版 @electron/node-gyp。
-# 例外只作用于本工作区，用户级 pnpm 安全策略保持不变。
-blockExoticSubdeps: false
-nodeLinker: hoisted
-allowBuilds:
-  electron: true
-  electron-winstaller: true
-  esbuild: true

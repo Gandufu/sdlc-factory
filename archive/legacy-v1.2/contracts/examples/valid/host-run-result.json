@@ -1,1 +1,0 @@
-{"result_id":"HRS-1","run_id":"RUN-1","invocation_id":"INV-1","host_session_id":"ses_123","status":"SUCCEEDED","handoff_ref":"handoffs/HND-1.json","usage":{"input_tokens":1200,"output_tokens":300,"cost_usd":0.01,"host_calls":1},"completed_at":"2026-08-05T10:05:00Z"}

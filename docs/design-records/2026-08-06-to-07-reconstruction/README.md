@@ -40,7 +40,7 @@
 
 ## 研究输入
 
-- [用户提供的 Open Design 调研原文](source-opendesign-analysis.md)：原样保存的前置调研输入，不是当前设计。
+- [用户提供的 Open Design 调研原文](source-opendesign-analysis.md)：原样保存的前置调研输入，不是当前设计。为保持下方 SHA-256 不变，其正文中的历史绝对路径不修订，也不参与当前仓库的 Markdown 链接有效性校验。
 - [Open Design 官方源码审计](../../research/open-design-official-source-audit-2026-08-06.md)：对官方仓库和代码的核验记录。
 - [Claude Code Game Studios 工作流引导机制审计](../../research/claude-code-game-studios-workflow-guidance-audit-2026-08-06.md)：柔性流程提示的源码依据。
 - [Agent 运行时选型与 Pi SDK 研究记录](../../research/agent-runtime-selection-pi-sdk-2026-08-07.md)：研究事实保留，Pi 首版结论已被后续 OpenCode 决策替代。
