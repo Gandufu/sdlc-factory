@@ -25,3 +25,17 @@
 - Session：`ses_02545ba73ffeg0jO657LdEGVS0`
 - 已改善：保留一个问题；拒绝自行批准；Todo 与 `/sdlc-spec` 完全一致。
 - 新漏洞：使用“是否全部按行业常规”的打包问题，可能一次性把多个未知项升级为决定。
+
+## 第三次 GREEN 观察
+
+- Session：`ses_025399a45ffe9qd7muJ5UIguHV`
+- 已登记并读取：`source-requirements`、`source-home`、`source-settings`、`source-api`。
+- 大型 API 快照按 `offset`、`limit` 和 `nextOffset` 在当前会话内读取至 `complete=true`，未委派后台 `task`。
+- 拒绝自行批准；来源事实、用户压力、假设、开放问题和未知项保持分离。
+- 只提出一个具体决策问题：自签名证书采用设备证书指纹、指定 CA，还是暂不支持。
+- Todo 为 `执行 /sdlc-spec`，完整命令为 `/sdlc-spec`。
+
+## 分页能力 RED / GREEN
+
+- RED Session：`ses_0253d3c97ffe9oViPzBHsYo8bR`。旧工具一次返回 87 KB 内容并被 OpenCode 截断，模型转而启动后台 `task`，CLI 在 120 秒边界未退出。
+- GREEN：`sdlc_source_read` 改为最大 12000 字符的确定性分页；插件测试验证连续页边界，第三次 GREEN Session 在 84.1 秒内正常退出。

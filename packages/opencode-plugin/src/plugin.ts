@@ -51,8 +51,12 @@ export const SdlcFactoryPlugin: Plugin = async ({ directory }) => ({
       },
     }),
     sdlc_source_read: tool({
-      description: "Read a previously snapshotted text source by its stable source id.",
-      args: { sourceId: tool.schema.string().min(1) },
+      description: "Read a bounded page from a snapshotted text source by stable source id.",
+      args: {
+        sourceId: tool.schema.string().min(1),
+        offset: tool.schema.number().int().nonnegative().default(0),
+        limit: tool.schema.number().int().min(1).max(12000).default(12000),
+      },
       async execute(args) {
         const store = new ProjectStore(directory);
         const snapshot = await store.readJson<{
@@ -61,11 +65,19 @@ export const SdlcFactoryPlugin: Plugin = async ({ directory }) => ({
           snapshotPath: string;
           sha256: string;
         }>("sources", args.sourceId);
+        const text = await readFile(snapshot.snapshotPath, "utf8");
+        const offset = args.offset ?? 0;
+        const limit = args.limit ?? 12000;
+        const nextOffset = Math.min(offset + limit, text.length);
         return JSON.stringify({
           sourceId: snapshot.sourceId,
           originalPath: snapshot.originalPath,
           sha256: snapshot.sha256,
-          content: await readFile(snapshot.snapshotPath, "utf8"),
+          content: text.slice(offset, nextOffset),
+          offset,
+          nextOffset,
+          totalLength: text.length,
+          complete: nextOffset >= text.length,
         });
       },
     }),
@@ -74,9 +86,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ directory }) => ({
       args: {},
       async execute() {
         const initialized = existsSync(path.join(directory, ".sdlc-factory", "manifest.json"));
-        return JSON.stringify(initialized
-          ? { initialized: true }
-          : {
+        if (!initialized) {
+          return JSON.stringify({
               initialized: false,
               recommendedAction: {
                 action: "INIT",
@@ -84,6 +95,12 @@ export const SdlcFactoryPlugin: Plugin = async ({ directory }) => ({
                 command: "/sdlc-init",
               },
             });
+        }
+        const store = new ProjectStore(directory);
+        const sources = await store.listJson<{ sourceId: string; sha256: string }>("sources");
+        return JSON.stringify(sources.length > 0
+          ? { initialized: true, registeredSources: sources.map(({ sourceId, sha256 }) => ({ sourceId, sha256 })) }
+          : { initialized: true });
       },
     }),
   },

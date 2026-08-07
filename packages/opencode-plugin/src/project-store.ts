@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { link, mkdir, open, readFile, rm } from "node:fs/promises";
+import { link, mkdir, open, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 export class ImmutableRecordError extends Error {}
@@ -53,6 +53,23 @@ export class ProjectStore {
 
   async readManifest<T>(): Promise<T> {
     return JSON.parse(await readFile(path.join(this.stateRoot, "manifest.json"), "utf8")) as T;
+  }
+
+  async listJson<T>(collection: string): Promise<T[]> {
+    const directory = path.join(this.stateRoot, collection);
+    let entries: string[];
+    try {
+      entries = await readdir(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+    return Promise.all(
+      entries
+        .filter((entry) => entry.endsWith(".json"))
+        .sort()
+        .map(async (entry) => JSON.parse(await readFile(path.join(directory, entry), "utf8")) as T),
+    );
   }
 
   async appendJournal(event: unknown): Promise<void> {

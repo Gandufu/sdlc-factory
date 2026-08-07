@@ -15,7 +15,7 @@ Build a traceable shared understanding from real sources. A plausible detail is 
 
 ## Required sequence
 
-1. Call `sdlc_status` and read registered sources before drawing conclusions.
+1. Call `sdlc_status` and read registered sources before drawing conclusions. Read large sources with repeated bounded `sdlc_source_read` pages (`nextOffset`) in the current session; never delegate source reading to a background task.
 2. Classify every material statement as one of:
    - sourced fact;
    - explicit user decision;
