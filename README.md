@@ -2,7 +2,7 @@
 
 SDLC Factory 是一个本地优先的桌面 AI 软件研发工作台。它以项目内持续多轮对话为主轴，通过显式 `/sdlc-*` 命令调用研发能力，由 AI 根据真实项目状态提供柔性提示，并由用户审核后形成正式基线。
 
-当前正在复核的重构方向是：
+当前已确认的重构方案是：
 
 - Electron + React 提供三栏桌面工作台；
 - 左侧保留项目导航，中间平铺多轮对话，右侧聚合文件、变更、产物、证据、审核与基线；
@@ -30,7 +30,7 @@ flowchart LR
 
 ## 当前文档
 
-- [SDLC Factory 重构方案](docs/architecture/sdlc-factory-overall-design.md)——待用户复核，复核前不称为冻结方案。
+- [SDLC Factory 重构方案](docs/architecture/sdlc-factory-overall-design.md)——已于 2026-08-07 经用户确认，是当前方案依据。
 - [2026-08-06 至 2026-08-07 重构讨论记录](docs/design-records/2026-08-06-to-07-reconstruction/README.md)——包含 `localhost:50620` 展示过的全部原始设计页面及用户提供的 Open Design 调研原文。
 - [Agent 运行时选型与 Pi SDK 研究记录](docs/research/agent-runtime-selection-pi-sdk-2026-08-07.md)
 - [Open Design 官方源码审计](docs/research/open-design-official-source-audit-2026-08-06.md)
@@ -40,4 +40,4 @@ flowchart LR
 
 [archive/legacy-v1.2](archive/legacy-v1.2/ARCHIVE-NOTICE.md) 仅保存 v1.2 历史实现快照，包括当时的代码、合同和文档。它不是当前方案，也不能作为新版实现依据。
 
-当前只进行方案复核；在用户确认重构方案前，不制定或执行后续实施计划。
+重构方案已经确认；实施计划尚未制定，需作为下一项独立工作另行确认后再执行。
