@@ -213,6 +213,8 @@ Plugin 或 Skill 只能因为以下原因停止当前命令：
 
 ## 7. 需求分析
 
+`/sdlc-spec` 的最终流程、Grilling、精简 SRS 结构、Context Assembly 和 RequirementCandidate 就绪条件，以 [MVP0 `/sdlc-spec` 最终设计](./mvp0-sdlc-spec-design.md) 为准。
+
 ### 7.1 输入真实性
 
 用户可以上传需求文档、图片、协议、接口说明和参考资料，也可以在对话中直接描述并逐轮补充。Plugin 登记来源引用和 Hash；AI 生成文档不能修改或冒充原始输入。

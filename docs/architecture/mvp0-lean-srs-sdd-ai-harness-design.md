@@ -10,6 +10,8 @@
 
 调研依据：[标准 SRS 与 SDD 生成规范调研](../research/standard-srs-sdd-csci-mainstream-practices-2026-08-07.md)
 
+需求阶段详细权威设计：[MVP0 `/sdlc-spec` 最终设计](./mvp0-sdlc-spec-design.md)。本文件继续负责 SRS/SDD 的总体裁剪和边界；若需求论证流程、SRS 结构或 RequirementCandidate 就绪条件发生冲突，以该最终设计为准。
+
 ## 1. 目标与裁剪结论
 
 本设计不把完整 CSCI Data Item Description 原样复制为项目模板。CSCI 理念只用于检查软件范围、需求类别、接口、验证和追溯是否遗漏，不直接决定最终文档目录。
