@@ -55,7 +55,7 @@ export class SetService {
       facts: { componentVersionIds: components.map((version) => version.versionId) },
       createdBySessionId: input.sessionId,
     };
-    return new CandidateService(this.store, this.workspaceRoot, this.runtime).create(candidateInput);
+    return new CandidateService(this.store, this.workspaceRoot, this.runtime).createFromSetService(candidateInput);
   }
 }
 

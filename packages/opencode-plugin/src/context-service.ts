@@ -4,6 +4,7 @@ import { currentVersion } from "./candidate-service.js";
 import { findRequirementMap } from "./artifact-validator.js";
 import type { ApprovedVersion } from "./domain.js";
 import type { ProjectStore } from "./project-store.js";
+import { resolveStoredSnapshotPath } from "./workspace-path.js";
 
 type ContextWorkflow = "SPEC" | "DESIGN" | "CODE" | "MODULE_TEST" | "SYSTEM_TEST";
 
@@ -81,7 +82,7 @@ export class ContextService {
         let content: string | undefined;
         let itemClipped = false;
         if (textual && remaining > 0) {
-          const text = await readFile(subject.snapshotPath, "utf8");
+          const text = await readFile(await resolveStoredSnapshotPath(this.store.workspaceRoot, subject.snapshotPath), "utf8");
           const allowance = Math.min(12_000, remaining);
           content = text.slice(0, allowance);
           itemClipped = content.length < text.length;

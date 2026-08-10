@@ -7,6 +7,7 @@ import type { Candidate } from "../src/domain.js";
 import { sha256 } from "../src/hash.js";
 import { ProjectStore } from "../src/project-store.js";
 import { ReviewMismatchError, ReviewService, StaleCandidateError } from "../src/review-service.js";
+import { toWorkspaceRelativePath } from "../src/workspace-path.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -18,7 +19,10 @@ async function candidateFixture(workspace: string): Promise<{ store: ProjectStor
   const store = new ProjectStore(workspace);
   const bytes = Buffer.from("# 产品概述\n", "utf8");
   await writeFile(path.join(workspace, "brief.md"), bytes);
-  const snapshotPath = await store.writeImmutableBytes("revisions/candidate-1/0001-brief.md", bytes);
+  const snapshotPath = toWorkspaceRelativePath(
+    workspace,
+    await store.writeImmutableBytes("revisions/candidate-1/0001-brief.md", bytes),
+  );
   const candidate: Candidate = {
     candidateId: "candidate-1",
     kind: "PRODUCT_BRIEF",

@@ -5,10 +5,12 @@ import path from "node:path";
 export class ImmutableRecordError extends Error {}
 
 export class ProjectStore {
+  readonly workspaceRoot: string;
   readonly stateRoot: string;
 
   constructor(workspaceRoot: string) {
-    this.stateRoot = path.join(workspaceRoot, ".sdlc-factory");
+    this.workspaceRoot = path.resolve(workspaceRoot);
+    this.stateRoot = path.join(this.workspaceRoot, ".sdlc-factory");
   }
 
   async writeImmutable(collection: string, id: string, value: unknown): Promise<string> {

@@ -36,7 +36,8 @@ describe("SourceService", () => {
     const snapshot = await service.snapshot("source-1", sourceFile);
 
     expect(snapshot.sha256).toBe("8e4621379786ef42a4fec155cd525c291dd7db3c1fde3478522f4f61c03fd1bd");
-    await expect(readFile(snapshot.snapshotPath)).resolves.toEqual(Buffer.from([0x61, 0x0d, 0x0a]));
+    expect(path.isAbsolute(snapshot.snapshotPath)).toBe(false);
+    await expect(readFile(path.join(workspace, snapshot.snapshotPath))).resolves.toEqual(Buffer.from([0x61, 0x0d, 0x0a]));
     await expect(readFile(sourceFile)).resolves.toEqual(Buffer.from([0x61, 0x0d, 0x0a]));
   });
 });

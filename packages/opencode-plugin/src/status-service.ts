@@ -13,6 +13,8 @@ import type {
   VersionSetFacts,
 } from "./domain.js";
 import type { ProjectStore } from "./project-store.js";
+import { testRecordFingerprintFilesCurrent } from "./test-record-service.js";
+import { approvedVersionBytesCurrent } from "./version-integrity.js";
 
 export type RecommendedAction = {
   action: string;
@@ -46,6 +48,7 @@ export type ProjectStatus = {
   requirementSetVersionId?: string;
   designSetVersionId?: string;
   systemTestVersionId?: string;
+  systemTestRecordIds?: string[];
   systemAcceptanceVersionId?: string;
   registeredSources: Array<{ sourceId: string; sha256: string }>;
   pendingCandidates: Array<{
@@ -83,10 +86,38 @@ export class StatusService {
     const pendingCandidates = pending(candidates, reviews);
     const mapVersion = currentVersion(versions, "REQUIREMENT_MAP", "project");
     const map = findRequirementMap(versions);
+    const codeVersionsToCheck = (map?.businessModules ?? [])
+      .map((module) => currentVersion(versions, "CODE", module.moduleId))
+      .filter((version): version is ApprovedVersion => Boolean(version));
+    const testRecordIdsToCheck = new Set([
+      ...(map?.businessModules.filter((module) => module.status === "ACTIVE") ?? [])
+        .flatMap((module) => currentVersion(versions, "MODULE_TEST", module.moduleId)?.testRecordIds ?? []),
+      ...(currentVersion(versions, "SYSTEM_TEST", "system")?.testRecordIds ?? []),
+    ]);
+    const currentCodeVersionIds = new Set((await Promise.all(codeVersionsToCheck
+      .map(async (version) => ({ version, current: await approvedVersionBytesCurrent(this.store.workspaceRoot, version) }))))
+      .filter((item) => item.current)
+      .map((item) => item.version.versionId));
+    const currentTestRecordIds = new Set((await Promise.all(testRecords
+      .filter((record) => testRecordIdsToCheck.has(record.testRecordId))
+      .map(async (record) => ({
+        record,
+        current: await testRecordFingerprintFilesCurrent(this.store.workspaceRoot, record),
+      }))))
+      .filter((item) => item.current)
+      .map((item) => item.record.testRecordId));
     const requirementSet = validRequirementSet(versions, map);
     const designSet = validDesignSet(versions, map, requirementSet);
-    const systemTest = validSystemTest(versions, map, designSet, testRecords);
-    const systemAcceptance = validAcceptance(versions, systemTest);
+    const systemTest = validSystemTest(
+      versions,
+      map,
+      requirementSet,
+      designSet,
+      testRecords,
+      currentCodeVersionIds,
+      currentTestRecordIds,
+    );
+    const systemAcceptance = validAcceptance(versions, systemTest, testRecords);
     const gates: string[] = [];
     if (!currentVersion(versions, "PRODUCT_BRIEF", "project")) gates.push("产品概述尚未批准");
     if (!mapVersion) gates.push("需求地图尚未批准");
@@ -105,6 +136,8 @@ export class StatusService {
         runs,
         events,
         testRecords,
+        currentCodeVersionIds,
+        currentTestRecordIds,
       }))
       : undefined;
     const recommendedAction = recommend({
@@ -125,6 +158,7 @@ export class StatusService {
       ...(requirementSet ? { requirementSetVersionId: requirementSet.versionId } : {}),
       ...(designSet ? { designSetVersionId: designSet.versionId } : {}),
       ...(systemTest ? { systemTestVersionId: systemTest.versionId } : {}),
+      ...(systemTest ? { systemTestRecordIds: systemTest.testRecordIds } : {}),
       ...(systemAcceptance ? { systemAcceptanceVersionId: systemAcceptance.versionId } : {}),
       registeredSources: sources.map(({ sourceId, sha256 }) => ({ sourceId, sha256 })),
       pendingCandidates,
@@ -227,18 +261,28 @@ function moduleProgress(input: {
   runs: RunRecord[];
   events: JournalEvent[];
   testRecords: TestRecord[];
+  currentCodeVersionIds: Set<string>;
+  currentTestRecordIds: Set<string>;
 }): ModuleProgress {
   const requirement = currentVersion(input.versions, "MODULE_REQUIREMENT", input.module.moduleId);
   const design = currentVersion(input.versions, "MODULE_DESIGN", input.module.moduleId);
   const code = currentVersion(input.versions, "CODE", input.module.moduleId);
   const moduleTest = currentVersion(input.versions, "MODULE_TEST", input.module.moduleId);
   const validDesign = Boolean(design && requirement && hasInputs(design, [requirement.versionId, input.requirementSet.versionId]));
-  const validCode = Boolean(code && design && hasInputs(code, [
+  const dependencyCodeVersionIds = input.module.dependencies
+    .map((dependencyId) => currentVersion(input.versions, "CODE", dependencyId)?.versionId)
+    .filter((versionId): versionId is string => Boolean(versionId));
+  const dependenciesComplete = dependencyCodeVersionIds.length === input.module.dependencies.length;
+  const dependenciesCurrent = dependencyCodeVersionIds.every((versionId) => input.currentCodeVersionIds.has(versionId));
+  const validCode = Boolean(code && design && dependenciesComplete && dependenciesCurrent && hasInputs(code, [
     requirement!.versionId, design.versionId, input.requirementSet.versionId, input.designSet.versionId,
-  ]));
+    ...dependencyCodeVersionIds,
+  ]) && input.currentCodeVersionIds.has(code.versionId));
   const testRecord = moduleTest?.testRecordIds.map((id) => input.testRecords.find((item) => item.testRecordId === id))
-    .find((record) => record?.outcome === "PASSED");
-  const validModuleTest = Boolean(moduleTest && code && hasInputs(moduleTest, [code.versionId, design!.versionId, input.designSet.versionId]) && testRecord);
+    .find((record) => record?.outcome === "PASSED" && input.currentTestRecordIds.has(record.testRecordId));
+  const validModuleTest = Boolean(moduleTest && code && hasInputs(moduleTest, [
+    code.versionId, design!.versionId, input.designSet.versionId, ...dependencyCodeVersionIds,
+  ]) && testRecord);
   const candidate = input.pendingCandidates.find((item) => item.scopeId === input.module.moduleId);
   const finishedRunIds = new Set(input.events.filter((event) => event.type === "RUN_FINISHED").map((event) => String(event.runId)));
   const activeRun = input.runs.find((run) => run.scope.id === input.module.moduleId && !finishedRunIds.has(run.runId));
@@ -282,7 +326,7 @@ function moduleProgress(input: {
     recommendedCommand = `/sdlc-test ${input.module.name}`;
   } else if (!input.systemAcceptance) {
     stage = "SYSTEM_TEST";
-    state = "NOT_STARTED";
+    state = input.systemTest ? "COMPLETED" : "NOT_STARTED";
     recommendedCommand = "/sdlc-test system";
   } else {
     stage = "COMPLETED";
@@ -310,28 +354,51 @@ function moduleProgress(input: {
 function validSystemTest(
   versions: ApprovedVersion[],
   map: ReturnType<typeof findRequirementMap>,
+  requirementSet: ApprovedVersion | undefined,
   designSet: ApprovedVersion | undefined,
   records: TestRecord[],
+  currentCodeVersionIds: Set<string>,
+  currentTestRecordIds: Set<string>,
 ): ApprovedVersion | undefined {
-  if (!map || !designSet) return undefined;
+  if (!map || !requirementSet || !designSet) return undefined;
   const systemTest = currentVersion(versions, "SYSTEM_TEST", "system");
   if (!systemTest) return undefined;
   const required = [designSet.versionId];
   for (const module of map.businessModules.filter((item) => item.status === "ACTIVE")) {
     const code = currentVersion(versions, "CODE", module.moduleId);
     const moduleTest = currentVersion(versions, "MODULE_TEST", module.moduleId);
-    if (!code || !moduleTest) return undefined;
+    const requirement = currentVersion(versions, "MODULE_REQUIREMENT", module.moduleId);
+    const design = currentVersion(versions, "MODULE_DESIGN", module.moduleId);
+    const dependencyCodeIds = module.dependencies.map((dependencyId) => currentVersion(versions, "CODE", dependencyId)?.versionId);
+    if (!code || !currentCodeVersionIds.has(code.versionId) || !moduleTest || !requirement || !design
+      || dependencyCodeIds.some((id) => !id)) return undefined;
+    if (!hasInputs(code, [requirementSet.versionId, designSet.versionId, requirement.versionId, design.versionId,
+      ...dependencyCodeIds as string[]])) return undefined;
+    if (!hasInputs(moduleTest, [designSet.versionId, design.versionId, code.versionId,
+      ...dependencyCodeIds as string[]])) return undefined;
+    if (moduleTest.testRecordIds.length === 0 || !moduleTest.testRecordIds.every((id) =>
+      records.some((record) => record.testRecordId === id && record.outcome === "PASSED"
+        && currentTestRecordIds.has(record.testRecordId)))) return undefined;
     required.push(code.versionId, moduleTest.versionId);
   }
-  const passedRecord = systemTest.testRecordIds.map((id) => records.find((record) => record.testRecordId === id))
-    .some((record) => record?.outcome === "PASSED");
-  return passedRecord && hasInputs(systemTest, required) ? systemTest : undefined;
+  const passedRecords = systemTest.testRecordIds.length > 0 && systemTest.testRecordIds.every((id) =>
+    records.some((record) => record.testRecordId === id && record.outcome === "PASSED"
+      && currentTestRecordIds.has(record.testRecordId)));
+  return passedRecords && hasInputs(systemTest, required) ? systemTest : undefined;
 }
 
-function validAcceptance(versions: ApprovedVersion[], systemTest: ApprovedVersion | undefined): ApprovedVersion | undefined {
+function validAcceptance(
+  versions: ApprovedVersion[],
+  systemTest: ApprovedVersion | undefined,
+  records: TestRecord[],
+): ApprovedVersion | undefined {
   if (!systemTest) return undefined;
   const acceptance = currentVersion(versions, "SYSTEM_ACCEPTANCE", "system");
-  return acceptance && hasInputs(acceptance, [systemTest.versionId]) ? acceptance : undefined;
+  if (!acceptance || !hasInputs(acceptance, [systemTest.versionId])
+    || !sameSet(acceptance.testRecordIds, systemTest.testRecordIds)
+    || acceptance.testRecordIds.length === 0) return undefined;
+  return acceptance.testRecordIds.every((id) =>
+    records.some((record) => record.testRecordId === id && record.outcome === "PASSED")) ? acceptance : undefined;
 }
 
 function recommend(input: {
@@ -345,7 +412,11 @@ function recommend(input: {
   systemAcceptance: ApprovedVersion | undefined;
 }): RecommendedAction {
   const candidate = input.pendingCandidates.find((item) => item.reviewState === "PENDING") ?? input.pendingCandidates[0];
-  if (candidate) return action("REVIEW", `/sdlc-review ${candidate.scopeName === "项目" ? "" : candidate.scopeName}`.trim(), "存在等待人工决定的候选");
+  if (candidate) return action(
+    "REVIEW",
+    candidate.scopeId === "project" || candidate.scopeId === "system" ? "/sdlc-review" : `/sdlc-review ${candidate.scopeName}`,
+    "存在等待人工决定的候选",
+  );
   if (!currentVersion(input.versions, "PRODUCT_BRIEF", "project") || !input.map) {
     return action("SPEC", "/sdlc-spec", "需要建立产品概述和需求地图");
   }
@@ -379,7 +450,9 @@ function recommend(input: {
     }
   }
   if (!input.designSet) return action("DESIGN", "/sdlc-design", "需要生成并审核总设计版本");
-  const actionable = input.modules?.find((module) => !["COMPLETED", "BLOCKED", "SUSPENDED"].includes(module.state));
+  const actionable = input.modules?.find((module) =>
+    ["REQUIREMENTS", "DESIGN", "CODING", "MODULE_TEST"].includes(module.stage)
+    && !["COMPLETED", "BLOCKED", "SUSPENDED"].includes(module.state));
   if (actionable?.recommendedCommand) return action(actionable.stage, actionable.recommendedCommand, `推进业务模块: ${actionable.moduleName}`);
   const blocked = input.modules?.find((module) => module.state === "BLOCKED");
   if (blocked?.recommendedCommand) return action(blocked.stage, blocked.recommendedCommand, blocked.blockers.join("；") || "业务模块被阻塞");

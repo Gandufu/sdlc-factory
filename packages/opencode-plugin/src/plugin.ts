@@ -17,6 +17,7 @@ import type {
   Candidate,
   CandidateFacts,
   EnvironmentVersion,
+  JournalEvent,
   ProjectManifest,
   RunRecord,
 } from "./domain.js";
@@ -30,7 +31,8 @@ import { SetService } from "./set-service.js";
 import { SourceService } from "./source-service.js";
 import { findModuleByExactName, StatusService } from "./status-service.js";
 import { TestRecordService, VerificationReportService } from "./test-record-service.js";
-import { resolveWorkspacePath } from "./workspace-path.js";
+import { resolveStoredSnapshotPath, resolveWorkspacePath } from "./workspace-path.js";
+import { assertApprovedCodeIntegrity } from "./version-integrity.js";
 
 const PLUGIN_VERSION = "0.1.0";
 const DEFAULT_EXECUTABLES = ["node", "corepack", "pnpm", "npm", "npx", "mvn", "mvnw", "gradle", "gradlew", "java", "playwright"];
@@ -85,6 +87,14 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
     },
     "command.execute.before": async (input) => {
       sessionCommands.set(input.sessionID, input.command);
+      if (existsSync(path.join(directory, ".sdlc-factory", "manifest.json"))) {
+        await store().appendJournal({
+          type: "LIFECYCLE_COMMAND_ENTERED",
+          at: runtime.now(),
+          sessionId: input.sessionID,
+          command: input.command,
+        });
+      }
     },
     "tool.execute.before": async (input, output) => {
       const service = new RunService(store(), runtime);
@@ -133,7 +143,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       sdlc_source_snapshot: tool({
         description: "Snapshot an explicitly authorized source into immutable project facts.",
         args: { sourceId: tool.schema.string().min(1), sourcePath: tool.schema.string().min(1) },
-        async execute(args) {
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-init", "sdlc-spec"]);
           const projectStore = store();
           const manifest = await projectStore.readManifest<ProjectManifest>();
           return JSON.stringify(await new SourceService(projectStore, directory, manifest.allowedReadRoots)
@@ -151,7 +162,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           const snapshot = await store().readJson<{
             sourceId: string; originalPath: string; snapshotPath: string; sha256: string;
           }>("sources", args.sourceId);
-          const text = await readFile(snapshot.snapshotPath, "utf8");
+          const text = await readFile(await resolveStoredSnapshotPath(directory, snapshot.snapshotPath), "utf8");
           const offset = args.offset ?? 0;
           const limit = args.limit ?? 12000;
           const nextOffset = Math.min(offset + limit, text.length);
@@ -170,11 +181,12 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       sdlc_source_materialize: tool({
         description: "Copy exact immutable source bytes into a bounded workspace path.",
         args: { sourceId: tool.schema.string().min(1), targetPath: tool.schema.string().min(1) },
-        async execute(args) {
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-init", "sdlc-spec"]);
           const snapshot = await store().readJson<{ sourceId: string; snapshotPath: string; sha256: string }>("sources", args.sourceId);
           const target = await resolveWorkspacePath(directory, args.targetPath);
           await mkdir(path.dirname(target), { recursive: true });
-          await copyFile(snapshot.snapshotPath, target);
+          await copyFile(await resolveStoredSnapshotPath(directory, snapshot.snapshotPath), target);
           const actualHash = sha256(await readFile(target));
           if (actualHash !== snapshot.sha256) throw new Error(`来源复制哈希不一致: ${args.sourceId}`);
           return JSON.stringify({ sourceId: args.sourceId, targetPath: args.targetPath, sha256: actualHash });
@@ -183,7 +195,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       sdlc_document_write: tool({
         description: "Atomically write a Markdown or YAML lifecycle document inside docs.",
         args: { targetPath: tool.schema.string().min(1), content: tool.schema.string() },
-        async execute(args) {
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-spec", "sdlc-design"]);
           return JSON.stringify(await writeLifecycleDocument(directory, args.targetPath, args.content));
         },
       }),
@@ -244,6 +257,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         },
         async execute(args, context) {
           const kind = args.kind as ArtifactKind;
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, [commandForCandidateKind(kind)]);
           let facts: CandidateFacts | undefined;
           if (kind === "REQUIREMENT_MAP") {
             facts = {
@@ -326,6 +340,28 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           });
         },
       }),
+      sdlc_system_acceptance_candidate_create: tool({
+        description: "Create a system-acceptance candidate directly from the current valid approved system-test version without rerunning or reconstructing test fingerprints.",
+        args: {},
+        async execute(_args, context) {
+          const projectStore = store();
+          await requireLifecycleCommand(sessionCommands, projectStore, context.sessionID, ["sdlc-test"]);
+          const status = await new StatusService(projectStore).read();
+          if (!status.systemTestVersionId) throw new Error("当前没有有效的已批准系统测试版本");
+          if (status.systemAcceptanceVersionId) throw new Error(`当前系统验收版本已经有效: ${status.systemAcceptanceVersionId}`);
+          const candidate = await new CandidateService(projectStore, directory, runtime)
+            .createSystemAcceptance(context.sessionID);
+          return JSON.stringify({
+            ...candidate,
+            recommendedAction: {
+              action: "REVIEW",
+              command: "/sdlc-review",
+              todo: "执行 /sdlc-review",
+              reason: "系统验收候选已经固定，等待用户直接审核",
+            },
+          });
+        },
+      }),
       sdlc_set_candidate_create: tool({
         description: "Generate an exact requirement or design version-set projection and immutable candidate.",
         args: {
@@ -335,6 +371,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           proposedImpactScopeIds: tool.schema.array(tool.schema.string().min(1)).default([]),
         },
         async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, [args.kind === "REQUIREMENT_SET" ? "sdlc-spec" : "sdlc-design"]);
           const candidate = await new SetService(store(), directory, runtime).create({
             kind: args.kind,
             changeType: args.changeType,
@@ -361,6 +398,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           decision: tool.schema.enum(["APPROVE", "REVISE", "HOLD"]),
         },
         async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-review"]);
           return JSON.stringify(await new ReviewService(store(), directory, sessionMessages, runtime)
             .apply(context.sessionID, args));
         },
@@ -384,6 +422,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           effectiveFrom: tool.schema.string().min(1),
         },
         async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-design", "sdlc-test"]);
           return JSON.stringify(await new EnvironmentService(store(), runtime).register({
             environmentId: args.environmentId,
             name: args.name,
@@ -409,6 +448,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           moduleName: tool.schema.string().min(1).optional(),
         },
         async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, [args.command.startsWith("/sdlc-code ") ? "sdlc-code" : "sdlc-test"]);
           const projectStore = store();
           const status = await new StatusService(projectStore).read();
           const versions = await projectStore.listJson<ApprovedVersion>("approved-versions");
@@ -455,9 +495,17 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
             }
             const design = currentVersion(versions, "MODULE_DESIGN", module.moduleId)!;
             if (!isModuleDesignFacts(design.facts)) throw new Error(`模块设计缺少实现路径边界: ${design.versionId}`);
+            const dependencyCodeVersionIds = module.dependencies.map((dependencyId) => {
+              const dependencyCode = currentVersion(versions, "CODE", dependencyId);
+              if (!dependencyCode) throw new Error(`依赖模块尚无已批准代码: ${dependencyId}`);
+              return dependencyCode.versionId;
+            });
             const inputVersionIds = isCode
-              ? [status.requirementSetVersionId!, status.designSetVersionId!, moduleProgress.requirementVersionId!, design.versionId]
-              : [status.designSetVersionId!, design.versionId, moduleProgress.codeVersionId!];
+              ? [
+                status.requirementSetVersionId!, status.designSetVersionId!,
+                moduleProgress.requirementVersionId!, design.versionId, ...dependencyCodeVersionIds,
+              ]
+              : [status.designSetVersionId!, design.versionId, moduleProgress.codeVersionId!, ...dependencyCodeVersionIds];
             runInput = {
               command: args.command,
               commandType: isCode ? "CODE" : "MODULE_TEST",
@@ -469,6 +517,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
               allowedTestPaths: design.facts.testPaths,
             };
           }
+          await assertApprovedCodeIntegrity(projectStore, directory, runInput.inputVersionIds);
           return JSON.stringify(await new RunService(projectStore, runtime).start(runInput));
         },
       }),
@@ -484,6 +533,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         async execute(args, context) {
           const projectStore = store();
           const run = await projectStore.readJson<RunRecord>("runs", args.runId);
+          await requireLifecycleCommand(sessionCommands, projectStore, context.sessionID, [run.commandType === "CODE" ? "sdlc-code" : "sdlc-test"]);
           if (run.sessionId !== context.sessionID) throw new Error("只能在创建运行的同一会话中执行命令");
           await new RunService(projectStore, runtime).assertToolAllowed(context.sessionID, "bash");
           return JSON.stringify(await new ControlledExecutionService(projectStore, directory, runtime).execute({
@@ -501,8 +551,11 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           runId: tool.schema.string().min(1),
           state: tool.schema.enum(["SUCCEEDED", "FAILED", "BLOCKED"]),
         },
-        async execute(args) {
-          return JSON.stringify(await new RunService(store(), runtime).finish(args.runId, args.state));
+        async execute(args, context) {
+          const projectStore = store();
+          const run = await projectStore.readJson<RunRecord>("runs", args.runId);
+          await requireLifecycleCommand(sessionCommands, projectStore, context.sessionID, [run.commandType === "CODE" ? "sdlc-code" : "sdlc-test"]);
+          return JSON.stringify(await new RunService(projectStore, runtime).finish(args.runId, args.state));
         },
       }),
       sdlc_test_record_create: tool({
@@ -516,7 +569,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           fingerprintPaths: tool.schema.array(tool.schema.string().min(1)).default([]),
           evidencePaths: tool.schema.array(tool.schema.string().min(1)).default([]),
         },
-        async execute(args) {
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-test"]);
           return JSON.stringify(await new TestRecordService(store(), directory, runtime).create({
             runId: args.runId,
             scope: { type: args.scopeType, id: args.scopeId, name: args.scopeName },
@@ -541,7 +595,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
             workingDirectory: tool.schema.string().min(1).default("."),
           })).min(1),
         },
-        async execute(args) {
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-test"]);
           const record = await new TestRecordService(store(), directory, runtime).findReusable(
             { type: args.scopeType, id: args.scopeId, name: args.scopeName },
             args.inputVersionIds,
@@ -559,7 +614,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       sdlc_verification_report_generate: tool({
         description: "Generate the user-readable verification report only from immutable test records.",
         args: { testRecordIds: tool.schema.array(tool.schema.string().min(1)).min(1) },
-        async execute(args) {
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-test"]);
           return JSON.stringify(await new VerificationReportService(store(), directory).generate(args.testRecordIds));
         },
       }),
@@ -569,6 +625,30 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
 
 function isMutatingTool(toolName: string): boolean {
   return ["write", "edit", "patch", "apply_patch", "bash", "shell"].includes(toolName.toLowerCase());
+}
+
+async function requireLifecycleCommand(
+  sessionCommands: Map<string, string>,
+  projectStore: ProjectStore,
+  sessionId: string,
+  allowedCommands: string[],
+): Promise<void> {
+  const events = await projectStore.readJournal<JournalEvent>();
+  const persisted = [...events].reverse().find((event) =>
+    event.type === "LIFECYCLE_COMMAND_ENTERED" && event.sessionId === sessionId);
+  const current = sessionCommands.get(sessionId) ?? String(persisted?.command ?? "");
+  if (!current || !allowedCommands.includes(current)) {
+    throw new Error(`当前写操作必须通过 ${allowedCommands.map((command) => `/${command}`).join(" 或 ")} 命令执行`);
+  }
+}
+
+function commandForCandidateKind(kind: ArtifactKind): string {
+  if ([
+    "PRODUCT_BRIEF", "REQUIREMENT_MAP", "MODULE_REQUIREMENT", "INTERFACE_REQUIREMENT", "QUALITY_REQUIREMENT",
+  ].includes(kind)) return "sdlc-spec";
+  if (["PRODUCT_ARCHITECTURE", "MODULE_DESIGN", "INTERFACE_DESIGN"].includes(kind)) return "sdlc-design";
+  if (kind === "CODE") return "sdlc-code";
+  return "sdlc-test";
 }
 
 function enforceReadBoundary(

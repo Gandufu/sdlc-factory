@@ -58,6 +58,9 @@ describe("SdlcFactoryPlugin", () => {
       { projectName: "测试项目", allowedReadRoots: [sourceRoot], allowedExecutables: ["node"] },
       { sessionID: "session-1" } as never,
     );
+    await hooks["command.execute.before"]!({
+      command: "sdlc-spec", sessionID: "session-1", arguments: "",
+    }, { parts: [] } as never);
     await hooks.tool!.sdlc_source_snapshot!.execute(
       { sourceId: "source-requirements", sourcePath },
       { sessionID: "session-1" } as never,
@@ -75,6 +78,9 @@ describe("SdlcFactoryPlugin", () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
     temporaryDirectories.push(directory);
     const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks["command.execute.before"]!({
+      command: "sdlc-spec", sessionID: "session-1", arguments: "",
+    }, { parts: [] } as never);
 
     await hooks.tool!.sdlc_document_write!.execute(
       { targetPath: "docs/requirements/requirement-set.yaml", content: "schemaVersion: 1\n" },
@@ -86,6 +92,28 @@ describe("SdlcFactoryPlugin", () => {
       { targetPath: "src/app.ts", content: "越权" },
       { sessionID: "session-1" } as never,
     )).rejects.toThrow("docs 目录");
+  });
+
+  it("插件重启后从项目日志恢复当前会话进入的生命周期命令", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const firstHooks = await SdlcFactoryPlugin({ directory } as never);
+    await firstHooks.tool!.sdlc_init!.execute(
+      { projectName: "测试项目", allowedReadRoots: [], allowedExecutables: ["node"] },
+      { sessionID: "session-recovered" } as never,
+    );
+    await firstHooks["command.execute.before"]!({
+      command: "sdlc-spec", sessionID: "session-recovered", arguments: "",
+    }, { parts: [] } as never);
+
+    const restartedHooks = await SdlcFactoryPlugin({ directory } as never);
+    await restartedHooks.tool!.sdlc_document_write!.execute(
+      { targetPath: "docs/requirements/recovered.md", content: "# 已恢复\n" },
+      { sessionID: "session-recovered" } as never,
+    );
+
+    await expect(readFile(path.join(directory, "docs", "requirements", "recovered.md"), "utf8"))
+      .resolves.toBe("# 已恢复\n");
   });
 
   it("通过工具创建产品概述候选后状态进入等待审核", async () => {
@@ -100,6 +128,22 @@ describe("SdlcFactoryPlugin", () => {
       { projectName: "测试项目", allowedReadRoots: [], allowedExecutables: ["node"] },
       { sessionID: "session-1" } as never,
     );
+    await expect(hooks.tool!.sdlc_candidate_create!.execute({
+      kind: "PRODUCT_BRIEF",
+      scopeType: "PROJECT",
+      scopeId: "project",
+      scopeName: "项目",
+      subjectPaths: ["docs/requirements/product-brief.md"],
+      inputVersionIds: [],
+      sourceIds: [],
+      testRecordIds: [],
+      changeType: "STRUCTURE",
+      changeSummary: "建立产品概述",
+      proposedImpactScopeIds: [],
+    }, { sessionID: "session-without-command" } as never)).rejects.toThrow("必须通过 /sdlc-spec");
+    await hooks["command.execute.before"]!({
+      command: "sdlc-spec", sessionID: "session-1", arguments: "",
+    }, { parts: [] } as never);
 
     const candidate = JSON.parse(await hooks.tool!.sdlc_candidate_create!.execute({
       kind: "PRODUCT_BRIEF",

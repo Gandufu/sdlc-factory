@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
+import { toWorkspaceRelativePath } from "./workspace-path.js";
 
 export class SourceBoundaryError extends Error {}
 
@@ -30,7 +31,8 @@ export class SourceService {
       throw new SourceBoundaryError(`Source is outside allowed read roots: ${sourcePath}`);
     }
     const bytes = await readFile(realSourcePath);
-    const snapshotPath = await this.store.writeImmutableBytes(path.join("source-snapshots", sourceId, "original"), bytes);
+    const absoluteSnapshotPath = await this.store.writeImmutableBytes(path.join("source-snapshots", sourceId, "original"), bytes);
+    const snapshotPath = toWorkspaceRelativePath(this.workspaceRoot, absoluteSnapshotPath);
     const snapshot = { sourceId, originalPath: realSourcePath, snapshotPath, sha256: sha256(bytes) };
     await this.store.writeImmutable("sources", sourceId, snapshot);
     return snapshot;

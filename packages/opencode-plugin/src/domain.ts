@@ -207,6 +207,7 @@ export type TestRecord = {
   skippedCommands: number;
   blockedCommands: number;
   assertionCountsAvailable: boolean;
+  fingerprintFiles?: Array<{ path: string; sha256: string; size: number }>;
   evidencePaths: Array<{ path: string; sha256: string; size: number }>;
   fingerprint: string;
   reusedFromTestRecordId?: string;

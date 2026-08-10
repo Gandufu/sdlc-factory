@@ -5,7 +5,7 @@ import type { ApprovedVersion, Candidate, ReviewRecord } from "./domain.js";
 import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
 import { parseReviewDecision } from "./review-decision.js";
-import { resolveWorkspacePath } from "./workspace-path.js";
+import { resolveStoredSnapshotPath, resolveWorkspacePath } from "./workspace-path.js";
 
 export class ReviewMismatchError extends Error {}
 export class StaleCandidateError extends Error {}
@@ -105,7 +105,7 @@ export class ReviewService {
   private async verifyCandidateBytes(candidate: Candidate): Promise<void> {
     for (const subject of candidate.subjects) {
       const workspaceBytes = await readFile(await resolveWorkspacePath(this.workspaceRoot, subject.path));
-      const snapshotBytes = await readFile(subject.snapshotPath);
+      const snapshotBytes = await readFile(await resolveStoredSnapshotPath(this.workspaceRoot, subject.snapshotPath));
       if (
         workspaceBytes.byteLength !== subject.size
         || sha256(workspaceBytes) !== subject.sha256

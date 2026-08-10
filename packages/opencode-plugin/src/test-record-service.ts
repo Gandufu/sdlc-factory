@@ -13,6 +13,7 @@ import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
 import { RunService } from "./run-service.js";
 import { resolveWorkspacePath } from "./workspace-path.js";
+import { mandatoryFingerprintPaths } from "./version-integrity.js";
 
 type RuntimeValues = { id(): string; now(): string };
 
@@ -46,7 +47,12 @@ export class TestRecordService {
     const environment = input.environmentVersionId
       ? await this.store.readJson<EnvironmentVersion>("environments", input.environmentVersionId)
       : undefined;
-    const fingerprintFiles = await hashPaths(this.workspaceRoot, input.fingerprintPaths);
+    const fingerprintFiles = await hashPaths(this.workspaceRoot, await mandatoryFingerprintPaths(
+      this.store,
+      this.workspaceRoot,
+      run.inputVersionIds,
+      input.fingerprintPaths,
+    ));
     const evidenceFiles = await hashPaths(this.workspaceRoot, input.evidencePaths);
     const fingerprintInput = {
       scope: input.scope,
@@ -79,6 +85,7 @@ export class TestRecordService {
       skippedCommands: 0,
       blockedCommands: runState === "BLOCKED" ? 1 : 0,
       assertionCountsAvailable: false,
+      fingerprintFiles,
       evidencePaths: evidenceFiles,
       fingerprint: sha256(Buffer.from(JSON.stringify(fingerprintInput), "utf8")),
       startedAt: run.createdAt,
@@ -112,7 +119,12 @@ export class TestRecordService {
       scope,
       inputVersionIds: [...inputVersionIds].sort(),
       environmentHash: environment?.contentHash ?? null,
-      fingerprintFiles: await hashPaths(this.workspaceRoot, fingerprintPaths),
+      fingerprintFiles: await hashPaths(this.workspaceRoot, await mandatoryFingerprintPaths(
+        this.store,
+        this.workspaceRoot,
+        inputVersionIds,
+        fingerprintPaths,
+      )),
       commands,
     }), "utf8"));
     return (await this.store.listJson<TestRecord>("test-runs"))
@@ -160,6 +172,7 @@ export class VerificationReportService {
         `- 环境版本：${record.environmentVersionId ?? "未使用"}`,
         `- 命令：通过 ${record.passedCommands}，失败 ${record.failedCommands}，跳过 ${record.skippedCommands}，阻塞 ${record.blockedCommands}`,
         `- 指纹：${record.fingerprint}`,
+        `- 指纹文件：${record.fingerprintFiles && record.fingerprintFiles.length > 0 ? record.fingerprintFiles.map((item) => item.path).join("、") : "无（旧记录）"}`,
         `- 证据：${record.evidencePaths.length > 0 ? record.evidencePaths.map((item) => item.path).join("、") : "仅有命令证据"}`,
         "",
       );
@@ -181,6 +194,23 @@ export class VerificationReportService {
     const result = await writeLifecycleDocument(this.workspaceRoot, targetPath, lines.join("\n"));
     return { ...result, outcome };
   }
+}
+
+export async function testRecordFingerprintFilesCurrent(
+  workspaceRoot: string,
+  record: TestRecord,
+): Promise<boolean> {
+  if (!record.fingerprintFiles) return true;
+  for (const file of record.fingerprintFiles) {
+    try {
+      const bytes = await readFile(await resolveWorkspacePath(workspaceRoot, file.path));
+      if (bytes.byteLength !== file.size || sha256(bytes) !== file.sha256) return false;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw error;
+    }
+  }
+  return true;
 }
 
 async function hashPaths(workspaceRoot: string, paths: string[]) {

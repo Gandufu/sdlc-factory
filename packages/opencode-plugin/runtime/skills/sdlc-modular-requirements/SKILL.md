@@ -11,7 +11,7 @@ metadata:
 ## 不可跳过的顺序
 
 1. 调用 `sdlc_status` 恢复事实；有未变化候选时停止写作并建议审核。
-2. 通过 `sdlc_source_read` 分页读取已登记资料，不得凭产品名称补全事实。
+2. 通过 `sdlc_source_read` 读取已登记资料，不得凭产品名称补全事实。首次读取使用 `limit=12000`；仅当返回 `complete=false` 时，才从 `nextOffset` 继续，不得把小资料机械切成许多小页。
 3. 区分来源事实、用户决定、待确认推断、开放问题和未知。
 4. 先形成简短产品概述，再建立同层级业务模块。一级业务域是模块；页面、技术层、表和开发步骤不是模块。“用户管理”通常是“系统管理”的功能组。
 5. 需求地图必须结构化声明业务模块、功能组、执行依赖、外部接口和非功能需求作用范围，并通过 `sdlc_candidate_create` 校验。
@@ -38,6 +38,8 @@ metadata:
 - `docs/requirements/interfaces/<接口路径名>.md`
 - `docs/requirements/quality/global.md` 或模块文件
 - `docs/requirements/requirement-set.yaml`（系统生成）
+
+创建普通候选前必须先用 `sdlc_document_write` 写入该产物规定的唯一文档，再把该文档作为 `subjectPaths`。不得省略目标文档，不得借用产品概述或其他文件占位。只有总需求版本由 `sdlc_set_candidate_create` 直接生成 YAML 和候选。
 
 候选校验使用以下必要章节名。写作时可以增加编号，但标题必须包含这些词，避免写完后重复改名：
 

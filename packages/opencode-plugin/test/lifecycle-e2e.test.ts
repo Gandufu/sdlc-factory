@@ -80,26 +80,41 @@ describe("双业务模块生命周期重建", () => {
       inputVersionIds: designComponents.map((version) => version.versionId),
       facts: { componentVersionIds: designComponents.map((version) => version.versionId) },
     });
-    const codeVersions = mapFacts.businessModules.map((module, index) => approvedVersion({
-      kind: "CODE",
-      scope: { type: "MODULE", id: module.moduleId, name: module.name },
-      inputVersionIds: [
-        requirementSet.versionId,
-        designSet.versionId,
-        requirementVersions[index]!.versionId,
-        designVersions[index]!.versionId,
-      ],
-    }));
+    const codeVersions: ApprovedVersion[] = [];
+    for (let index = 0; index < mapFacts.businessModules.length; index += 1) {
+      const module = mapFacts.businessModules[index]!;
+      codeVersions.push(approvedVersion({
+        kind: "CODE",
+        scope: { type: "MODULE", id: module.moduleId, name: module.name },
+        inputVersionIds: [
+          requirementSet.versionId,
+          designSet.versionId,
+          requirementVersions[index]!.versionId,
+          designVersions[index]!.versionId,
+          ...module.dependencies.map((dependencyId) => codeVersions.find((version) => version.scope.id === dependencyId)!.versionId),
+        ],
+      }));
+    }
     const testRecords: TestRecord[] = mapFacts.businessModules.map((module, index) => testRecord(
       `test-record-module-${index + 1}`,
       { type: "MODULE", id: module.moduleId, name: module.name },
-      [codeVersions[index]!.versionId, designVersions[index]!.versionId, designSet.versionId],
+      [
+        codeVersions[index]!.versionId,
+        designVersions[index]!.versionId,
+        designSet.versionId,
+        ...module.dependencies.map((dependencyId) => codeVersions.find((version) => version.scope.id === dependencyId)!.versionId),
+      ],
     ));
     for (const record of testRecords) await store.writeImmutable("test-runs", record.testRecordId, record);
     const moduleTests = mapFacts.businessModules.map((module, index) => approvedVersion({
       kind: "MODULE_TEST",
       scope: { type: "MODULE", id: module.moduleId, name: module.name },
-      inputVersionIds: [codeVersions[index]!.versionId, designVersions[index]!.versionId, designSet.versionId],
+      inputVersionIds: [
+        codeVersions[index]!.versionId,
+        designVersions[index]!.versionId,
+        designSet.versionId,
+        ...module.dependencies.map((dependencyId) => codeVersions.find((version) => version.scope.id === dependencyId)!.versionId),
+      ],
       testRecordIds: [testRecords[index]!.testRecordId],
     }));
     const systemRecord = testRecord("test-record-system", system, [

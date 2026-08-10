@@ -3,6 +3,30 @@ import path from "node:path";
 
 export class WorkspaceBoundaryError extends Error {}
 
+export function toWorkspaceRelativePath(workspaceRoot: string, candidate: string): string {
+  const root = path.resolve(workspaceRoot);
+  const resolved = path.resolve(candidate);
+  const relative = path.relative(root, resolved);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new WorkspaceBoundaryError(`Path escapes workspace: ${candidate}`);
+  }
+  return relative.replaceAll("\\", "/");
+}
+
+export async function resolveStoredSnapshotPath(workspaceRoot: string, candidate: string): Promise<string> {
+  if (!path.isAbsolute(candidate)) return resolveWorkspacePath(workspaceRoot, candidate);
+
+  const relative = path.relative(path.resolve(workspaceRoot), path.resolve(candidate));
+  if (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
+    return resolveWorkspacePath(workspaceRoot, candidate);
+  }
+
+  const segments = candidate.split(/[\\/]/u);
+  const stateIndex = segments.lastIndexOf(".sdlc-factory");
+  if (stateIndex < 0) throw new WorkspaceBoundaryError(`Stored snapshot is not project state: ${candidate}`);
+  return resolveWorkspacePath(workspaceRoot, segments.slice(stateIndex).join(path.sep));
+}
+
 export async function resolveWorkspacePath(workspaceRoot: string, candidate: string): Promise<string> {
   const root = path.resolve(workspaceRoot);
   const resolved = path.resolve(root, candidate);
