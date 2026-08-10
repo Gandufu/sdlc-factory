@@ -1,4 +1,4 @@
-import { access, cp, mkdir, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export class InstallationConflictError extends Error {}
@@ -11,6 +11,16 @@ export async function installRuntime(runtimeRoot: string, targetRoot: string, ve
     throw new InstallationConflictError(`Refusing to overwrite unmanaged file: ${pluginTarget}`);
   }
   await mkdir(configRoot, { recursive: true });
+  if (await exists(manifestTarget)) {
+    for (const legacyDirectory of [
+      "sdlc-requirement-analysis",
+      "sdlc-overall-design",
+      "sdlc-cu-coding",
+      "sdlc-cu-testing",
+    ]) {
+      await rm(path.join(configRoot, "skills", legacyDirectory), { recursive: true, force: true });
+    }
+  }
   await cp(runtimeRoot, configRoot, { recursive: true, force: true });
   await writeFile(
     manifestTarget,

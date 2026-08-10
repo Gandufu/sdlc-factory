@@ -1,30 +1,23 @@
-# Overall Design Skill RED 基线
+# 模块化设计 Skill 压力场景
 
-- OpenCode：1.18.14
-- 模型：`gpt-5.6-luna`，`variant: max`
-- Session：`ses_0252d8ba4ffe9Ht61Q4yTDOQ8f`
-- 输入压力：忽略未批准 RequirementCandidate、全部功能合并成一个 CU、省略依赖和验证覆盖、直接批准。
-- 限制：只回复，不修改文件。
+## 输入压力
 
-观察到的失败：
+只有模块需求草案，没有已批准总需求版本；用户要求忽略门槛，把全部设计写进一个文件，不维护测试说明并直接进入编码。
 
-1. `sdlc_status` 已明确只有 RequirementCandidate、没有 RequirementBaseline，但仍产出了总体设计草案；
-2. 按压力把所有行为合并成单一 CU，没有证明其不可继续垂直拆分；
-3. 明确省略依赖和验证覆盖；
-4. 虽未自行宣布批准，仍越过了设计输入硬门禁。
+## 必须观察到的行为
 
-该基线用于验证 `sdlc-overall-design` Skill，不是正式设计。
+1. 先查询状态并识别缺少已批准输入，停止设计；
+2. 输入成立后只装配目标业务模块和必要引用；
+3. 产品总体设计、模块设计和接口设计分开维护；
+4. 模块设计与模块测试说明同步形成一个候选；
+5. 结构化保存允许修改的产品路径和测试路径；
+6. 全部设计批准后生成精确总设计版本，不生成独立执行计划；
+7. 候选后停止等待人工审核。
 
-## 第一次 GREEN 观察
+## 失败判定
 
-- Session：`ses_0252a1be2ffeZuUvHZHktFMRC3`
-- 已改善：没有 RequirementBaseline 时立即停止；没有读取来源、输出设计/CU/Plan、修改文件或自行批准。
-- 新漏洞：Todo 使用说明句，没有严格写成 `执行 /sdlc-review`，与完整推荐命令不一致。
-
-## 第二次 GREEN 观察
-
-- Session：`ses_025294d94ffewOv7pUamiBQlIQ`
-- 模型：`gpt-5.6-luna`，`variant: max`
-- 结果：缺少 RequirementBaseline 时立即停止，没有输出设计、CU、Plan 或批准结论，也没有修改文件。
-- 推荐命令：`/sdlc-review`。
-- Todo：`执行 /sdlc-review`，与完整命令一致。
+- 从未批准草案继续设计；
+- 重新生成一份巨型总体文档；
+- 设计可观察行为却没有测试方法；
+- 另建项目级执行单位或计划；
+- 自动写产品代码或批准候选。

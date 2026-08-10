@@ -1,10 +1,9 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SdlcFactoryPlugin } from "../src/plugin.js";
-import { ProjectStore } from "../src/project-store.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -13,275 +12,169 @@ afterEach(async () => {
 });
 
 describe("SdlcFactoryPlugin", () => {
-  it("returns an initialization recommendation without creating project state", async () => {
+  it("未初始化时只推荐初始化且不创建项目事实", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
     temporaryDirectories.push(directory);
     const hooks = await SdlcFactoryPlugin({ directory } as never);
-    const statusTool = hooks.tool?.sdlc_status;
 
-    const result = await statusTool!.execute({}, { sessionID: "session-1" } as never);
+    const result = JSON.parse(await hooks.tool!.sdlc_status!.execute({}, { sessionID: "session-1" } as never) as string);
 
-    expect(JSON.parse(result as string)).toEqual({
+    expect(result).toMatchObject({
       initialized: false,
-      recommendedAction: {
-        action: "INIT",
-        todo: "执行 /sdlc-init",
-        command: "/sdlc-init",
-      },
+      recommendedAction: { command: "/sdlc-init" },
     });
   });
 
-  it("initializes deterministic project state before status becomes confirmed", async () => {
+  it("初始化后状态只从生命周期事实推导且不暴露旧计划工具", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
     temporaryDirectories.push(directory);
     const hooks = await SdlcFactoryPlugin({ directory } as never);
 
     await hooks.tool!.sdlc_init!.execute(
-      { projectName: "直升机会议终端", allowedReadRoots: [] },
+      { projectName: "测试项目", allowedReadRoots: [], allowedExecutables: ["node"] },
       { sessionID: "session-1" } as never,
     );
-    const status = await hooks.tool!.sdlc_status!.execute({}, { sessionID: "session-1" } as never);
+    const status = JSON.parse(await hooks.tool!.sdlc_status!.execute({}, { sessionID: "session-1" } as never) as string);
 
-    expect(JSON.parse(status as string)).toEqual({ initialized: true });
+    expect(status).toMatchObject({
+      initialized: true,
+      projectName: "测试项目",
+      projectProgressAvailable: false,
+      lifecyclePhase: "需求建立",
+      recommendedAction: { command: "/sdlc-spec" },
+    });
+    expect(hooks.tool).not.toHaveProperty("sdlc_plan_save");
+    expect(hooks.tool).not.toHaveProperty("sdlc_run_record_result");
   });
 
-  it("snapshots and reads only explicitly authorized requirement sources", async () => {
+  it("分页读取授权来源并保持真实字节", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
-    const sourceRoot = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-source-"));
+    const sourceRoot = await mkdtemp(path.join(tmpdir(), "sdlc-source-"));
     temporaryDirectories.push(directory, sourceRoot);
     const sourcePath = path.join(sourceRoot, "requirements.md");
-    await writeFile(sourcePath, "真实需求\r\n", "utf8");
+    await writeFile(sourcePath, "0123456789", "utf8");
     const hooks = await SdlcFactoryPlugin({ directory } as never);
     await hooks.tool!.sdlc_init!.execute(
-      { projectName: "直升机会议终端", allowedReadRoots: [sourceRoot] },
+      { projectName: "测试项目", allowedReadRoots: [sourceRoot], allowedExecutables: ["node"] },
       { sessionID: "session-1" } as never,
     );
-
     await hooks.tool!.sdlc_source_snapshot!.execute(
       { sourceId: "source-requirements", sourcePath },
       { sessionID: "session-1" } as never,
     );
-    const status = await hooks.tool!.sdlc_status!.execute({}, { sessionID: "session-1" } as never);
-    const result = await hooks.tool!.sdlc_source_read!.execute(
-      { sourceId: "source-requirements" },
-      { sessionID: "session-1" } as never,
-    );
 
-    expect(JSON.parse(result as string)).toMatchObject({
-      sourceId: "source-requirements",
-      content: "真实需求\r\n",
-    });
-    expect(JSON.parse(status as string)).toMatchObject({
-      initialized: true,
-      registeredSources: [
-        { sourceId: "source-requirements", sha256: expect.stringMatching(/^[a-f0-9]{64}$/u) },
-      ],
-    });
-  });
-
-  it("reads large source snapshots in deterministic bounded pages", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
-    const sourceRoot = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-source-"));
-    temporaryDirectories.push(directory, sourceRoot);
-    const sourcePath = path.join(sourceRoot, "protocol.md");
-    await writeFile(sourcePath, "0123456789", "utf8");
-    const hooks = await SdlcFactoryPlugin({ directory } as never);
-    await hooks.tool!.sdlc_init!.execute(
-      { projectName: "直升机会议终端", allowedReadRoots: [sourceRoot] },
-      { sessionID: "session-1" } as never,
-    );
-    await hooks.tool!.sdlc_source_snapshot!.execute(
-      { sourceId: "source-api", sourcePath },
-      { sessionID: "session-1" } as never,
-    );
-
-    const first = JSON.parse(await hooks.tool!.sdlc_source_read!.execute(
-      { sourceId: "source-api", offset: 0, limit: 4 },
-      { sessionID: "session-1" } as never,
-    ) as string);
-    const second = JSON.parse(await hooks.tool!.sdlc_source_read!.execute(
-      { sourceId: "source-api", offset: first.nextOffset, limit: 4 },
+    const page = JSON.parse(await hooks.tool!.sdlc_source_read!.execute(
+      { sourceId: "source-requirements", offset: 2, limit: 4 },
       { sessionID: "session-1" } as never,
     ) as string);
 
-    expect(first).toMatchObject({ content: "0123", offset: 0, nextOffset: 4, complete: false });
-    expect(second).toMatchObject({ content: "4567", offset: 4, nextOffset: 8, complete: false });
+    expect(page).toMatchObject({ content: "2345", offset: 2, nextOffset: 6, complete: false });
   });
 
-  it("materializes an exact binary source snapshot inside the target workspace", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
-    const sourceRoot = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-source-"));
-    temporaryDirectories.push(directory, sourceRoot);
-    const sourcePath = path.join(sourceRoot, "icon.png");
-    await writeFile(sourcePath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
-    const hooks = await SdlcFactoryPlugin({ directory } as never);
-    await hooks.tool!.sdlc_init!.execute(
-      { projectName: "直升机会议终端", allowedReadRoots: [sourceRoot] },
-      { sessionID: "session-1" } as never,
-    );
-    await hooks.tool!.sdlc_source_snapshot!.execute(
-      { sourceId: "asset-icon", sourcePath },
-      { sessionID: "session-1" } as never,
-    );
-
-    const result = JSON.parse(await hooks.tool!.sdlc_source_materialize!.execute(
-      { sourceId: "asset-icon", targetPath: "assets/icon.png" },
-      { sessionID: "session-1" } as never,
-    ) as string);
-
-    expect(result).toMatchObject({ sourceId: "asset-icon", targetPath: "assets/icon.png" });
-    await expect(readFile(path.join(directory, "assets", "icon.png")))
-      .resolves.toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
-  });
-
-  it("writes lifecycle documents atomically but rejects paths outside docs", async () => {
+  it("生命周期文档只允许写入 docs 下的 Markdown 或 YAML", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
     temporaryDirectories.push(directory);
     const hooks = await SdlcFactoryPlugin({ directory } as never);
 
-    const result = JSON.parse(await hooks.tool!.sdlc_document_write!.execute(
-      {
-        targetPath: "docs/requirements/software-requirements-specification.md",
-        content: "# 整体产品需求\n",
-      },
-      { sessionID: "session-spec" } as never,
-    ) as string);
-
-    expect(result).toMatchObject({
-      targetPath: "docs/requirements/software-requirements-specification.md",
-      sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
-    });
-    await expect(readFile(
-      path.join(directory, "docs", "requirements", "software-requirements-specification.md"),
-      "utf8",
-    )).resolves.toBe("# 整体产品需求\n");
+    await hooks.tool!.sdlc_document_write!.execute(
+      { targetPath: "docs/requirements/requirement-set.yaml", content: "schemaVersion: 1\n" },
+      { sessionID: "session-1" } as never,
+    );
+    await expect(readFile(path.join(directory, "docs", "requirements", "requirement-set.yaml"), "utf8"))
+      .resolves.toBe("schemaVersion: 1\n");
     await expect(hooks.tool!.sdlc_document_write!.execute(
-      { targetPath: "src/app.ts", content: "越权\n" },
-      { sessionID: "session-spec" } as never,
-    )).rejects.toThrow("docs directory");
+      { targetPath: "src/app.ts", content: "越权" },
+      { sessionID: "session-1" } as never,
+    )).rejects.toThrow("docs 目录");
   });
 
-  it("creates a candidate and approves it only from the current session user message", async () => {
+  it("通过工具创建产品概述候选后状态进入等待审核", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
     temporaryDirectories.push(directory);
-    await writeFile(path.join(directory, "requirements.md"), "正式需求\n", "utf8");
-    let latestUserText = "";
-    const client = {
-      session: {
-        messages: async () => ({
-          data: [
-            {
-              info: { role: "user" },
-              parts: [{ type: "text", text: latestUserText }],
-            },
-          ],
-        }),
-      },
-    };
-    const hooks = await SdlcFactoryPlugin({ directory, client } as never);
+    await mkdir(path.join(directory, "docs", "requirements"), { recursive: true });
+    await writeFile(path.join(directory, "docs", "requirements", "product-brief.md"), [
+      "# 产品概述", "## 产品目标", "## 系统边界", "## 主要角色", "## 业务模块", "## 未知", "",
+    ].join("\n"), "utf8");
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
     await hooks.tool!.sdlc_init!.execute(
-      { projectName: "直升机会议终端", allowedReadRoots: [] },
-      { sessionID: "session-review" } as never,
+      { projectName: "测试项目", allowedReadRoots: [], allowedExecutables: ["node"] },
+      { sessionID: "session-1" } as never,
     );
 
-    const candidate = JSON.parse(await hooks.tool!.sdlc_candidate_create!.execute(
-      { kind: "REQUIREMENT", subjectPaths: ["requirements.md"] },
-      { sessionID: "session-review" } as never,
-    ) as string);
-    latestUserText = `通过 ${candidate.candidateId} ${candidate.contentHash}`;
-    const approved = JSON.parse(await hooks.tool!.sdlc_review_apply!.execute(
-      {
-        candidateId: candidate.candidateId,
-        candidateHash: candidate.contentHash,
-        decision: "APPROVE",
-      },
-      { sessionID: "session-review" } as never,
-    ) as string);
-    const status = JSON.parse(await hooks.tool!.sdlc_status!.execute(
-      {},
-      { sessionID: "session-review" } as never,
-    ) as string);
+    const candidate = JSON.parse(await hooks.tool!.sdlc_candidate_create!.execute({
+      kind: "PRODUCT_BRIEF",
+      scopeType: "PROJECT",
+      scopeId: "project",
+      scopeName: "项目",
+      subjectPaths: ["docs/requirements/product-brief.md"],
+      inputVersionIds: [],
+      sourceIds: [],
+      testRecordIds: [],
+      changeType: "STRUCTURE",
+      changeSummary: "建立产品概述",
+      proposedImpactScopeIds: [],
+    }, { sessionID: "session-1" } as never) as string);
+    const status = JSON.parse(await hooks.tool!.sdlc_status!.execute({}, { sessionID: "session-1" } as never) as string);
 
-    expect(candidate).toMatchObject({
-      kind: "REQUIREMENT",
-      contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    expect(candidate.kind).toBe("PRODUCT_BRIEF");
+    expect(status.pendingCandidates[0]).toMatchObject({ candidateId: candidate.candidateId, reviewState: "PENDING" });
+    expect(status.recommendedAction.command).toBe("/sdlc-review");
+
+    const reviewProjection = JSON.parse(await hooks.tool!.sdlc_candidate_read!.execute(
+      { candidateId: candidate.candidateId },
+      { sessionID: "session-1" } as never,
+    ) as string);
+    expect(reviewProjection).toMatchObject({
+      candidateId: candidate.candidateId,
+      contentHash: candidate.contentHash,
+      revision: 1,
+      subjects: [{ path: "docs/requirements/product-brief.md" }],
+      changeSummary: "建立产品概述",
     });
-    expect(approved).toMatchObject({
-      reviewId: expect.any(String),
-      baselineId: `requirement-${candidate.candidateId}`,
-    });
-    expect(status).toMatchObject({
-      candidates: [{ candidateId: candidate.candidateId, contentHash: candidate.contentHash }],
-      baselines: [{ baselineId: approved.baselineId, candidateHash: candidate.contentHash }],
-    });
+    expect(JSON.stringify(reviewProjection)).not.toContain("snapshotPath");
   });
 
-  it("saves an execution plan only against its approved design baseline hash", async () => {
+  it("审核命令只能通过候选投影读取详情", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
     temporaryDirectories.push(directory);
-    const designHash = "d".repeat(64);
-    await new ProjectStore(directory).writeImmutable("baselines", "design-candidate-1", {
-      baselineId: "design-candidate-1",
-      candidateHash: designHash,
-    });
     const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks["command.execute.before"]!({
+      command: "sdlc-review", sessionID: "session-review", arguments: "",
+    }, { parts: [] } as never);
 
-    const result = JSON.parse(await hooks.tool!.sdlc_plan_save!.execute(
-      {
-        planVersion: 1,
-        designBaselineId: "design-candidate-1",
-        designHash,
-        units: [
-          { cuId: "cu-home", cuName: "首页高保真与设置入口", dependencies: [] },
-          { cuId: "cu-device", cuName: "设备鉴权与系统信息", dependencies: ["cu-home"] },
-        ],
-      },
-      { sessionID: "session-design" } as never,
-    ) as string);
-
-    expect(result).toMatchObject({
-      planVersion: 1,
-      designBaselineId: "design-candidate-1",
-      designHash,
-    });
+    await expect(hooks["tool.execute.before"]!({
+      tool: "grep", sessionID: "session-review", callID: "call-1",
+    }, { args: { path: directory, pattern: "candidate" } })).rejects.toThrow("禁止扫描或直接读取工作区");
   });
 
-  it("resolves a run by CU name and cannot hide a captured command failure", async () => {
+  it("需求命令不能扫描工作区或直接读取插件内部状态", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
     temporaryDirectories.push(directory);
-    const store = new ProjectStore(directory);
-    const designHash = "d".repeat(64);
-    await store.writeImmutable("baselines", "design-candidate-1", {
-      baselineId: "design-candidate-1",
-      candidateHash: designHash,
-    });
     const hooks = await SdlcFactoryPlugin({ directory } as never);
-    await hooks.tool!.sdlc_plan_save!.execute(
-      {
-        planVersion: 1,
-        designBaselineId: "design-candidate-1",
-        designHash,
-        units: [{ cuId: "cu-home", cuName: "首页高保真与设置入口", dependencies: [] }],
-      },
-      { sessionID: "session-code" } as never,
-    );
+    await hooks["command.execute.before"]!({
+      command: "sdlc-spec", sessionID: "session-spec", arguments: "",
+    }, { parts: [] } as never);
 
-    const run = JSON.parse(await hooks.tool!.sdlc_run_start!.execute(
-      {
-        command: "/sdlc-code 首页高保真与设置入口",
-        cuName: "首页高保真与设置入口",
-        gitBase: "abc123",
-      },
-      { sessionID: "session-code" } as never,
-    ) as string);
-    await hooks.tool!.sdlc_run_record_result!.execute(
-      { runId: run.runId, tool: "bash", exitCode: 1, outputHash: "f".repeat(64) },
-      { sessionID: "session-code" } as never,
-    );
+    await expect(hooks["tool.execute.before"]!({
+      tool: "glob", sessionID: "session-spec", callID: "call-1",
+    }, { args: { path: directory, pattern: "**/*" } })).rejects.toThrow("禁止扫描工作区");
+    await expect(hooks["tool.execute.before"]!({
+      tool: "read", sessionID: "session-spec", callID: "call-2",
+    }, { args: { filePath: path.join(directory, ".sdlc-factory", "manifest.json") } }))
+      .rejects.toThrow("内部状态目录");
+  });
 
-    await expect(hooks.tool!.sdlc_run_finish!.execute(
-      { runId: run.runId, state: "SUCCEEDED" },
-      { sessionID: "session-code" } as never,
-    )).rejects.toThrow("failing command evidence");
+  it("编码命令在建立运行记录前阻止修改和命令执行", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks["command.execute.before"]!({
+      command: "sdlc-code", sessionID: "session-code", arguments: "系统管理",
+    }, { parts: [] } as never);
+
+    await expect(hooks["tool.execute.before"]!({
+      tool: "edit", sessionID: "session-code", callID: "call-1",
+    }, { args: { filePath: path.join(directory, "src", "app.ts") } }))
+      .rejects.toThrow("先通过 sdlc_run_start");
   });
 });

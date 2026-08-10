@@ -1,9 +1,9 @@
 ---
-description: Initialize deterministic SDLC Factory state for the current project
+description: 初始化当前项目的生命周期事实
 ---
 
-Call `sdlc_status` first. If the project is already initialized, report its current facts and do not initialize again.
+先调用 `sdlc_status`。项目已经初始化时只报告当前事实，不得重复初始化。
 
-If initialization inputs are missing, ask for the project name and explicitly authorized external read roots. Otherwise call `sdlc_init` once. Do not infer read roots or execute another lifecycle command.
+缺少信息时只询问项目名称、允许读取的外部资料目录和允许执行的程序。信息完整后调用一次 `sdlc_init`。不得推断授权目录，不得自动执行其他生命周期命令。
 
-End with one recommended action, one Todo and one complete `/sdlc-*` command. Never execute the recommendation.
+结束时只给出一个建议动作、一条“执行 <完整命令>”待办和一条完整 `/sdlc-*` 命令，不得代替用户执行建议。

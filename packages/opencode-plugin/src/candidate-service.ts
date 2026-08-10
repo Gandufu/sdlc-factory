@@ -1,26 +1,41 @@
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 
+import { findModule, findRequirementMap, validateArtifact } from "./artifact-validator.js";
+import type {
+  ApprovedVersion,
+  ArtifactKind,
+  ArtifactScope,
+  Candidate,
+  CandidateFacts,
+  CandidateProvenance,
+  ChangeType,
+  RunRecord,
+  TestRecord,
+} from "./domain.js";
 import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
+import { RunService } from "./run-service.js";
 import { resolveWorkspacePath } from "./workspace-path.js";
 
-type CandidateKind = "REQUIREMENT" | "DESIGN" | "CODE" | "TEST" | "SYSTEM_ACCEPTANCE";
+const STABLE_ID = /^[a-z][a-z0-9-]{1,63}$/u;
+const DOCUMENT_EXTENSIONS = new Set([".md", ".yaml", ".yml"]);
+const EXECUTABLE_KINDS = new Set<ArtifactKind>(["CODE", "MODULE_TEST", "SYSTEM_TEST", "SYSTEM_ACCEPTANCE"]);
 
-type Candidate = {
-  candidateId: string;
-  kind: CandidateKind;
-  contentHash: string;
+export type CreateCandidateInput = {
+  kind: ArtifactKind;
+  scope: ArtifactScope;
   subjectPaths: string[];
-  subjects: Array<{ path: string; sha256: string; size: number }>;
+  parentVersionId?: string;
+  inputVersionIds: string[];
+  sourceIds: string[];
+  testRecordIds: string[];
+  changeType: ChangeType;
+  changeSummary: string;
+  proposedImpactScopeIds: string[];
+  facts?: CandidateFacts;
   provenance?: CandidateProvenance;
-  createdAt: string;
-};
-
-export type CandidateProvenance = {
-  runId: string;
-  gitBase: string;
-  cuName: string;
-  inputBaselineIds: string[];
+  createdBySessionId: string;
 };
 
 type RuntimeValues = {
@@ -35,37 +50,282 @@ export class CandidateService {
     private readonly runtime: RuntimeValues,
   ) {}
 
-  async createDocumentCandidate(
-    kind: CandidateKind,
-    subjectPaths: string[],
-    provenance?: CandidateProvenance,
-  ): Promise<Candidate> {
-    if (subjectPaths.length === 0) {
-      throw new Error("A document candidate requires at least one subject path");
+  async create(input: CreateCandidateInput): Promise<Candidate> {
+    validateIdentityAndScope(input.kind, input.scope);
+    if (!input.changeSummary.trim()) throw new Error("候选必须包含修订摘要");
+    const normalizedPaths = normalizeSubjectPaths(input.subjectPaths);
+    if (normalizedPaths.length === 0 && input.testRecordIds.length === 0) {
+      throw new Error("候选至少需要一个文件或测试记录");
     }
 
-    const subjects = await Promise.all(
-      subjectPaths.map(async (subjectPath) => {
-        const resolved = await resolveWorkspacePath(this.workspaceRoot, subjectPath);
-        const bytes = await readFile(resolved);
-        return { path: subjectPath, sha256: sha256(bytes), size: bytes.byteLength };
-      }),
-    );
-    const contentHash = provenance
-      ? sha256(Buffer.from(JSON.stringify({ subjects, provenance }), "utf8"))
-      : subjects.length === 1
-      ? subjects[0]!.sha256
-      : sha256(Buffer.from(JSON.stringify(subjects), "utf8"));
-    const candidate: Candidate = {
-      candidateId: this.runtime.id(),
-      kind,
-      contentHash,
-      subjectPaths,
+    const approvedVersions = await this.store.listJson<ApprovedVersion>("approved-versions");
+    await this.validateReferences(input, approvedVersions);
+    this.validateScope(input, approvedVersions);
+    await this.validateLifecycleInputs(input, approvedVersions, normalizedPaths);
+    const current = currentVersion(approvedVersions, input.kind, input.scope.id);
+    if (current?.versionId !== input.parentVersionId) {
+      throw new Error(current
+        ? `父版本必须是当前已批准版本: ${current.versionId}`
+        : "首个修订不能声明父版本");
+    }
+
+    const candidateId = this.runtime.id();
+    const textByPath = new Map<string, string>();
+    const subjects = [];
+    for (let index = 0; index < normalizedPaths.length; index += 1) {
+      const subjectPath = normalizedPaths[index]!;
+      const resolved = await resolveWorkspacePath(this.workspaceRoot, subjectPath);
+      const bytes = await readFile(resolved);
+      const snapshotName = `${String(index + 1).padStart(4, "0")}-${path.basename(subjectPath)}`;
+      const snapshotPath = await this.store.writeImmutableBytes(
+        path.join("revisions", candidateId, snapshotName),
+        bytes,
+      );
+      subjects.push({ path: subjectPath, sha256: sha256(bytes), size: bytes.byteLength, snapshotPath });
+      if (DOCUMENT_EXTENSIONS.has(path.extname(subjectPath).toLowerCase())) {
+        textByPath.set(subjectPath, bytes.toString("utf8"));
+      }
+    }
+
+    const deterministicChecks = validateArtifact({
+      kind: input.kind,
+      scope: input.scope,
       subjects,
-      ...(provenance ? { provenance } : {}),
+      textByPath,
+      ...(input.facts ? { facts: input.facts } : {}),
+      approvedVersions,
+    });
+    const revision = (current?.revision ?? 0) + 1;
+    const hashInput = {
+      kind: input.kind,
+      scope: input.scope,
+      revision,
+      ...(input.parentVersionId ? { parentVersionId: input.parentVersionId } : {}),
+      subjects: subjects.map(({ path: subjectPath, sha256: subjectHash, size }) => ({
+        path: subjectPath,
+        sha256: subjectHash,
+        size,
+      })),
+      inputVersionIds: [...input.inputVersionIds].sort(),
+      sourceIds: [...input.sourceIds].sort(),
+      testRecordIds: [...input.testRecordIds].sort(),
+      changeType: input.changeType,
+      changeSummary: input.changeSummary.trim(),
+      proposedImpactScopeIds: [...input.proposedImpactScopeIds].sort(),
+      ...(input.facts ? { facts: input.facts } : {}),
+      ...(input.provenance ? { provenance: input.provenance } : {}),
+    };
+    const candidate: Candidate = {
+      candidateId,
+      ...hashInput,
+      contentHash: sha256(Buffer.from(JSON.stringify(hashInput), "utf8")),
+      subjectPaths: normalizedPaths,
+      subjects,
+      deterministicChecks,
+      createdBySessionId: input.createdBySessionId,
       createdAt: this.runtime.now(),
     };
     await this.store.writeImmutable("candidates", candidate.candidateId, candidate);
+    await this.store.appendJournal({
+      type: "CANDIDATE_CREATED",
+      at: candidate.createdAt,
+      candidateId: candidate.candidateId,
+      candidateHash: candidate.contentHash,
+      kind: candidate.kind,
+      scope: candidate.scope,
+    });
     return candidate;
   }
+
+  private async validateReferences(input: CreateCandidateInput, versions: ApprovedVersion[]): Promise<void> {
+    const versionIds = new Set(versions.map((version) => version.versionId));
+    for (const versionId of input.inputVersionIds) {
+      if (!versionIds.has(versionId)) throw new Error(`输入版本不存在或未批准: ${versionId}`);
+    }
+    for (const sourceId of input.sourceIds) await this.store.readJson("sources", sourceId);
+    for (const testRecordId of input.testRecordIds) {
+      await this.store.readJson<TestRecord>("test-runs", testRecordId);
+    }
+    if (EXECUTABLE_KINDS.has(input.kind)) {
+      if (!input.provenance?.runId || !input.provenance.gitBase || input.provenance.inputVersionIds.length === 0) {
+        throw new Error(`${input.kind} 候选必须绑定运行、Git 基点和精确输入版本`);
+      }
+      if (!sameSet(input.provenance.inputVersionIds, input.inputVersionIds)) {
+        throw new Error("候选输入版本与运行来源输入版本不一致");
+      }
+      await this.store.readJson("runs", input.provenance.runId);
+    }
+  }
+
+  private validateScope(input: CreateCandidateInput, versions: ApprovedVersion[]): void {
+    const projectKinds = new Set<ArtifactKind>([
+      "PRODUCT_BRIEF", "REQUIREMENT_MAP", "REQUIREMENT_SET", "PRODUCT_ARCHITECTURE", "DESIGN_SET",
+    ]);
+    if (projectKinds.has(input.kind) && (input.scope.type !== "PROJECT" || input.scope.id !== "project")) {
+      throw new Error(`${input.kind} 必须使用 project 项目范围`);
+    }
+    if (["MODULE_REQUIREMENT", "MODULE_DESIGN", "CODE", "MODULE_TEST"].includes(input.kind)) {
+      if (input.scope.type !== "MODULE" || !findModule(versions, input.scope.id)) {
+        throw new Error(`业务模块不存在于当前已批准需求地图: ${input.scope.id}`);
+      }
+      const module = findModule(versions, input.scope.id)!;
+      if (module.name !== input.scope.name || module.status !== "ACTIVE") {
+        throw new Error(`业务模块名称或状态与当前需求地图不一致: ${input.scope.name}`);
+      }
+    }
+    if (["INTERFACE_REQUIREMENT", "INTERFACE_DESIGN"].includes(input.kind)) {
+      const contract = findRequirementMap(versions)?.interfaces.find((item) => item.interfaceId === input.scope.id);
+      if (input.scope.type !== "INTERFACE" || !contract || contract.name !== input.scope.name) {
+        throw new Error(`外部接口不存在于当前已批准需求地图: ${input.scope.id}`);
+      }
+    }
+    if (input.kind === "QUALITY_REQUIREMENT") {
+      const quality = findRequirementMap(versions)?.qualityRequirements.find((item) => item.qualityId === input.scope.id);
+      if (input.scope.type !== "QUALITY" || !quality || quality.name !== input.scope.name) {
+        throw new Error(`非功能需求不存在于当前已批准需求地图: ${input.scope.id}`);
+      }
+    }
+    if (["SYSTEM_TEST", "SYSTEM_ACCEPTANCE"].includes(input.kind)
+      && (input.scope.type !== "SYSTEM" || input.scope.id !== "system")) {
+      throw new Error(`${input.kind} 必须使用 system 系统范围`);
+    }
+  }
+
+  private async validateLifecycleInputs(
+    input: CreateCandidateInput,
+    versions: ApprovedVersion[],
+    subjectPaths: string[],
+  ): Promise<void> {
+    const mapVersion = currentVersion(versions, "REQUIREMENT_MAP", "project");
+    const requirementSet = currentVersion(versions, "REQUIREMENT_SET", "project");
+    const designSet = currentVersion(versions, "DESIGN_SET", "project");
+    const requireInputs = (required: Array<ApprovedVersion | undefined>) => {
+      for (const version of required) {
+        if (!version) throw new Error(`缺少 ${input.kind} 的前置已批准版本`);
+        if (!input.inputVersionIds.includes(version.versionId)) {
+          throw new Error(`${input.kind} 未绑定当前前置版本: ${version.versionId}`);
+        }
+      }
+    };
+    switch (input.kind) {
+      case "MODULE_REQUIREMENT":
+      case "INTERFACE_REQUIREMENT":
+      case "QUALITY_REQUIREMENT":
+        requireInputs([mapVersion]);
+        break;
+      case "PRODUCT_ARCHITECTURE":
+        requireInputs([requirementSet]);
+        break;
+      case "MODULE_DESIGN":
+        requireInputs([requirementSet, currentVersion(versions, "MODULE_REQUIREMENT", input.scope.id)]);
+        break;
+      case "INTERFACE_DESIGN":
+        requireInputs([requirementSet, currentVersion(versions, "INTERFACE_REQUIREMENT", input.scope.id)]);
+        break;
+      case "CODE":
+        requireInputs([
+          requirementSet,
+          designSet,
+          currentVersion(versions, "MODULE_REQUIREMENT", input.scope.id),
+          currentVersion(versions, "MODULE_DESIGN", input.scope.id),
+        ]);
+        await this.validateSuccessfulRunAndPaths(input, subjectPaths);
+        break;
+      case "MODULE_TEST":
+        requireInputs([
+          designSet,
+          currentVersion(versions, "MODULE_DESIGN", input.scope.id),
+          currentVersion(versions, "CODE", input.scope.id),
+        ]);
+        await this.validateSuccessfulRunAndPaths(input, subjectPaths);
+        await this.requirePassingTestRecord(input);
+        break;
+      case "SYSTEM_TEST":
+        requireInputs([designSet]);
+        for (const module of findRequirementMap(versions)?.businessModules.filter((item) => item.status === "ACTIVE") ?? []) {
+          requireInputs([
+            currentVersion(versions, "CODE", module.moduleId),
+            currentVersion(versions, "MODULE_TEST", module.moduleId),
+          ]);
+        }
+        await this.validateSuccessfulRunAndPaths(input, subjectPaths);
+        await this.requirePassingTestRecord(input);
+        break;
+      case "SYSTEM_ACCEPTANCE":
+        requireInputs([currentVersion(versions, "SYSTEM_TEST", "system")]);
+        await this.validateSuccessfulRunAndPaths(input, subjectPaths);
+        await this.requirePassingTestRecord(input);
+        break;
+      case "REQUIREMENT_SET":
+      case "DESIGN_SET":
+        throw new Error(`${input.kind} 必须通过 sdlc_set_candidate_create 生成`);
+      default:
+        break;
+    }
+  }
+
+  private async validateSuccessfulRunAndPaths(input: CreateCandidateInput, subjectPaths: string[]): Promise<void> {
+    const runId = input.provenance!.runId;
+    const run = await this.store.readJson<RunRecord>("runs", runId);
+    if (run.scope.id !== input.scope.id || run.gitBase !== input.provenance!.gitBase) {
+      throw new Error("候选范围或 Git 基点与运行记录不一致");
+    }
+    if (await new RunService(this.store, this.runtime).state(runId) !== "SUCCEEDED") {
+      throw new Error("只有真实成功的运行才能创建可执行产物候选");
+    }
+    if (input.kind === "CODE") {
+      const allowed = [...run.allowedProductPaths, ...run.allowedTestPaths];
+      for (const subjectPath of subjectPaths) {
+        if (!allowed.some((prefix) => isWithinPrefix(subjectPath, prefix))) {
+          throw new Error(`代码候选文件超出模块设计批准的路径边界: ${subjectPath}`);
+        }
+      }
+    }
+  }
+
+  private async requirePassingTestRecord(input: CreateCandidateInput): Promise<void> {
+    if (input.testRecordIds.length === 0) throw new Error(`${input.kind} 候选必须引用测试记录`);
+    for (const testRecordId of input.testRecordIds) {
+      const record = await this.store.readJson<TestRecord>("test-runs", testRecordId);
+      if (record.outcome !== "PASSED" || record.runId !== input.provenance!.runId) {
+        throw new Error(`测试记录未通过或不属于当前运行: ${testRecordId}`);
+      }
+    }
+  }
+}
+
+export function currentVersion(
+  versions: ApprovedVersion[],
+  kind: ArtifactKind,
+  scopeId: string,
+): ApprovedVersion | undefined {
+  return versions
+    .filter((version) => version.kind === kind && version.scope.id === scopeId)
+    .sort((left, right) => right.revision - left.revision)[0];
+}
+
+function validateIdentityAndScope(kind: ArtifactKind, scope: ArtifactScope): void {
+  if (!STABLE_ID.test(scope.id) || !scope.name.trim()) throw new Error(`候选范围编号或名称无效: ${scope.id}`);
+  if (kind === "CODE" && scope.type !== "MODULE") throw new Error("代码候选只能属于业务模块");
+}
+
+function normalizeSubjectPaths(subjectPaths: string[]): string[] {
+  const normalized = subjectPaths.map((subjectPath) => path.normalize(subjectPath).replaceAll("\\", "/"));
+  const unique = new Set(normalized);
+  if (unique.size !== normalized.length) throw new Error("候选文件路径不能重复");
+  if (normalized.some((subjectPath) => path.isAbsolute(subjectPath) || subjectPath === ".." || subjectPath.startsWith("../"))) {
+    throw new Error("候选文件必须位于项目工作区内");
+  }
+  return [...unique].sort();
+}
+
+function sameSet(left: string[], right: string[]): boolean {
+  return left.length === right.length && [...left].sort().every((value, index) => value === [...right].sort()[index]);
+}
+
+function isWithinPrefix(subjectPath: string, allowedPrefix: string): boolean {
+  const subject = path.normalize(subjectPath);
+  const prefix = path.normalize(allowedPrefix);
+  const relative = path.relative(prefix, subject);
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }

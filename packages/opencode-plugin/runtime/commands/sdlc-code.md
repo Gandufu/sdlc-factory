@@ -1,13 +1,13 @@
 ---
-description: Implement one approved Capability Unit by its user-readable name
+description: 按已批准业务模块设计完成编码和测试代码
 ---
 
-Load the `sdlc-cu-coding` skill, then call `sdlc_status`.
+加载 `sdlc-module-coding` Skill，先调用 `sdlc_status`。
 
-The requested CU name is:
+目标业务模块名称为：
 
 `$ARGUMENTS`
 
-Require one exact CU name from the approved ExecutionPlan. Resolve its internal ID through project facts; never require the user to enter an ID. Work only on that CU and do not auto-run `/sdlc-test`, `/sdlc-review` or the next CU.
+必须与当前需求地图中的业务模块名称完全一致。总需求、总设计、模块需求、模块设计和测试说明均有效后才能开始。
 
-End with one recommendation, one Todo exactly matching the plain text `执行 <recommended command>` without backticks, and one complete `/sdlc-*` command; never execute it.
+开始运行后，修改任何文件或执行任何命令前必须实际调用 OpenCode 原生 `todowrite` 建立编码待办清单，并在过程中更新。不得用普通文本计划替代。只在已批准模块路径边界内修改产品代码和测试代码；所有编译、静态检查和测试通过 `sdlc_command_execute` 执行并自动留证。形成代码候选后停止等待人工审核。

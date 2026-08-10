@@ -19,4 +19,12 @@ describe("parseReviewDecision", () => {
       candidateHash: hash,
     });
   });
+
+  it("requires a concern when a candidate is put on hold", () => {
+    expect(() => parseReviewDecision(`暂缓 ${candidateId} ${hash}`)).toThrow(ReviewDecisionError);
+    expect(parseReviewDecision(`暂缓 ${candidateId} ${hash}：等待接口地址`)).toMatchObject({
+      decision: "HOLD",
+      reason: "等待接口地址",
+    });
+  });
 });

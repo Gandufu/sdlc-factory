@@ -1,7 +1,9 @@
 ---
-description: Show deterministic project facts and one recommended next action
+description: 展示从生命周期事实推导的当前项目进度
 ---
 
-Call `sdlc_status`. Report only persisted project facts and derived status; do not modify files, create candidates, apply reviews or start runs.
+只调用 `sdlc_status`。不得写文件、创建候选、执行审核或开始运行。
 
-If a next action is available, show exactly one RecommendedAction, one Todo in the form `执行 <command>`, and one complete `/sdlc-*` command. Never execute it.
+总设计批准前展示当前阶段、缺失门槛、待审核候选和唯一建议命令。总设计批准后按业务模块展示当前阶段、最新需求/设计/代码/测试版本号、测试结果、等待审核、挂起、阻塞、完成或失效状态。
+
+项目进度是只读当前投影，不得保存为项目计划，不得给它业务版本号。最后只显示工具返回的一条建议动作、一条“执行 <完整命令>”待办和一条完整命令，不得执行建议。

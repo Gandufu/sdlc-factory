@@ -14,6 +14,6 @@ if (command !== "install" || !target) {
 } else {
   const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
   const runtimeRoot = path.resolve(scriptDirectory, "..", "runtime");
-  await installRuntime(runtimeRoot, path.resolve(target), "0.0.1");
-  console.log(`Installed SDLC Factory Plugin 0.0.1 into ${path.resolve(target)}`);
+  await installRuntime(runtimeRoot, path.resolve(target), "0.1.0");
+  console.log(`Installed SDLC Factory Plugin 0.1.0 into ${path.resolve(target)}`);
 }

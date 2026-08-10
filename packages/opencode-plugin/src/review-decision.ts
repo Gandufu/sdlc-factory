@@ -17,6 +17,9 @@ export function parseReviewDecision(message: string): ReviewDecision {
   if (verb === "退回" && !reason?.trim()) {
     throw new ReviewDecisionError("A revision decision must include a reason");
   }
+  if (verb === "暂缓" && !reason?.trim()) {
+    throw new ReviewDecisionError("A hold decision must include its concern");
+  }
 
   const decision = verb === "通过" ? "APPROVE" : verb === "退回" ? "REVISE" : "HOLD";
   return reason

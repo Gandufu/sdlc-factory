@@ -25,7 +25,7 @@ describe("installRuntime", () => {
     const target = await mkdtemp(path.join(tmpdir(), "sdlc-target-"));
     temporaryDirectories.push(target);
 
-    await installRuntime(runtime, target, "0.0.1");
+    await installRuntime(runtime, target, "0.1.0");
 
     await expect(readFile(path.join(target, ".opencode", "plugins", "sdlc-factory.js"), "utf8"))
       .resolves.toBe("export const plugin = true;\n");
@@ -38,6 +38,21 @@ describe("installRuntime", () => {
     await mkdir(path.join(target, ".opencode", "plugins"), { recursive: true });
     await writeFile(path.join(target, ".opencode", "plugins", "sdlc-factory.js"), "unmanaged\n", "utf8");
 
-    await expect(installRuntime(runtime, target, "0.0.1")).rejects.toBeInstanceOf(InstallationConflictError);
+    await expect(installRuntime(runtime, target, "0.1.0")).rejects.toBeInstanceOf(InstallationConflictError);
+  });
+
+  it("upgrades a managed install without retaining legacy skill directories", async () => {
+    const runtime = await fixtureRuntime();
+    const target = await mkdtemp(path.join(tmpdir(), "sdlc-target-"));
+    temporaryDirectories.push(target);
+    const configRoot = path.join(target, ".opencode");
+    await mkdir(path.join(configRoot, "skills", "sdlc-requirement-analysis"), { recursive: true });
+    await writeFile(path.join(configRoot, "skills", "sdlc-requirement-analysis", "SKILL.md"), "legacy\n", "utf8");
+    await writeFile(path.join(configRoot, "sdlc-factory-install.json"), "{}\n", "utf8");
+
+    await installRuntime(runtime, target, "0.1.0");
+
+    await expect(readFile(path.join(configRoot, "skills", "sdlc-requirement-analysis", "SKILL.md"), "utf8"))
+      .rejects.toThrow();
   });
 });

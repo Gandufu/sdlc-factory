@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 
 import { sha256 } from "./hash.js";
@@ -19,6 +19,7 @@ export class SourceService {
     snapshotPath: string;
     sha256: string;
   }> {
+    if (!/^[a-z][a-z0-9-]{1,63}$/u.test(sourceId)) throw new Error(`Invalid source id: ${sourceId}`);
     const realSourcePath = await realpath(sourcePath);
     const allowed = await Promise.all(this.allowedReadRoots.map((root) => realpath(root)));
     const isAllowed = allowed.some((root) => {
@@ -28,11 +29,8 @@ export class SourceService {
     if (!isAllowed) {
       throw new SourceBoundaryError(`Source is outside allowed read roots: ${sourcePath}`);
     }
-    const directory = path.join(this.store.stateRoot, "source-snapshots", sourceId);
-    const snapshotPath = path.join(directory, "original");
     const bytes = await readFile(realSourcePath);
-    await mkdir(directory, { recursive: true });
-    await copyFile(realSourcePath, snapshotPath);
+    const snapshotPath = await this.store.writeImmutableBytes(path.join("source-snapshots", sourceId, "original"), bytes);
     const snapshot = { sourceId, originalPath: realSourcePath, snapshotPath, sha256: sha256(bytes) };
     await this.store.writeImmutable("sources", sourceId, snapshot);
     return snapshot;

@@ -1,9 +1,13 @@
 ---
-description: Analyze requirements and maintain the traceable software requirements specification
+description: 按业务模块论证、拆分和版本化需求
 ---
 
-Load the `sdlc-requirement-analysis` skill, then call `sdlc_status`.
+加载 `sdlc-modular-requirements` Skill，先调用 `sdlc_status`。Skill 工具已经返回完整内容后，不得再次读取其 `SKILL.md` 文件。
 
-Work only on requirements. Read registered source snapshots through deterministic SDLC tools. Preserve facts, decisions, assumptions, open questions and unknowns as separate categories. Ask at most one consequential question in this turn.
+当前用户参数为：
 
-Do not enter design, create an ExecutionPlan, write product code, claim approval or execute a recommended command. End with exactly one recommended action, one Todo and one complete command that the user may choose to enter later.
+`$ARGUMENTS`
+
+没有参数时处理产品概述、需求地图、外部接口、非功能需求或总需求版本；有参数时只处理名称完全一致的业务模块及其必要引用。资料只能通过已登记来源读取，大文件分页读取。
+
+不得进入设计、编码或测试，不得创建独立项目计划。存在重大歧义时本轮只问一个最影响范围的问题，并给出有限候选；问题必须在候选创建前解决或保留为明确未知。形成候选后不得再提新问题，必须采用候选工具返回的唯一审核命令并停止。

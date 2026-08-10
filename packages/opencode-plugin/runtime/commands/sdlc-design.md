@@ -1,9 +1,13 @@
 ---
-description: Produce the overall design, Capability Units and approved-design execution plan
+description: 维护产品总体设计、模块设计、接口设计和测试说明
 ---
 
-Load the `sdlc-overall-design` skill, then call `sdlc_status`.
+加载 `sdlc-modular-design` Skill，先调用 `sdlc_status`。
 
-Work only from an approved RequirementBaseline. Maintain the overall design and Capability Map, with user-readable CU names and stable internal CU IDs. Do not write product code or tests.
+当前用户参数为：
 
-After creating a DesignCandidate, stop for human review. Only after a DesignBaseline exists may `sdlc_plan_save` create the ExecutionPlan. End with one recommendation, one Todo exactly matching `执行 <recommended command>`, and one complete `/sdlc-*` command; never execute it.
+`$ARGUMENTS`
+
+没有参数时处理产品总体设计、跨模块接口设计或总设计版本；有参数时只处理名称完全一致的业务模块。模块设计和该模块测试说明必须作为同一候选同步维护。
+
+只使用已批准需求版本和 `sdlc_context_assemble` 返回的最小上下文。不得创建新的执行层级、能力单元或项目计划，不得写产品代码。候选形成后停止等待人工审核。

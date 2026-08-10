@@ -4,7 +4,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CandidateService } from "../src/candidate-service.js";
+import { ArtifactValidationError } from "../src/artifact-validator.js";
 import { ProjectStore } from "../src/project-store.js";
+import { requirementMapFacts } from "./fixtures.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -12,51 +14,91 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
+function runtime(id: string) {
+  return { id: () => id, now: () => "2026-08-11T05:00:00.000Z" };
+}
+
 describe("CandidateService", () => {
-  it("binds a document candidate to the exact file bytes", async () => {
+  it("按规范化顺序绑定工作区字节并保存不可变快照", async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-candidate-"));
     temporaryDirectories.push(workspace);
-    await mkdir(path.join(workspace, "docs"));
-    await writeFile(path.join(workspace, "docs", "requirements.md"), Buffer.from([0x61, 0x0d, 0x0a]));
-    const service = new CandidateService(new ProjectStore(workspace), workspace, {
-      id: () => "candidate-1",
-      now: () => "2026-08-07T05:00:00.000Z",
+    await mkdir(path.join(workspace, "docs", "requirements"), { recursive: true });
+    await writeFile(path.join(workspace, "docs", "requirements", "product-brief.md"), [
+      "# 产品概述",
+      "## 产品目标",
+      "## 系统边界",
+      "## 主要角色",
+      "## 业务模块",
+      "## 未知",
+      "",
+    ].join("\n"), "utf8");
+    const service = new CandidateService(new ProjectStore(workspace), workspace, runtime("candidate-1"));
+
+    const candidate = await service.create({
+      kind: "PRODUCT_BRIEF",
+      scope: { type: "PROJECT", id: "project", name: "项目" },
+      subjectPaths: ["docs/requirements/product-brief.md"],
+      inputVersionIds: [],
+      sourceIds: [],
+      testRecordIds: [],
+      changeType: "STRUCTURE",
+      changeSummary: "建立产品概述",
+      proposedImpactScopeIds: [],
+      createdBySessionId: "session-1",
     });
 
-    const candidate = await service.createDocumentCandidate("REQUIREMENT", ["docs/requirements.md"]);
-
-    expect(candidate.contentHash).toBe("8e4621379786ef42a4fec155cd525c291dd7db3c1fde3478522f4f61c03fd1bd");
-    const stored = JSON.parse(
-      await readFile(
-        path.join(workspace, ".sdlc-factory", "candidates", "candidate-1.json"),
-        "utf8",
-      ),
-    ) as { contentHash: string };
-    expect(stored.contentHash).toBe(candidate.contentHash);
+    expect(candidate.revision).toBe(1);
+    expect(candidate.subjects[0]!.snapshotPath).toContain(path.join("revisions", "candidate-1"));
+    await expect(readFile(candidate.subjects[0]!.snapshotPath, "utf8")).resolves.toContain("产品目标");
   });
 
-  it("binds executable candidates to run, git base, CU and input baselines", async () => {
+  it("校验需求地图结构化事实并拒绝遗留概念", async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-candidate-"));
     temporaryDirectories.push(workspace);
-    await writeFile(path.join(workspace, "main.ts"), "export const value = 1;\n", "utf8");
-    const service = new CandidateService(new ProjectStore(workspace), workspace, {
-      id: () => "candidate-code-1",
-      now: () => "2026-08-07T05:00:00.000Z",
-    });
+    await mkdir(path.join(workspace, "docs", "requirements"), { recursive: true });
+    await writeFile(path.join(workspace, "docs", "requirements", "requirement-map.md"), [
+      "# 需求地图",
+      "## 业务模块",
+      "## 功能组",
+      "## 执行依赖",
+      "## 外部接口",
+      "## 非功能需求",
+      "旧能力单元",
+      "",
+    ].join("\n"), "utf8");
+    const service = new CandidateService(new ProjectStore(workspace), workspace, runtime("candidate-map"));
 
-    const candidate = await service.createDocumentCandidate("CODE", ["main.ts"], {
-      runId: "run-1",
-      gitBase: "abc123",
-      cuName: "首页高保真与设置入口",
-      inputBaselineIds: ["design-1"],
-    });
+    await expect(service.create({
+      kind: "REQUIREMENT_MAP",
+      scope: { type: "PROJECT", id: "project", name: "项目" },
+      subjectPaths: ["docs/requirements/requirement-map.md"],
+      inputVersionIds: [],
+      sourceIds: [],
+      testRecordIds: [],
+      changeType: "STRUCTURE",
+      changeSummary: "建立业务模块",
+      proposedImpactScopeIds: [],
+      facts: requirementMapFacts,
+      createdBySessionId: "session-1",
+    })).rejects.toBeInstanceOf(ArtifactValidationError);
+  });
 
-    expect(candidate.provenance).toEqual({
-      runId: "run-1",
-      gitBase: "abc123",
-      cuName: "首页高保真与设置入口",
-      inputBaselineIds: ["design-1"],
-    });
-    expect(candidate.contentHash).not.toBe(candidate.subjects[0]!.sha256);
+  it("拒绝重复候选路径", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-candidate-"));
+    temporaryDirectories.push(workspace);
+    const service = new CandidateService(new ProjectStore(workspace), workspace, runtime("candidate-duplicate"));
+
+    await expect(service.create({
+      kind: "PRODUCT_BRIEF",
+      scope: { type: "PROJECT", id: "project", name: "项目" },
+      subjectPaths: ["docs/requirements/product-brief.md", "docs\\requirements\\product-brief.md"],
+      inputVersionIds: [],
+      sourceIds: [],
+      testRecordIds: [],
+      changeType: "EDITORIAL",
+      changeSummary: "重复路径",
+      proposedImpactScopeIds: [],
+      createdBySessionId: "session-1",
+    })).rejects.toThrow("不能重复");
   });
 });

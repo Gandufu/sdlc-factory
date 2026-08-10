@@ -12,9 +12,34 @@ export class ProjectStore {
   }
 
   async writeImmutable(collection: string, id: string, value: unknown): Promise<string> {
-    const directory = path.join(this.stateRoot, collection);
-    const target = path.join(directory, `${id}.json`);
+    const target = this.resolveJsonTarget(collection, id);
     return this.writeImmutableTarget(target, value);
+  }
+
+  async writeImmutableBytes(relativePath: string, value: Uint8Array): Promise<string> {
+    const target = this.resolveStatePath(relativePath);
+    const directory = path.dirname(target);
+    const temporary = path.join(directory, `.${path.basename(target)}.${randomUUID()}.tmp`);
+    await mkdir(directory, { recursive: true });
+    const handle = await open(temporary, "wx");
+    try {
+      await handle.writeFile(value);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+
+    try {
+      await link(temporary, target);
+      return target;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        throw new ImmutableRecordError(`Immutable record already exists: ${target}`);
+      }
+      throw error;
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
 
   async writeManifest(value: unknown): Promise<string> {
@@ -48,7 +73,7 @@ export class ProjectStore {
   }
 
   async readJson<T>(collection: string, id: string): Promise<T> {
-    return JSON.parse(await readFile(path.join(this.stateRoot, collection, `${id}.json`), "utf8")) as T;
+    return JSON.parse(await readFile(this.resolveJsonTarget(collection, id), "utf8")) as T;
   }
 
   async readManifest<T>(): Promise<T> {
@@ -56,7 +81,7 @@ export class ProjectStore {
   }
 
   async listJson<T>(collection: string): Promise<T[]> {
-    const directory = path.join(this.stateRoot, collection);
+    const directory = this.resolveCollection(collection);
     let entries: string[];
     try {
       entries = await readdir(directory);
@@ -84,7 +109,13 @@ export class ProjectStore {
   }
 
   async readJournal<T = unknown>(): Promise<T[]> {
-    const content = await readFile(path.join(this.stateRoot, "journal.jsonl"), "utf8");
+    let content: string;
+    try {
+      content = await readFile(path.join(this.stateRoot, "journal.jsonl"), "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
     const lines = content.split("\n");
     const events: T[] = [];
     for (let index = 0; index < lines.length; index += 1) {
@@ -98,5 +129,24 @@ export class ProjectStore {
       }
     }
     return events;
+  }
+
+  private resolveStatePath(relativePath: string): string {
+    const resolved = path.resolve(this.stateRoot, relativePath);
+    const relative = path.relative(this.stateRoot, resolved);
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error(`State path escapes project state: ${relativePath}`);
+    }
+    return resolved;
+  }
+
+  private resolveCollection(collection: string): string {
+    if (!/^[a-z][a-z0-9-]*$/u.test(collection)) throw new Error(`Invalid state collection: ${collection}`);
+    return this.resolveStatePath(collection);
+  }
+
+  private resolveJsonTarget(collection: string, id: string): string {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(id)) throw new Error(`Invalid immutable record id: ${id}`);
+    return path.join(this.resolveCollection(collection), `${id}.json`);
   }
 }
