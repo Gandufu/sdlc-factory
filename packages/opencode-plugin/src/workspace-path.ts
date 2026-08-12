@@ -1,4 +1,4 @@
-import { realpath } from "node:fs/promises";
+import { access, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 
 export class WorkspaceBoundaryError extends Error {}
@@ -14,17 +14,26 @@ export function toWorkspaceRelativePath(workspaceRoot: string, candidate: string
 }
 
 export async function resolveStoredSnapshotPath(workspaceRoot: string, candidate: string): Promise<string> {
-  if (!path.isAbsolute(candidate)) return resolveWorkspacePath(workspaceRoot, candidate);
+  const relocated = relocateStoredPath(workspaceRoot, candidate);
+  const resolved = await resolveWorkspacePath(workspaceRoot, relocated);
+  if (await exists(resolved)) return resolved;
 
-  const relative = path.relative(path.resolve(workspaceRoot), path.resolve(candidate));
-  if (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
-    return resolveWorkspacePath(workspaceRoot, candidate);
+  const relative = toWorkspaceRelativePath(workspaceRoot, resolved);
+  if (!relative.startsWith(".sdlc-factory/revisions/")) return resolved;
+  const manifestPath = path.join(workspaceRoot, ".sdlc-factory", "migrations", "revisions-to-objects-v1.json");
+  try {
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      entries?: Array<{ legacyPath: string; objectPath: string }>;
+    };
+    const migrated = manifest.entries?.find((entry) => normalizePortable(entry.legacyPath) === relative);
+    if (!migrated || !normalizePortable(migrated.objectPath).startsWith(".sdlc-factory/objects/sha256/")) {
+      return resolved;
+    }
+    return resolveWorkspacePath(workspaceRoot, migrated.objectPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return resolved;
+    throw error;
   }
-
-  const segments = candidate.split(/[\\/]/u);
-  const stateIndex = segments.lastIndexOf(".sdlc-factory");
-  if (stateIndex < 0) throw new WorkspaceBoundaryError(`Stored snapshot is not project state: ${candidate}`);
-  return resolveWorkspacePath(workspaceRoot, segments.slice(stateIndex).join(path.sep));
 }
 
 export async function resolveWorkspacePath(workspaceRoot: string, candidate: string): Promise<string> {
@@ -57,5 +66,29 @@ async function nearestExistingRealPath(candidate: string): Promise<string> {
       if (parent === current) throw error;
       current = parent;
     }
+  }
+}
+
+function relocateStoredPath(workspaceRoot: string, candidate: string): string {
+  if (!path.isAbsolute(candidate)) return candidate;
+  const relative = path.relative(path.resolve(workspaceRoot), path.resolve(candidate));
+  if (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) return candidate;
+
+  const segments = candidate.split(/[\\/]/u);
+  const stateIndex = segments.lastIndexOf(".sdlc-factory");
+  if (stateIndex < 0) throw new WorkspaceBoundaryError(`Stored snapshot is not project state: ${candidate}`);
+  return segments.slice(stateIndex).join(path.sep);
+}
+
+function normalizePortable(candidate: string): string {
+  return path.normalize(candidate).replaceAll("\\", "/");
+}
+
+async function exists(target: string): Promise<boolean> {
+  try {
+    await access(target);
+    return true;
+  } catch {
+    return false;
   }
 }

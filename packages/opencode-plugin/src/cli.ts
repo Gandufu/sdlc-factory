@@ -14,6 +14,11 @@ if (command !== "install" || !target) {
 } else {
   const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
   const runtimeRoot = path.resolve(scriptDirectory, "..", "runtime");
-  await installRuntime(runtimeRoot, path.resolve(target), "0.1.0");
+  const migration = await installRuntime(runtimeRoot, path.resolve(target), "0.1.0");
   console.log(`Installed SDLC Factory Plugin 0.1.0 into ${path.resolve(target)}`);
+  if (migration.removedLegacyDirectory) {
+    console.log(
+      `Migrated ${migration.migratedLegacyFiles} legacy snapshots and indexed ${migration.indexedLegacyReferences} references.`,
+    );
+  }
 }

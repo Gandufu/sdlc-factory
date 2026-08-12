@@ -1,9 +1,15 @@
 import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { migrateLegacyRevisions, type StateMigrationResult } from "./state-migration.js";
+
 export class InstallationConflictError extends Error {}
 
-export async function installRuntime(runtimeRoot: string, targetRoot: string, version: string): Promise<void> {
+export async function installRuntime(
+  runtimeRoot: string,
+  targetRoot: string,
+  version: string,
+): Promise<StateMigrationResult> {
   const configRoot = path.join(targetRoot, ".opencode");
   const pluginTarget = path.join(configRoot, "plugins", "sdlc-factory.js");
   const manifestTarget = path.join(configRoot, "sdlc-factory-install.json");
@@ -11,6 +17,7 @@ export async function installRuntime(runtimeRoot: string, targetRoot: string, ve
     throw new InstallationConflictError(`Refusing to overwrite unmanaged file: ${pluginTarget}`);
   }
   await mkdir(configRoot, { recursive: true });
+  const migration = await migrateLegacyRevisions(targetRoot);
   if (await exists(manifestTarget)) {
     for (const legacyDirectory of [
       "sdlc-requirement-analysis",
@@ -27,6 +34,7 @@ export async function installRuntime(runtimeRoot: string, targetRoot: string, ve
     `${JSON.stringify({ version }, null, 2)}\n`,
     "utf8",
   );
+  return migration;
 }
 
 async function exists(target: string): Promise<boolean> {
