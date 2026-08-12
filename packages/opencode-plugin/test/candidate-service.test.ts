@@ -51,8 +51,8 @@ describe("CandidateService", () => {
 
     expect(candidate.revision).toBe(1);
     expect(path.isAbsolute(candidate.subjects[0]!.snapshotPath)).toBe(false);
-    expect(candidate.subjects[0]!.snapshotPath).toContain("revisions/candidate-1");
-    expect(candidate.subjects[0]!.snapshotPath).toMatch(/0001\.snapshot$/u);
+    expect(candidate.subjects[0]!.snapshotPath).toContain("objects/sha256/");
+    expect(candidate.subjects[0]!.snapshotPath).toMatch(/[a-f0-9]{64}$/u);
     await expect(readFile(path.join(workspace, candidate.subjects[0]!.snapshotPath), "utf8"))
       .resolves.toContain("产品目标");
   });
@@ -107,7 +107,7 @@ describe("CandidateService", () => {
     })).rejects.toThrow("不能重复");
   });
 
-  it("模块测试候选不得重复纳入测试说明等批准测试路径外文件", async () => {
+  it("模块测试候选通过专用入口只绑定通过记录，不重复快照测试代码", async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-candidate-"));
     temporaryDirectories.push(workspace);
     await mkdir(path.join(workspace, "docs", "verification", "modules", "system-management"), { recursive: true });
@@ -168,13 +168,11 @@ describe("CandidateService", () => {
     };
     await store.writeImmutable("test-runs", record.testRecordId, record);
 
-    await expect(new CandidateService(store, workspace, runtime("candidate-module-test")).create({
+    const service = new CandidateService(store, workspace, runtime("candidate-module-test"));
+    await expect(service.create({
       kind: "MODULE_TEST",
       scope: moduleScope,
-      subjectPaths: [
-        "docs/verification/modules/system-management/verification-spec.md",
-        "tests/system-management/domain.test.ts",
-      ],
+      subjectPaths: [],
       inputVersionIds: run.inputVersionIds,
       sourceIds: [],
       testRecordIds: [record.testRecordId],
@@ -188,7 +186,87 @@ describe("CandidateService", () => {
         testRecordIds: [record.testRecordId],
       },
       createdBySessionId: run.sessionId,
-    })).rejects.toThrow("模块测试候选文件超出模块设计批准的测试路径边界");
+    })).rejects.toThrow("sdlc_module_test_candidate_create");
+
+    const candidate = await service.createModuleTest(record.testRecordId, run.sessionId);
+    expect(candidate.subjects).toEqual([]);
+    expect(candidate.subjectPaths).toEqual([]);
+    expect(candidate.testRecordIds).toEqual([record.testRecordId]);
+    expect(candidate.provenance).toMatchObject({ runId: run.runId, gitBase: run.gitBase });
+  });
+
+  it("系统测试候选通过专用入口固定自动报告和系统测试记录", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-candidate-"));
+    temporaryDirectories.push(workspace);
+    await mkdir(path.join(workspace, "docs", "verification"), { recursive: true });
+    await writeFile(path.join(workspace, "docs", "verification", "verification-report.md"), [
+      "# 系统测试报告",
+      "## 报告结论",
+      "## 输入版本",
+      "## 环境与实际接口地址",
+      "## 测试记录",
+      "## 失败、跳过、阻塞和缺失证据",
+      "## 人工检查项",
+      "",
+    ].join("\n"), "utf8");
+    const store = new ProjectStore(workspace);
+    const moduleScope = { type: "MODULE", id: "module-system-management", name: "系统管理" } as const;
+    const systemScope = { type: "SYSTEM", id: "system", name: "系统" } as const;
+    const map = approvedVersion({
+      kind: "REQUIREMENT_MAP",
+      scope: { type: "PROJECT", id: "project", name: "项目" },
+      facts: requirementMapFacts,
+    });
+    const designSet = approvedVersion({
+      kind: "DESIGN_SET", scope: { type: "PROJECT", id: "project", name: "项目" },
+    });
+    const code = approvedVersion({ kind: "CODE", scope: moduleScope });
+    const moduleTest = approvedVersion({ kind: "MODULE_TEST", scope: moduleScope, testRecordIds: ["module-record"] });
+    await writeVersions(store, [map, designSet, code, moduleTest]);
+    const inputVersionIds = [designSet.versionId, code.versionId, moduleTest.versionId];
+    const run: RunRecord = {
+      runId: "run-system-test",
+      command: "/sdlc-test system",
+      commandType: "SYSTEM_TEST",
+      sessionId: "session-system-test",
+      scope: systemScope,
+      gitBase: "b".repeat(40),
+      inputVersionIds,
+      allowedProductPaths: [],
+      allowedTestPaths: ["tests"],
+      createdAt: "2026-08-11T05:00:00.000Z",
+    };
+    await store.writeImmutable("runs", run.runId, run);
+    await store.appendJournal({
+      type: "RUN_FINISHED", at: "2026-08-11T05:00:01.000Z", runId: run.runId, state: "SUCCEEDED",
+    });
+    const record: TestRecord = {
+      testRecordId: "system-record",
+      scope: systemScope,
+      runId: run.runId,
+      outcome: "PASSED",
+      inputVersionIds,
+      resolvedAddresses: [],
+      commandEvidenceIds: ["system-evidence"],
+      passedCommands: 1,
+      failedCommands: 0,
+      skippedCommands: 0,
+      blockedCommands: 0,
+      assertionCountsAvailable: false,
+      evidencePaths: [],
+      fingerprint: "f".repeat(64),
+      startedAt: run.createdAt,
+      finishedAt: "2026-08-11T05:00:01.000Z",
+      createdAt: "2026-08-11T05:00:01.000Z",
+    };
+    await store.writeImmutable("test-runs", record.testRecordId, record);
+
+    const service = new CandidateService(store, workspace, runtime("candidate-system-test"));
+    const candidate = await service.createSystemTest(record.testRecordId, run.sessionId);
+
+    expect(candidate.subjectPaths).toEqual(["docs/verification/verification-report.md"]);
+    expect(candidate.testRecordIds).toEqual([record.testRecordId]);
+    expect(candidate.provenance).toMatchObject({ runId: run.runId, inputVersionIds });
   });
 
   it("系统验收直接复用当前系统测试的通过记录，不伪造第二次可执行运行", async () => {

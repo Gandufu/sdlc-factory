@@ -1,10 +1,10 @@
 # SDLC Factory
 
-> 状态：OpenCode 插件完整生命周期闭环已实现并通过真实目标项目验收
+> 状态：OpenCode 生命周期插件完整产品已实现并通过真实目标项目验收
 >
-> 更新日期：2026-08-11
+> 更新日期：2026-08-13
 
-SDLC Factory 是一个本地优先的 AI 软件研发工作台。它以真实项目资料、持续多轮对话和显式 `/sdlc-*` 命令为入口，把需求、设计、编码、测试和系统验收组织成可追溯、可恢复、可人工审核的研发过程。
+SDLC Factory 是一个安装到目标项目中的本地优先 OpenCode 生命周期插件。它以真实项目资料、持续多轮对话和显式 `/sdlc-*` 命令为入口，把需求、设计、编码、测试和系统验收组织成可追溯、可恢复、可人工审核的研发过程。
 
 AI 负责阅读资料、分析问题、提出候选和生成草案；用户负责业务决定和正式审核；系统负责保存版本、内容哈希、执行记录和测试证据。AI 的文字结论不能自行成为已批准事实。
 
@@ -12,7 +12,7 @@ AI 负责阅读资料、分析问题、提出候选和生成草案；用户负�
 
 当前正式约定按以下顺序解释：
 
-1. 本 README：产品目标、阶段和总边界；
+1. 本 README：产品目标、使用方式和总边界；
 2. [CONTEXT.md](CONTEXT.md)：统一业务语言；
 3. `docs/design` 中按编号排列的正式设计；
 4. `docs/research`：研究证据，仅解释来源，不自行升级为产品决定；
@@ -145,7 +145,7 @@ Playwright 不替代 Java、TypeScript 或其他语言的单元测试执行器�
 
 ## 2. 命令与引导
 
-第一阶段保留以下显式命令：
+插件提供以下显式命令：
 
 - `/sdlc-init`：初始化项目、来源目录和本地事实；
 - `/sdlc-spec [业务模块名称]`：维护产品概述、需求地图或指定模块需求；
@@ -172,6 +172,27 @@ Playwright 不替代 Java、TypeScript 或其他语言的单元测试执行器�
 - 精确的输入版本和内容哈希。
 
 跨模块检查先读取地图、摘要和结构化引用，发现问题后再按需读取相关正文。不得为了“保险”把整个项目文档一次性放入模型上下文。
+
+### 2.2 安装与开始使用
+
+前置条件为 Node.js 22.12 或更高版本、pnpm 10.34.5 和 OpenCode 1.18.14。插件从本仓库构建并安装到一个明确的目标项目：
+
+```powershell
+cd D:\workspace\sdlc-factory\packages\opencode-plugin
+pnpm install --frozen-lockfile
+pnpm build
+node dist\cli.js install --target D:\path\to\target-project
+```
+
+安装器只覆盖自己管理的 `.opencode` 运行资源；如果目标位置存在未登记的同名插件文件会拒绝覆盖。升级时重复执行同一安装命令。进入目标项目启动 OpenCode 后，先执行 `/sdlc-init`，随后使用 `/sdlc-status` 获取唯一建议命令。
+
+自动化脚本只需读取当前项目进度时，不要启动模型会话，直接在目标项目执行：
+
+```powershell
+node .opencode\bin\sdlc-status.mjs
+```
+
+该入口调用与 `/sdlc-status` 相同的确定性状态服务，只输出结构化当前事实，不产生模型 token。
 
 ## 3. 版本与审核
 
@@ -219,11 +240,9 @@ Playwright 不替代 Java、TypeScript 或其他语言的单元测试执行器�
 
 系统验收不是第二次测试运行。系统测试版本批准后，`sdlc_system_acceptance_candidate_create` 在工具内部核对当前有效版本，只复用该版本的自动报告和测试记录；AI 不再重构历史命令、文件指纹或测试参数。
 
-## 5. 分阶段交付
+## 5. 产品边界与完成定义
 
-### 5.1 插件验证阶段
-
-使用 OpenCode 项目级插件、命令和 Skills 验证：
+SDLC Factory 只交付 OpenCode 项目级插件、命令、Skills、确定性工具和目标项目内的生命周期产物，范围包括：
 
 - 模块化需求、设计和测试说明；
 - 需求地图和版本修订；
@@ -233,18 +252,9 @@ Playwright 不替代 Java、TypeScript 或其他语言的单元测试执行器�
 - 最小上下文装配和中断恢复；
 - 环境、接口地址和测试证据记录。
 
-### 5.2 桌面工作台阶段
+项目管理界面、独立服务端、通用任务编排器和面向多项目的门户不属于本产品。目标项目自己的 Electron、Web、Java 或其他应用只是被插件研发和测试的对象，不构成 Factory 的产品形态。
 
-在插件闭环验证后，建设 Electron + React 桌面工作台，提供：
-
-- 项目和会话管理；
-- 需求地图、设计、项目进度和版本差异；
-- 模块编码和测试进度；
-- 外部接口与环境检查；
-- 候选审核、测试证据和系统验收；
-- 模型调用、耗时和失败诊断统计。
-
-Spring Boot 负责项目事实、审核、版本、运行和测试记录；OpenCode 负责模型交互、Skills、会话和工具调用；桌面端只通过受控接口读写，不自行修改生命周期事实。
+插件完成必须同时具备真实业务模块编码、原生模块测试、完整应用系统测试、Playwright 跨模块流程、系统测试审核和系统验收审核，不能只完成文档模板或核心数据合同。
 
 ## 6. 安全与事实边界
 
@@ -261,17 +271,14 @@ Spring Boot 负责项目事实、审核、版本、运行和测试记录；OpenC
 
 按阅读顺序：
 
-1. [DESIGN-01：插件验证阶段总体设计](docs/design/01-mvp0-opencode-plugin-design.md)
+1. [DESIGN-01：OpenCode 生命周期插件总体设计](docs/design/01-mvp0-opencode-plugin-design.md)
 2. [DESIGN-02：`/sdlc-spec` 模块化需求设计](docs/design/02-mvp0-sdlc-spec-design.md)
 3. [DESIGN-03：`/sdlc-design` 与测试验证设计](docs/design/03-mvp0-sdlc-design-test-design.md)
-4. [DESIGN-04：桌面工作台设计](docs/design/04-mvp1-desktop-harness-design.md)
+4. [DESIGN-04：插件产物与质量设计](docs/design/04-plugin-artifact-quality-design.md)
 
 主要研究证据：
 
 - [Claude Code Game Studios 流程引导机制审计](docs/research/claude-code-game-studios-workflow-guidance-audit-2026-08-06.md)
-- [标准需求与设计文档实践调研](docs/research/standard-srs-sdd-csci-mainstream-practices-2026-08-07.md)
-- [Open Design 官方源码审计](docs/research/open-design-official-source-audit-2026-08-06.md)
-- [桌面工作台竞品分析](docs/research/sdlc-factory-ui-competitor-analysis-2026-08-05.md)
 - [主流项目对生命周期插件重构的参考结论](docs/research/mainstream-sdlc-plugin-practices-2026-08-11.md)
 
 验证证据：
@@ -280,8 +287,12 @@ Spring Boot 负责项目事实、审核、版本、运行和测试记录；OpenC
 
 ## 8. 当前状态
 
-本轮已经完成 OpenCode 插件完整生命周期闭环：业务模块贯穿需求、设计、编码和测试；需求、设计和测试文档按模块装配；候选固定文件快照、父版本和精确输入；直接用户审核后形成不可变已批准版本；环境、受控命令、测试记录和报告分别留证；项目进度从底层事实和工作区当前字节实时推导，不再保存独立计划。
+当前已经完成 OpenCode 插件完整生命周期闭环：业务模块贯穿需求、设计、编码和测试；需求、设计和测试文档按模块装配；候选固定文件快照、父版本和精确输入；直接用户审核后形成不可变已批准版本；环境、受控命令、测试记录和报告分别留证；项目进度从底层事实和工作区当前字节实时推导，不再保存独立计划。
 
 OpenCode 原生编码待办已经通过插件事件和运行门槛约束：编码运行在文件修改或命令执行前必须实际调用 `todowrite`，成功结束还需要至少五项全部完成的待办和真实命令证据。测试命令由受控工具等待进程退出并自动保存脱敏证据，不使用固定 sleep 判断完成。
 
-自动化测试当前覆盖 19 个测试文件、52 项合同测试。真实隔离项目 `D:\workspace\sdlc-test\lifecycle-plugin-acceptance-20260811` 已从原始需求走通产品概述、需求地图、两个业务模块需求、外部接口需求、非功能需求、总需求版本、总体设计、两个模块设计与测试说明、接口设计、总设计版本、两模块编码和原生待办、30 项项目测试、完整 Electron 打包、Playwright 跨模块流程、系统测试报告及最终系统验收。全新进程和迁移副本均能恢复状态；修改已批准代码后，依赖模块、模块测试、系统测试与系统验收会自动失效。插件验证阶段已完成，桌面工作台仍是后续独立阶段，不属于本次插件交付。
+当前插件自动化回归覆盖 19 个测试文件、55 项测试，包括需求与设计合同、专用测试候选、内容寻址快照、零模型状态查询、审核、状态恢复、证据指纹、漂移传播、路径边界、安装和构建产物。
+
+真实隔离项目 `D:\workspace\sdlc-test\lifecycle-plugin-acceptance-20260811` 已从原始需求走通产品概述、需求地图、两个业务模块需求、外部接口需求、非功能需求、总需求版本、总体设计、两个模块设计与测试说明、接口设计、总设计版本、两模块编码和原生待办、30 项项目测试、完整应用打包、Playwright 跨模块流程、系统测试报告及最终系统验收。全新进程和迁移副本均能恢复状态；修改已批准代码后，依赖模块、模块测试、系统测试与系统验收会自动失效。
+
+运行产物审计确认，完整验收项目的隐藏状态约 512 KB。145 个 JSON 分别对应候选、审核、版本、运行、命令证据、测试记录、来源和环境，数量与事实条数一致，不应合并成少数可变大文件。后续候选正文改为按 SHA-256 内容复用；模块测试、系统测试和系统验收均使用专用确定性入口，避免重复快照和模型重构历史参数。详见 [DESIGN-04](docs/design/04-plugin-artifact-quality-design.md)。

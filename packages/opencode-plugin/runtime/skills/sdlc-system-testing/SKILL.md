@@ -17,7 +17,7 @@ metadata:
 5. 所有测试、启动和检查通过 `sdlc_command_execute` 执行；应用就绪依据健康检查或进程信号，不通过固定 sleep 等待 OpenCode。
 6. 检查环境版本和实际接口地址，再运行已有的非浏览器检查和 Playwright 跨模块关键流程。Playwright 不替代单元测试，也不得现场生成全套测试。
 7. 如实结束运行并创建系统测试记录；使用 `sdlc_verification_report_generate` 从记录自动生成报告。
-8. 只有必须场景全部通过且证据完整时才能形成系统测试候选，候选只包含自动生成的系统测试报告。
+8. 只有必须场景全部通过且证据完整时，才能调用 `sdlc_system_test_candidate_create`。专用工具直接绑定当前系统运行、自动报告和通过记录，不得让模型重构版本清单和文件指纹。
 9. `sdlc_status` 已返回有效的系统测试版本且尚无系统验收版本时，直接调用 `sdlc_system_acceptance_candidate_create`，由工具复用已批准系统测试版本、报告和测试记录形成系统验收候选，然后等待用户审核。此阶段不得调用 `sdlc_test_reuse_find`、不得重构历史命令或指纹参数、不得重新执行测试。
 
 不得直接读取 `.sdlc-factory` 或 `.opencode`，不得扫描不属于当前项目的子目录。系统范围和参与版本只使用状态及最小上下文工具返回的事实。

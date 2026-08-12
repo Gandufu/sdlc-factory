@@ -2,9 +2,9 @@
 
 文档编号：DESIGN-02
 状态：正式方案，已实现并通过完整目标项目验收
-更新日期：2026-08-11
+更新日期：2026-08-13
 
-上位设计：[DESIGN-01《插件验证阶段总体设计》](./01-mvp0-opencode-plugin-design.md)
+上位设计：[DESIGN-01《OpenCode 生命周期插件总体设计》](./01-mvp0-opencode-plugin-design.md)
 
 ## 1. 目标
 

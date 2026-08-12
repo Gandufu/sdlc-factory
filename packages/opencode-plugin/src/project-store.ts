@@ -44,6 +44,20 @@ export class ProjectStore {
     }
   }
 
+  async ensureImmutableBytes(relativePath: string, value: Uint8Array): Promise<string> {
+    try {
+      return await this.writeImmutableBytes(relativePath, value);
+    } catch (error) {
+      if (!(error instanceof ImmutableRecordError)) throw error;
+      const target = this.resolveStatePath(relativePath);
+      const existing = await readFile(target);
+      if (!existing.equals(Buffer.from(value))) {
+        throw new ImmutableRecordError(`Immutable record content mismatch: ${target}`);
+      }
+      return target;
+    }
+  }
+
   async writeManifest(value: unknown): Promise<string> {
     return this.writeImmutableTarget(path.join(this.stateRoot, "manifest.json"), value);
   }

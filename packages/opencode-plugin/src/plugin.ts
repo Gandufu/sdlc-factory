@@ -234,7 +234,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           kind: tool.schema.enum([
             "PRODUCT_BRIEF", "REQUIREMENT_MAP", "MODULE_REQUIREMENT", "INTERFACE_REQUIREMENT",
             "QUALITY_REQUIREMENT", "PRODUCT_ARCHITECTURE", "MODULE_DESIGN", "INTERFACE_DESIGN",
-            "CODE", "MODULE_TEST", "SYSTEM_TEST", "SYSTEM_ACCEPTANCE",
+            "CODE",
           ]),
           scopeType: tool.schema.enum(["PROJECT", "MODULE", "INTERFACE", "QUALITY", "SYSTEM"]),
           scopeId: tool.schema.string().min(1),
@@ -337,6 +337,43 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
             changeSummary: candidate.changeSummary,
             proposedImpactScopeIds: candidate.proposedImpactScopeIds,
             createdAt: candidate.createdAt,
+          });
+        },
+      }),
+      sdlc_module_test_candidate_create: tool({
+        description: "Create a module-test candidate directly from one passing immutable test record without copying test source files.",
+        args: { testRecordId: tool.schema.string().min(1) },
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-test"]);
+          const candidate = await new CandidateService(store(), directory, runtime)
+            .createModuleTest(args.testRecordId, context.sessionID);
+          const command = `/sdlc-review ${candidate.scope.name}`;
+          return JSON.stringify({
+            ...candidate,
+            recommendedAction: {
+              action: "REVIEW",
+              command,
+              todo: `执行 ${command}`,
+              reason: "模块测试候选已经固定，等待用户直接审核",
+            },
+          });
+        },
+      }),
+      sdlc_system_test_candidate_create: tool({
+        description: "Create a system-test candidate from the current generated report and one passing immutable system test record.",
+        args: { testRecordId: tool.schema.string().min(1) },
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-test"]);
+          const candidate = await new CandidateService(store(), directory, runtime)
+            .createSystemTest(args.testRecordId, context.sessionID);
+          return JSON.stringify({
+            ...candidate,
+            recommendedAction: {
+              action: "REVIEW",
+              command: "/sdlc-review",
+              todo: "执行 /sdlc-review",
+              reason: "系统测试候选已经固定，等待用户直接审核",
+            },
           });
         },
       }),

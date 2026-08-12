@@ -26,6 +26,21 @@ describe("ProjectStore.writeImmutable", () => {
       readFile(path.join(workspace, ".sdlc-factory", "candidates", "candidate-1.json"), "utf8"),
     ).resolves.toContain('"value": "first"');
   });
+
+  it("按内容地址复用完全相同的不可变字节", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-store-"));
+    temporaryDirectories.push(workspace);
+    const store = new ProjectStore(workspace);
+    const relativePath = "objects/sha256/ab/abcdef";
+
+    const first = await store.ensureImmutableBytes(relativePath, Buffer.from("same", "utf8"));
+    const second = await store.ensureImmutableBytes(relativePath, Buffer.from("same", "utf8"));
+
+    expect(second).toBe(first);
+    await expect(readFile(first, "utf8")).resolves.toBe("same");
+    await expect(store.ensureImmutableBytes(relativePath, Buffer.from("different", "utf8")))
+      .rejects.toThrow("content mismatch");
+  });
 });
 
 describe("ProjectStore journal", () => {

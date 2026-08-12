@@ -1,4 +1,5 @@
 import { access } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -28,5 +29,19 @@ describe("OpenCode 运行资源", () => {
     for (const name of ["sdlc-overall-design", "sdlc-cu-coding", "sdlc-cu-testing"]) {
       await expect(access(path.join(root, name, "SKILL.md"))).rejects.toThrow();
     }
+  });
+
+  it("提供不经过模型的只读状态入口", () => {
+    const root = path.resolve(import.meta.dirname, "..", "runtime");
+    const result = spawnSync(process.execPath, [path.join(root, "bin", "sdlc-status.mjs"), "--target", root], {
+      encoding: "utf8",
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      initialized: false,
+      recommendedAction: { command: "/sdlc-init" },
+    });
   });
 });

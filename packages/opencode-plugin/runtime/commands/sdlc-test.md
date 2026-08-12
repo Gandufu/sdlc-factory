@@ -12,4 +12,6 @@ description: 执行业务模块测试或系统集成测试并形成真实记录
 
 所有命令必须通过 `sdlc_command_execute` 运行并自动记录退出码、耗时、输出哈希和证据。不得使用固定 sleep 轮询 OpenCode；命令完成以进程退出和结构化结果为准。失败、跳过和阻塞不得描述为通过。
 
+模块测试通过后使用 `sdlc_module_test_candidate_create`；系统测试报告生成后使用 `sdlc_system_test_candidate_create`。两者只接收测试记录编号，由工具恢复运行和版本事实，不得再让模型传入测试源文件、Git 基点或完整版本清单。
+
 若 `sdlc_status.recommendedAction.action` 为 `SYSTEM_ACCEPTANCE`，不得再启动运行、查找复用记录或读取测试正文；直接调用 `sdlc_system_acceptance_candidate_create` 形成验收候选。

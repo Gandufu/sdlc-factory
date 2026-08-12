@@ -51,14 +51,76 @@ export class CandidateService {
   ) {}
 
   async create(input: CreateCandidateInput): Promise<Candidate> {
-    return this.createInternal(input, false, false);
+    return this.createInternal(input, { entry: "GENERAL" });
   }
 
   async createFromSetService(input: CreateCandidateInput): Promise<Candidate> {
     if (!["REQUIREMENT_SET", "DESIGN_SET"].includes(input.kind)) {
       throw new Error("集合专用入口只允许创建 REQUIREMENT_SET 或 DESIGN_SET");
     }
-    return this.createInternal(input, true, false);
+    return this.createInternal(input, { entry: "SET" });
+  }
+
+  async createModuleTest(testRecordId: string, createdBySessionId: string): Promise<Candidate> {
+    const record = await this.store.readJson<TestRecord>("test-runs", testRecordId);
+    if (record.scope.type !== "MODULE") throw new Error("模块测试候选只能引用业务模块测试记录");
+    const run = await this.store.readJson<RunRecord>("runs", record.runId);
+    if (run.commandType !== "MODULE_TEST") {
+      throw new Error("模块测试记录不属于模块测试运行");
+    }
+    const versions = await this.store.listJson<ApprovedVersion>("approved-versions");
+    const current = currentVersion(versions, "MODULE_TEST", record.scope.id);
+    return this.createInternal({
+      kind: "MODULE_TEST",
+      scope: record.scope,
+      subjectPaths: [],
+      ...(current ? { parentVersionId: current.versionId } : {}),
+      inputVersionIds: run.inputVersionIds,
+      sourceIds: [],
+      testRecordIds: [testRecordId],
+      changeType: "BEHAVIOR",
+      changeSummary: "依据当前模块测试运行及其通过记录形成模块测试候选；测试代码由已批准代码版本固定。",
+      proposedImpactScopeIds: [],
+      provenance: {
+        runId: run.runId,
+        gitBase: run.gitBase,
+        inputVersionIds: run.inputVersionIds,
+        testRecordIds: [testRecordId],
+      },
+      createdBySessionId,
+    }, { entry: "MODULE_TEST" });
+  }
+
+  async createSystemTest(testRecordId: string, createdBySessionId: string): Promise<Candidate> {
+    const record = await this.store.readJson<TestRecord>("test-runs", testRecordId);
+    if (record.scope.type !== "SYSTEM" || record.scope.id !== "system") {
+      throw new Error("系统测试候选只能引用系统测试记录");
+    }
+    const run = await this.store.readJson<RunRecord>("runs", record.runId);
+    if (run.commandType !== "SYSTEM_TEST") {
+      throw new Error("系统测试记录不属于系统测试运行");
+    }
+    const versions = await this.store.listJson<ApprovedVersion>("approved-versions");
+    const current = currentVersion(versions, "SYSTEM_TEST", "system");
+    return this.createInternal({
+      kind: "SYSTEM_TEST",
+      scope: { type: "SYSTEM", id: "system", name: "系统" },
+      subjectPaths: ["docs/verification/verification-report.md"],
+      ...(current ? { parentVersionId: current.versionId } : {}),
+      inputVersionIds: run.inputVersionIds,
+      sourceIds: [],
+      testRecordIds: [testRecordId],
+      changeType: "BEHAVIOR",
+      changeSummary: "依据当前系统测试运行、自动报告及其通过记录形成系统测试候选。",
+      proposedImpactScopeIds: [],
+      provenance: {
+        runId: run.runId,
+        gitBase: run.gitBase,
+        inputVersionIds: run.inputVersionIds,
+        testRecordIds: [testRecordId],
+      },
+      createdBySessionId,
+    }, { entry: "SYSTEM_TEST" });
   }
 
   async createSystemAcceptance(createdBySessionId: string): Promise<Candidate> {
@@ -78,13 +140,12 @@ export class CandidateService {
       changeSummary: "依据当前已批准系统测试版本及其测试记录形成系统验收候选；未重新执行测试。",
       proposedImpactScopeIds: [],
       createdBySessionId,
-    }, false, true);
+    }, { entry: "SYSTEM_ACCEPTANCE" });
   }
 
   private async createInternal(
     input: CreateCandidateInput,
-    createdBySetService: boolean,
-    createdBySystemAcceptanceService: boolean,
+    options: { entry: "GENERAL" | "SET" | "MODULE_TEST" | "SYSTEM_TEST" | "SYSTEM_ACCEPTANCE" },
   ): Promise<Candidate> {
     validateIdentityAndScope(input.kind, input.scope);
     if (!input.changeSummary.trim()) throw new Error("候选必须包含修订摘要");
@@ -100,8 +161,7 @@ export class CandidateService {
       input,
       approvedVersions,
       normalizedPaths,
-      createdBySetService,
-      createdBySystemAcceptanceService,
+      options.entry,
     );
     const current = currentVersion(approvedVersions, input.kind, input.scope.id);
     if (current?.versionId !== input.parentVersionId) {
@@ -113,17 +173,16 @@ export class CandidateService {
     const candidateId = this.runtime.id();
     const textByPath = new Map<string, string>();
     const subjects = [];
-    for (let index = 0; index < normalizedPaths.length; index += 1) {
-      const subjectPath = normalizedPaths[index]!;
+    for (const subjectPath of normalizedPaths) {
       const resolved = await resolveWorkspacePath(this.workspaceRoot, subjectPath);
       const bytes = await readFile(resolved);
-      const snapshotName = `${String(index + 1).padStart(4, "0")}.snapshot`;
-      const absoluteSnapshotPath = await this.store.writeImmutableBytes(
-        path.join("revisions", candidateId, snapshotName),
+      const subjectHash = sha256(bytes);
+      const absoluteSnapshotPath = await this.store.ensureImmutableBytes(
+        path.join("objects", "sha256", subjectHash.slice(0, 2), subjectHash),
         bytes,
       );
       const snapshotPath = toWorkspaceRelativePath(this.workspaceRoot, absoluteSnapshotPath);
-      subjects.push({ path: subjectPath, sha256: sha256(bytes), size: bytes.byteLength, snapshotPath });
+      subjects.push({ path: subjectPath, sha256: subjectHash, size: bytes.byteLength, snapshotPath });
       if (DOCUMENT_EXTENSIONS.has(path.extname(subjectPath).toLowerCase())) {
         textByPath.set(subjectPath, bytes.toString("utf8"));
       }
@@ -195,6 +254,9 @@ export class CandidateService {
       if (!sameSet(input.provenance.inputVersionIds, input.inputVersionIds)) {
         throw new Error("候选输入版本与运行来源输入版本不一致");
       }
+      if (!sameSet(input.provenance.testRecordIds, input.testRecordIds)) {
+        throw new Error("候选测试记录与运行来源测试记录不一致");
+      }
       await this.store.readJson("runs", input.provenance.runId);
     }
   }
@@ -237,8 +299,7 @@ export class CandidateService {
     input: CreateCandidateInput,
     versions: ApprovedVersion[],
     subjectPaths: string[],
-    createdBySetService: boolean,
-    createdBySystemAcceptanceService: boolean,
+    entry: "GENERAL" | "SET" | "MODULE_TEST" | "SYSTEM_TEST" | "SYSTEM_ACCEPTANCE",
   ): Promise<void> {
     const mapVersion = currentVersion(versions, "REQUIREMENT_MAP", "project");
     const requirementSet = currentVersion(versions, "REQUIREMENT_SET", "project");
@@ -279,6 +340,12 @@ export class CandidateService {
         await this.validateSuccessfulRunAndPaths(input, subjectPaths);
         break;
       case "MODULE_TEST":
+        if (entry !== "MODULE_TEST") {
+          throw new Error("MODULE_TEST 必须通过 sdlc_module_test_candidate_create 生成");
+        }
+        if (subjectPaths.length !== 0) {
+          throw new Error("模块测试候选只引用测试记录，不重复快照测试代码");
+        }
         requireInputs([
           designSet,
           currentVersion(versions, "MODULE_DESIGN", input.scope.id),
@@ -291,6 +358,9 @@ export class CandidateService {
         await this.requirePassingTestRecord(input);
         break;
       case "SYSTEM_TEST":
+        if (entry !== "SYSTEM_TEST") {
+          throw new Error("SYSTEM_TEST 必须通过 sdlc_system_test_candidate_create 生成");
+        }
         if (!sameSet(subjectPaths, ["docs/verification/verification-report.md"])) {
           throw new Error("系统测试候选只能包含自动生成的系统测试报告");
         }
@@ -306,7 +376,7 @@ export class CandidateService {
         break;
       case "SYSTEM_ACCEPTANCE":
         {
-          if (!createdBySystemAcceptanceService) {
+          if (entry !== "SYSTEM_ACCEPTANCE") {
             throw new Error("SYSTEM_ACCEPTANCE 必须通过 sdlc_system_acceptance_candidate_create 生成");
           }
           const systemTest = currentVersion(versions, "SYSTEM_TEST", "system");
@@ -322,7 +392,7 @@ export class CandidateService {
         break;
       case "REQUIREMENT_SET":
       case "DESIGN_SET":
-        if (!createdBySetService) {
+        if (entry !== "SET") {
           throw new Error(`${input.kind} 必须通过 sdlc_set_candidate_create 生成`);
         }
         break;
@@ -361,7 +431,9 @@ export class CandidateService {
     if (input.testRecordIds.length === 0) throw new Error(`${input.kind} 候选必须引用测试记录`);
     for (const testRecordId of input.testRecordIds) {
       const record = await this.store.readJson<TestRecord>("test-runs", testRecordId);
-      if (record.outcome !== "PASSED" || record.runId !== input.provenance!.runId) {
+      if (record.outcome !== "PASSED"
+        || record.runId !== input.provenance!.runId
+        || !sameSet(record.inputVersionIds, input.inputVersionIds)) {
         throw new Error(`测试记录未通过或不属于当前运行: ${testRecordId}`);
       }
     }
