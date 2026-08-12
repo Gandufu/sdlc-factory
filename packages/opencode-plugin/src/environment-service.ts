@@ -1,4 +1,4 @@
-import type { EnvironmentVersion } from "./domain.js";
+import type { EnvironmentVersion, TestRecord } from "./domain.js";
 import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
 
@@ -11,6 +11,34 @@ type EnvironmentInput = Omit<EnvironmentVersion,
   parentVersionId?: string;
 };
 type RuntimeValues = { now(): string };
+
+export type EffectiveEnvironmentProfile = "SIMULATION" | "REAL" | "UNSPECIFIED";
+
+export function effectiveEnvironmentProfile(environment: EnvironmentVersion): EffectiveEnvironmentProfile {
+  if (environment.profile) return environment.profile;
+  return /(?:模拟|mock|不代表真实|保留测试|invalid\.test)/iu.test(environment.purpose)
+    ? "SIMULATION"
+    : "UNSPECIFIED";
+}
+
+export function isRealAcceptanceEnvironment(environment: EnvironmentVersion): boolean {
+  return effectiveEnvironmentProfile(environment) === "REAL"
+    && Boolean(environment.applicationUrl)
+    && !/(?:模拟|mock|不代表真实|保留测试|invalid\.test)/iu.test(environment.purpose);
+}
+
+export async function assertRealAcceptanceRecords(store: ProjectStore, testRecordIds: string[]): Promise<void> {
+  for (const testRecordId of testRecordIds) {
+    const record = await store.readJson<TestRecord>("test-runs", testRecordId);
+    if (!record.environmentVersionId) {
+      throw new Error(`正式系统验收必须绑定明确的真实环境版本: ${testRecordId}`);
+    }
+    const environment = await store.readJson<EnvironmentVersion>("environments", record.environmentVersionId);
+    if (!isRealAcceptanceEnvironment(environment)) {
+      throw new Error(`模拟或未分类环境只能形成系统测试，不能形成正式系统验收: ${environment.environmentVersionId}`);
+    }
+  }
+}
 
 export class EnvironmentService {
   constructor(private readonly store: ProjectStore, private readonly runtime: RuntimeValues) {}
@@ -44,6 +72,9 @@ export class EnvironmentService {
       environmentId: input.environmentId,
       name: input.name.trim(),
       purpose: input.purpose.trim(),
+      profile: input.profile ?? (/\bmock\b|模拟|不代表真实|保留测试|invalid\.test/iu.test(input.purpose)
+        ? "SIMULATION" as const
+        : "UNSPECIFIED" as const),
       ...(input.parentVersionId ? { parentVersionId: input.parentVersionId } : {}),
       ...(input.applicationUrl ? { applicationUrl: input.applicationUrl } : {}),
       ...(input.readinessUrl ? { readinessUrl: input.readinessUrl } : {}),

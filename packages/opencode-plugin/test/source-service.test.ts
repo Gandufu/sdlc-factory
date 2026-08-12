@@ -36,8 +36,30 @@ describe("SourceService", () => {
     const snapshot = await service.snapshot("source-1", sourceFile);
 
     expect(snapshot.sha256).toBe("8e4621379786ef42a4fec155cd525c291dd7db3c1fde3478522f4f61c03fd1bd");
-    expect(path.isAbsolute(snapshot.snapshotPath)).toBe(false);
-    await expect(readFile(path.join(workspace, snapshot.snapshotPath))).resolves.toEqual(Buffer.from([0x61, 0x0d, 0x0a]));
+    expect(path.isAbsolute(snapshot.snapshotPath!)).toBe(false);
+    await expect(readFile(path.join(workspace, snapshot.snapshotPath!))).resolves.toEqual(Buffer.from([0x61, 0x0d, 0x0a]));
     await expect(readFile(sourceFile)).resolves.toEqual(Buffer.from([0x61, 0x0d, 0x0a]));
+  });
+
+  it("lists and snapshots an authorized asset directory as one source fact", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-source-workspace-"));
+    const allowed = await mkdtemp(path.join(tmpdir(), "sdlc-source-allowed-"));
+    temporaryDirectories.push(workspace, allowed);
+    await mkdir(path.join(allowed, "prototype", "assets"), { recursive: true });
+    await writeFile(path.join(allowed, "prototype", "index.html"), "<main>原型</main>\n", "utf8");
+    await writeFile(path.join(allowed, "prototype", "assets", "icon.png"), Buffer.from([0x00, 0x01, 0x02]));
+    const service = new SourceService(new ProjectStore(workspace), workspace, [allowed]);
+
+    const listing = await service.list(0, "prototype", true, 20);
+    const snapshot = await service.snapshot("source-prototype", path.join(allowed, "prototype"));
+
+    expect(listing.entries.map((entry) => entry.path)).toEqual([
+      "prototype/assets",
+      "prototype/assets/icon.png",
+      "prototype/index.html",
+    ]);
+    expect(snapshot).toMatchObject({ kind: "DIRECTORY", sourceId: "source-prototype" });
+    expect(snapshot.entries?.map((entry) => entry.path)).toEqual(["assets/icon.png", "index.html"]);
+    expect(snapshot.entries?.every((entry) => !path.isAbsolute(entry.snapshotPath))).toBe(true);
   });
 });

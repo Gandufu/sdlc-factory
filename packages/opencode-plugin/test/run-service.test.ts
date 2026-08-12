@@ -30,16 +30,21 @@ async function startCoding(store: ProjectStore) {
   });
 }
 
-async function writeEvidence(store: ProjectStore, exitCode: number): Promise<void> {
+async function writeEvidence(
+  store: ProjectStore,
+  exitCode: number,
+  evidenceId = "evidence-1",
+  startedAt = "2026-08-11T05:00:00.000Z",
+): Promise<void> {
   const evidence: CommandEvidence = {
-    evidenceId: "evidence-1",
+    evidenceId,
     runId: "run-1",
     executable: "node",
     arguments: ["--version"],
     workingDirectory: ".",
     exitCode,
     timedOut: false,
-    startedAt: "2026-08-11T05:00:00.000Z",
+    startedAt,
     finishedAt: "2026-08-11T05:00:01.000Z",
     durationMs: 1000,
     stdoutPath: "evidence/run-1/out.log",
@@ -70,6 +75,25 @@ describe("RunService", () => {
 
     await expect(service(store).finish("run-1", "SUCCEEDED"))
       .rejects.toBeInstanceOf(InvalidRunOutcomeError);
+  });
+
+  it("同一命令修复后原样重试成功可以收口且保留历史失败证据", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-run-"));
+    temporaryDirectories.push(workspace);
+    const store = new ProjectStore(workspace);
+    await startCoding(store);
+    await service(store).recordTodoInvocation("session-1");
+    await service(store).captureTodo("session-1", Array.from({ length: 5 }, (_, index) => ({
+      id: `todo-${index}`,
+      content: `步骤 ${index}`,
+      status: "completed",
+      priority: "high",
+    })));
+    await writeEvidence(store, 1, "evidence-failed", "2026-08-11T05:00:00.000Z");
+    await writeEvidence(store, 0, "evidence-passed", "2026-08-11T05:01:00.000Z");
+
+    await expect(service(store).finish("run-1", "SUCCEEDED")).resolves.toMatchObject({ state: "SUCCEEDED" });
+    await expect(store.listJson<CommandEvidence>("command-evidence")).resolves.toHaveLength(2);
   });
 
   it("成功编码要求真实命令证据和至少五项全部完成的待办", async () => {

@@ -24,6 +24,7 @@ describe("EnvironmentService", () => {
       environmentId: "test",
       name: "测试环境",
       purpose: "模块与系统测试",
+      profile: "REAL",
       applicationUrl: "https://test.example.com",
       readinessUrl: "https://test.example.com/health",
       externalInterfaces: [{ interfaceId: "interface-identity", address: "https://identity.example.com/api" }],
@@ -35,12 +36,14 @@ describe("EnvironmentService", () => {
     expect(environment).toMatchObject({
       environmentVersionId: "environment-test-r1",
       revision: 1,
+      profile: "REAL",
       contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
     });
     await expect(service.register({
       environmentId: "unsafe",
       name: "不安全环境",
       purpose: "拒绝",
+      profile: "REAL",
       applicationUrl: "https://user:password@example.com",
       externalInterfaces: [],
       dependencies: [],

@@ -3,11 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CandidateService } from "../src/candidate-service.js";
+import { CandidateService, isWithinApprovedPath, revisionSubjectPaths } from "../src/candidate-service.js";
 import { ArtifactValidationError } from "../src/artifact-validator.js";
 import { sha256 } from "../src/hash.js";
 import { ProjectStore } from "../src/project-store.js";
-import type { RunRecord, TestRecord } from "../src/domain.js";
+import type { EnvironmentVersion, RunRecord, TestRecord } from "../src/domain.js";
 import { approvedVersion, requirementMapFacts, writeVersions } from "./fixtures.js";
 
 const temporaryDirectories: string[] = [];
@@ -21,6 +21,25 @@ function runtime(id: string) {
 }
 
 describe("CandidateService", () => {
+  it("用设计 glob 匹配代码候选中的具体文件", () => {
+    expect(isWithinApprovedPath("assets/app.js", "assets/**")).toBe(true);
+    expect(isWithinApprovedPath("src/renderer/App.tsx", "src/renderer/**")).toBe(true);
+    expect(isWithinApprovedPath("tests/App.test.tsx", "tests/**/*.test.tsx")).toBe(true);
+    expect(isWithinApprovedPath("tests/nested/App.test.tsx", "tests/**/*.test.tsx")).toBe(true);
+    expect(isWithinApprovedPath("src/main/main.ts", "src/renderer/**")).toBe(false);
+    expect(isWithinApprovedPath("tests/App.test.ts", "tests/**/*.test.tsx")).toBe(false);
+  });
+
+  it("代码修订把本次改动与父版本文件合并为完整快照路径", () => {
+    const current = approvedVersion({
+      kind: "CODE",
+      scope: { type: "MODULE", id: "device", name: "设备" },
+    });
+    current.subjectPaths = ["src/device.ts", "tests/device.test.ts"];
+    expect(revisionSubjectPaths("CODE", current, ["tests/system-playwright.ts"]))
+      .toEqual(["src/device.ts", "tests/device.test.ts", "tests/system-playwright.ts"]);
+  });
+
   it("按规范化顺序绑定工作区字节并保存不可变快照", async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-candidate-"));
     temporaryDirectories.push(workspace);
@@ -292,13 +311,33 @@ describe("CandidateService", () => {
       snapshotPath: ".sdlc-factory/revisions/system-test/0001.snapshot",
     }];
     await writeVersions(store, [systemTest]);
+    const environment: EnvironmentVersion = {
+      environmentVersionId: "environment-real-r1",
+      environmentId: "real",
+      name: "真实验收环境",
+      purpose: "连接真实应用和真实外部接口进行系统验收",
+      profile: "REAL",
+      revision: 1,
+      applicationUrl: "https://app.example.test",
+      readinessUrl: "https://app.example.test/health",
+      externalInterfaces: [],
+      dependencies: [],
+      credentialReferences: [],
+      effectiveFrom: "2026-08-11T05:00:00.000Z",
+      contentHash: "e".repeat(64),
+      createdBySessionId: "session-environment",
+      createdAt: "2026-08-11T05:00:00.000Z",
+    };
+    await store.writeImmutable("environments", environment.environmentVersionId, environment);
     const record: TestRecord = {
       testRecordId: "test-record-system",
       scope: { type: "SYSTEM", id: "system", name: "系统" },
       runId: "run-system-test",
       outcome: "PASSED",
       inputVersionIds: [],
-      resolvedAddresses: [],
+      environmentVersionId: environment.environmentVersionId,
+      environmentHash: environment.contentHash,
+      resolvedAddresses: [environment.applicationUrl!],
       commandEvidenceIds: ["evidence-system-test"],
       passedCommands: 1,
       failedCommands: 0,
@@ -338,5 +377,70 @@ describe("CandidateService", () => {
     await writeFile(path.join(workspace, "docs", "verification", "verification-report.md"), "# 已修改\n", "utf8");
     await expect(service.createSystemAcceptance("session-acceptance"))
       .rejects.toThrow("当前系统测试报告与已批准版本不一致");
+  });
+
+  it("模拟系统测试不能形成正式系统验收候选", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-candidate-"));
+    temporaryDirectories.push(workspace);
+    await mkdir(path.join(workspace, "docs", "verification"), { recursive: true });
+    const reportBytes = Buffer.from("# 系统测试报告\n", "utf8");
+    await writeFile(path.join(workspace, "docs", "verification", "verification-report.md"), reportBytes);
+    const store = new ProjectStore(workspace);
+    const systemTest = approvedVersion({
+      kind: "SYSTEM_TEST",
+      scope: { type: "SYSTEM", id: "system", name: "系统" },
+      testRecordIds: ["test-record-simulation"],
+    });
+    systemTest.subjectPaths = ["docs/verification/verification-report.md"];
+    systemTest.subjects = [{
+      path: "docs/verification/verification-report.md",
+      sha256: sha256(reportBytes),
+      size: reportBytes.byteLength,
+      snapshotPath: ".sdlc-factory/objects/report",
+    }];
+    await writeVersions(store, [systemTest]);
+    const environment: EnvironmentVersion = {
+      environmentVersionId: "environment-simulation-r1",
+      environmentId: "simulation",
+      name: "模拟环境",
+      purpose: "仅做模拟，不代表真实设备验收",
+      profile: "SIMULATION",
+      revision: 1,
+      applicationUrl: "app://bundle/index.html",
+      readinessUrl: "app://bundle/index.html",
+      externalInterfaces: [{ interfaceId: "device", address: "https://192.0.2.10" }],
+      dependencies: [],
+      credentialReferences: [],
+      effectiveFrom: "2026-08-11T05:00:00.000Z",
+      contentHash: "e".repeat(64),
+      createdBySessionId: "session-environment",
+      createdAt: "2026-08-11T05:00:00.000Z",
+    };
+    await store.writeImmutable("environments", environment.environmentVersionId, environment);
+    await store.writeImmutable("test-runs", "test-record-simulation", {
+      testRecordId: "test-record-simulation",
+      scope: { type: "SYSTEM", id: "system", name: "系统" },
+      runId: "run-simulation",
+      outcome: "PASSED",
+      inputVersionIds: [],
+      environmentVersionId: environment.environmentVersionId,
+      environmentHash: environment.contentHash,
+      resolvedAddresses: [environment.applicationUrl!, environment.externalInterfaces[0]!.address],
+      commandEvidenceIds: ["evidence-simulation"],
+      passedCommands: 1,
+      failedCommands: 0,
+      skippedCommands: 0,
+      blockedCommands: 0,
+      assertionCountsAvailable: false,
+      evidencePaths: [],
+      fingerprint: "f".repeat(64),
+      startedAt: "2026-08-11T05:00:00.000Z",
+      finishedAt: "2026-08-11T05:00:01.000Z",
+      createdAt: "2026-08-11T05:00:01.000Z",
+    } satisfies TestRecord);
+
+    await expect(new CandidateService(store, workspace, runtime("candidate-simulation"))
+      .createSystemAcceptance("session-acceptance"))
+      .rejects.toThrow("模拟或未分类环境只能形成系统测试");
   });
 });

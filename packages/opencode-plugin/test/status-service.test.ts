@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { ApprovedVersion, RequirementMapFacts, TestRecord } from "../src/domain.js";
+import type { ApprovedVersion, EnvironmentVersion, RequirementMapFacts, TestRecord } from "../src/domain.js";
 import { sha256 } from "../src/hash.js";
 import { ProjectStore } from "../src/project-store.js";
 import { StatusService } from "../src/status-service.js";
@@ -242,16 +242,71 @@ describe("StatusService", () => {
       createdAt: "2026-08-11T05:00:01.000Z",
     });
     await store.writeImmutable("test-runs", moduleRecordId, record(moduleRecordId, requirement.scope, moduleTest.inputVersionIds));
-    await store.writeImmutable("test-runs", systemRecordId, record(systemRecordId, systemTest.scope, systemTest.inputVersionIds));
+    const realEnvironment: EnvironmentVersion = {
+      environmentVersionId: "environment-real-r1",
+      environmentId: "real",
+      name: "真实环境",
+      purpose: "真实系统测试",
+      profile: "REAL",
+      revision: 1,
+      applicationUrl: "https://app.example.test",
+      externalInterfaces: [],
+      dependencies: [],
+      credentialReferences: [],
+      effectiveFrom: "2026-08-11T05:00:00.000Z",
+      contentHash: "e".repeat(64),
+      createdBySessionId: "session-environment",
+      createdAt: "2026-08-11T05:00:00.000Z",
+    };
+    await store.writeImmutable("environments", realEnvironment.environmentVersionId, realEnvironment);
+    const systemRecord = record(systemRecordId, systemTest.scope, systemTest.inputVersionIds);
+    systemRecord.environmentVersionId = realEnvironment.environmentVersionId;
+    systemRecord.environmentHash = realEnvironment.contentHash;
+    systemRecord.resolvedAddresses = [realEnvironment.applicationUrl!];
+    await store.writeImmutable("test-runs", systemRecordId, systemRecord);
 
     const status = await new StatusService(store).read();
 
     expect(status.systemTestVersionId).toBe(systemTest.versionId);
     expect(status.systemTestRecordIds).toEqual([systemRecordId]);
+    expect(status.systemTestProfile).toBe("REAL");
     expect(status.modules).toEqual([
       expect.objectContaining({ stage: "SYSTEM_TEST", state: "COMPLETED", systemTestResult: "PASSED" }),
     ]);
     expect(status.recommendedAction).toMatchObject({ action: "SYSTEM_ACCEPTANCE", command: "/sdlc-test system" });
+
+    const simulationRecordId = "test-record-system-simulation";
+    const simulationTest = approvedVersion({
+      kind: "SYSTEM_TEST",
+      scope: systemTest.scope,
+      revision: 2,
+      inputVersionIds: systemTest.inputVersionIds,
+      testRecordIds: [simulationRecordId],
+    });
+    const simulationEnvironment: EnvironmentVersion = {
+      ...realEnvironment,
+      environmentVersionId: "environment-simulation-r1",
+      environmentId: "simulation",
+      name: "模拟环境",
+      purpose: "本地模拟，不代表真实设备验收",
+      profile: "SIMULATION",
+      applicationUrl: "app://bundle/index.html",
+      contentHash: "s".repeat(64),
+    };
+    await writeVersions(store, [simulationTest]);
+    await store.writeImmutable("environments", simulationEnvironment.environmentVersionId, simulationEnvironment);
+    const simulationRecord = record(simulationRecordId, simulationTest.scope, simulationTest.inputVersionIds);
+    simulationRecord.environmentVersionId = simulationEnvironment.environmentVersionId;
+    simulationRecord.environmentHash = simulationEnvironment.contentHash;
+    simulationRecord.resolvedAddresses = [simulationEnvironment.applicationUrl!];
+    await store.writeImmutable("test-runs", simulationRecordId, simulationRecord);
+
+    const simulated = await new StatusService(store).read();
+    expect(simulated.systemTestVersionId).toBe(simulationTest.versionId);
+    expect(simulated.systemTestProfile).toBe("SIMULATION");
+    expect(simulated.systemAcceptanceVersionId).toBeUndefined();
+    expect(simulated.lifecyclePhase).toBe("本地模拟闭环已验证");
+    expect(simulated.recommendedAction).toMatchObject({ action: "REAL_SYSTEM_TEST", command: "/sdlc-test system" });
 
     await writeFile(path.join(workspace, sourcePath), "export const value = 2;\n", "utf8");
     const drifted = await new StatusService(store).read();

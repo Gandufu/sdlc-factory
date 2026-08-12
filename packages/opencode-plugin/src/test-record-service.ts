@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 import type {
+  ApprovedVersion,
   ArtifactScope,
   CommandEvidence,
   EnvironmentVersion,
@@ -8,12 +9,14 @@ import type {
   RunRecord,
   TestRecord,
 } from "./domain.js";
+import { safeCommandArguments } from "./command-safety.js";
 import { writeLifecycleDocument } from "./document-service.js";
+import { effectiveEnvironmentProfile } from "./environment-service.js";
 import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
 import { RunService } from "./run-service.js";
 import { resolveWorkspacePath } from "./workspace-path.js";
-import { mandatoryFingerprintPaths } from "./version-integrity.js";
+import { existingFilesWithinApprovedPaths, mandatoryFingerprintPaths } from "./version-integrity.js";
 
 type RuntimeValues = { id(): string; now(): string };
 
@@ -51,7 +54,13 @@ export class TestRecordService {
       this.store,
       this.workspaceRoot,
       run.inputVersionIds,
-      input.fingerprintPaths,
+      [
+        ...await existingFilesWithinApprovedPaths(
+          this.workspaceRoot,
+          [...run.allowedProductPaths, ...run.allowedTestPaths],
+        ),
+        ...input.fingerprintPaths,
+      ],
     ));
     const evidenceFiles = await hashPaths(this.workspaceRoot, input.evidencePaths);
     const fingerprintInput = {
@@ -143,44 +152,107 @@ export class VerificationReportService {
     if (testRecordIds.length === 0 || new Set(testRecordIds).size !== testRecordIds.length) {
       throw new Error("测试报告必须引用至少一条且不重复的测试记录");
     }
-    const records = await Promise.all(testRecordIds.map((id) => this.store.readJson<TestRecord>("test-runs", id)));
+    const [records, allRecords, environments, evidence, versions] = await Promise.all([
+      Promise.all(testRecordIds.map((id) => this.store.readJson<TestRecord>("test-runs", id))),
+      this.store.listJson<TestRecord>("test-runs"),
+      this.store.listJson<EnvironmentVersion>("environments"),
+      this.store.listJson<CommandEvidence>("command-evidence"),
+      this.store.listJson<ApprovedVersion>("approved-versions"),
+    ]);
     const outcome = records.every((record) => record.outcome === "PASSED") ? "PASSED" : "NOT_PASSED";
+    const environmentById = new Map(environments.map((environment) => [environment.environmentVersionId, environment]));
+    const evidenceById = new Map(evidence.map((item) => [item.evidenceId, item]));
+    const profiles = records.map((record) => {
+      const environment = record.environmentVersionId
+        ? environmentById.get(record.environmentVersionId)
+        : undefined;
+      return environment ? effectiveEnvironmentProfile(environment) : "UNSPECIFIED" as const;
+    });
+    const profile = profiles.some((item) => item === "SIMULATION")
+      ? "SIMULATION"
+      : profiles.length > 0 && profiles.every((item) => item === "REAL") ? "REAL" : "UNSPECIFIED";
+    const selectedIds = new Set(testRecordIds);
+    const historical = allRecords
+      .filter((record) => record.scope.type === "SYSTEM" && !selectedIds.has(record.testRecordId))
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    const reusedModuleRecords = versions
+      .filter((version) => records.some((record) => record.inputVersionIds.includes(version.versionId))
+        && version.kind === "MODULE_TEST")
+      .flatMap((version) => version.testRecordIds)
+      .map((id) => allRecords.find((record) => record.testRecordId === id))
+      .filter((record): record is TestRecord => Boolean(record));
     const lines = [
       "# 系统测试报告",
       "",
       "## 报告结论",
       "",
-      outcome === "PASSED" ? "本报告引用的测试记录全部通过。" : "本报告存在失败、跳过或阻塞记录，不能作为通过结论。",
+      outcome !== "PASSED"
+        ? "本报告存在失败、跳过或阻塞记录，不能作为通过结论。"
+        : profile === "REAL"
+          ? "本报告引用的测试记录在明确登记的真实环境中全部通过，可进入正式系统验收审核。"
+          : profile === "SIMULATION"
+            ? "本报告引用的测试记录在模拟环境中全部通过；仅证明本地插件闭环和跨模块模拟行为，不代表真实设备、真实 TLS、真实凭据或真实外部接口验收。"
+            : "本报告引用的测试记录全部通过，但环境未明确分类为真实环境，不能进入正式系统验收。",
+      `- 环境级别：${profileLabel(profile)}`,
+      `- 正式验收资格：${outcome === "PASSED" && profile === "REAL" ? "具备" : "不具备"}`,
       "",
       "## 输入版本",
       "",
       ...[...new Set(records.flatMap((record) => record.inputVersionIds))].sort().map((id) => `- ${id}`),
       "",
-      "## 环境与实际接口地址",
+      "## 环境与声明地址",
       "",
       ...reportList(records.flatMap((record) => record.resolvedAddresses)),
+      "",
+      "以上地址来自不可变环境版本；是否真正建立网络连接必须以受控命令和测试实现证据为准。",
       "",
       "## 测试记录",
       "",
     ];
     for (const record of records) {
+      const environment = record.environmentVersionId ? environmentById.get(record.environmentVersionId) : undefined;
+      const commands = record.commandEvidenceIds.map((id) => evidenceById.get(id)).filter((item): item is CommandEvidence => Boolean(item));
       lines.push(
         `### ${record.scope.name}（${record.testRecordId}）`,
         "",
-        `- 结果：${record.outcome}`,
+        `- 结果：${outcomeLabel(record.outcome)}`,
         `- 运行：${record.runId}`,
         `- 环境版本：${record.environmentVersionId ?? "未使用"}`,
+        `- 环境级别：${profileLabel(environment ? effectiveEnvironmentProfile(environment) : "UNSPECIFIED")}`,
+        `- 环境名称：${environment?.name ?? "未登记"}`,
+        `- 环境用途：${environment?.purpose ?? "未登记"}`,
         `- 命令：通过 ${record.passedCommands}，失败 ${record.failedCommands}，跳过 ${record.skippedCommands}，阻塞 ${record.blockedCommands}`,
+        `- 断言计数：${record.assertionCountsAvailable ? "可用" : "不可用"}`,
         `- 指纹：${record.fingerprint}`,
         `- 指纹文件：${record.fingerprintFiles && record.fingerprintFiles.length > 0 ? record.fingerprintFiles.map((item) => item.path).join("、") : "无（旧记录）"}`,
         `- 证据：${record.evidencePaths.length > 0 ? record.evidencePaths.map((item) => item.path).join("、") : "仅有命令证据"}`,
         "",
+        "受控命令：",
+        "",
+        ...reportList(commands.map((item) => `${item.evidenceId}：${item.executable} ${safeCommandArguments(item.arguments).join(" ")}；退出码 ${item.exitCode ?? "无"}；超时 ${item.timedOut ? "是" : "否"}；耗时 ${item.durationMs} ms`)),
+        "",
       );
     }
     lines.push(
+      "## 复用的模块测试记录",
+      "",
+      ...reportList(reusedModuleRecords.map((record) => `${record.scope.name}（${record.testRecordId}）：${outcomeLabel(record.outcome)}，指纹 ${record.fingerprint}`)),
+      "",
+      "系统阶段复用当前有效模块测试记录，不为节省报告篇幅而重跑单元测试。",
+      "",
+      "## 历史系统测试尝试",
+      "",
+      ...reportList(historical.map((record) => `${record.testRecordId}：${outcomeLabel(record.outcome)}，运行 ${record.runId}`)),
+      "",
+      "历史失败或阻塞仍保存在不可变事实中；本报告结论只针对上方明确引用的测试记录。",
+      "",
+    );
+    lines.push(
       "## 失败、跳过、阻塞和缺失证据",
       "",
-      outcome === "PASSED" ? "无。" : "详见上述非 PASSED 测试记录；在问题解决并重新执行前不得批准系统验收。",
+      outcome === "PASSED"
+        ? "所选测试记录没有失败、跳过或阻塞；历史尝试不属于本次通过结论，详见上一节。"
+        : "详见上述非 PASSED 测试记录；在问题解决并重新执行前不得批准系统验收。",
       "",
       "## 人工检查项",
       "",
@@ -233,4 +305,12 @@ function resolvedAddresses(environment: EnvironmentVersion): string[] {
 function reportList(values: string[]): string[] {
   const unique = [...new Set(values)].sort();
   return unique.length > 0 ? unique.map((value) => `- ${value}`) : ["- 未配置实际地址。"];
+}
+
+function profileLabel(profile: "SIMULATION" | "REAL" | "UNSPECIFIED"): string {
+  return profile === "SIMULATION" ? "模拟" : profile === "REAL" ? "真实" : "未明确";
+}
+
+function outcomeLabel(outcome: TestRecord["outcome"]): string {
+  return outcome === "PASSED" ? "通过" : outcome === "FAILED" ? "失败" : "阻塞";
 }

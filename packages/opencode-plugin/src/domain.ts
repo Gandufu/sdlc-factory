@@ -179,6 +179,7 @@ export type EnvironmentVersion = {
   environmentId: string;
   name: string;
   purpose: string;
+  profile?: "SIMULATION" | "REAL" | "UNSPECIFIED";
   revision: number;
   parentVersionId?: string;
   applicationUrl?: string;

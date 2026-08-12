@@ -15,7 +15,9 @@ async function fixtureRuntime(): Promise<string> {
   const runtime = await mkdtemp(path.join(tmpdir(), "sdlc-runtime-"));
   temporaryDirectories.push(runtime);
   await mkdir(path.join(runtime, "plugins"), { recursive: true });
+  await mkdir(path.join(runtime, "commands"), { recursive: true });
   await writeFile(path.join(runtime, "plugins", "sdlc-factory.js"), "export const plugin = true;\n", "utf8");
+  await writeFile(path.join(runtime, "commands", "sdlc-test.md"), "managed command\n", "utf8");
   return runtime;
 }
 
@@ -39,6 +41,26 @@ describe("installRuntime", () => {
     await writeFile(path.join(target, ".opencode", "plugins", "sdlc-factory.js"), "unmanaged\n", "utf8");
 
     await expect(installRuntime(runtime, target, "0.1.0")).rejects.toBeInstanceOf(InstallationConflictError);
+  });
+
+  it("refuses to take over any unmanaged command file", async () => {
+    const runtime = await fixtureRuntime();
+    const target = await mkdtemp(path.join(tmpdir(), "sdlc-target-"));
+    temporaryDirectories.push(target);
+    await mkdir(path.join(target, ".opencode", "commands"), { recursive: true });
+    await writeFile(path.join(target, ".opencode", "commands", "sdlc-test.md"), "user command\n", "utf8");
+
+    await expect(installRuntime(runtime, target, "0.1.0")).rejects.toBeInstanceOf(InstallationConflictError);
+  });
+
+  it("refuses to overwrite a managed file modified after installation", async () => {
+    const runtime = await fixtureRuntime();
+    const target = await mkdtemp(path.join(tmpdir(), "sdlc-target-"));
+    temporaryDirectories.push(target);
+    await installRuntime(runtime, target, "0.1.0");
+    await writeFile(path.join(target, ".opencode", "commands", "sdlc-test.md"), "locally modified\n", "utf8");
+
+    await expect(installRuntime(runtime, target, "0.1.1")).rejects.toBeInstanceOf(InstallationConflictError);
   });
 
   it("upgrades a managed install without retaining legacy skill directories", async () => {

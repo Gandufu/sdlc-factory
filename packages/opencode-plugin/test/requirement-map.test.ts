@@ -26,6 +26,19 @@ describe("需求地图", () => {
     expect(() => validateRequirementMap(cyclic)).toThrow(RequirementMapError);
   });
 
+  it("拒绝多个对象共同写入同一份全局非功能需求文档", () => {
+    const duplicatedGlobal = structuredClone(requirementMapFacts);
+    duplicatedGlobal.qualityRequirements.push({
+      qualityId: "quality-reliability",
+      name: "可靠性",
+      slug: "reliability",
+      scope: "GLOBAL",
+      scopeModuleIds: [],
+    });
+
+    expect(() => validateRequirementMap(duplicatedGlobal)).toThrow(RequirementMapError);
+  });
+
   it("按业务模块依赖传播变化影响", () => {
     const modules = [
       { ...requirementMapFacts.businessModules[0]!, dependencies: [] },

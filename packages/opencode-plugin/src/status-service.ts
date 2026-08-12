@@ -13,8 +13,9 @@ import type {
   VersionSetFacts,
 } from "./domain.js";
 import type { ProjectStore } from "./project-store.js";
+import { effectiveEnvironmentProfile, isRealAcceptanceEnvironment, type EffectiveEnvironmentProfile } from "./environment-service.js";
 import { testRecordFingerprintFilesCurrent } from "./test-record-service.js";
-import { approvedVersionBytesCurrent } from "./version-integrity.js";
+import { currentApprovedCodeVersionIds } from "./version-integrity.js";
 
 export type RecommendedAction = {
   action: string;
@@ -49,6 +50,7 @@ export type ProjectStatus = {
   designSetVersionId?: string;
   systemTestVersionId?: string;
   systemTestRecordIds?: string[];
+  systemTestProfile?: EffectiveEnvironmentProfile;
   systemAcceptanceVersionId?: string;
   registeredSources: Array<{ sourceId: string; sha256: string }>;
   pendingCandidates: Array<{
@@ -94,10 +96,7 @@ export class StatusService {
         .flatMap((module) => currentVersion(versions, "MODULE_TEST", module.moduleId)?.testRecordIds ?? []),
       ...(currentVersion(versions, "SYSTEM_TEST", "system")?.testRecordIds ?? []),
     ]);
-    const currentCodeVersionIds = new Set((await Promise.all(codeVersionsToCheck
-      .map(async (version) => ({ version, current: await approvedVersionBytesCurrent(this.store.workspaceRoot, version) }))))
-      .filter((item) => item.current)
-      .map((item) => item.version.versionId));
+    const currentCodeVersionIds = await currentApprovedCodeVersionIds(this.store.workspaceRoot, codeVersionsToCheck);
     const currentTestRecordIds = new Set((await Promise.all(testRecords
       .filter((record) => testRecordIdsToCheck.has(record.testRecordId))
       .map(async (record) => ({
@@ -117,7 +116,8 @@ export class StatusService {
       currentCodeVersionIds,
       currentTestRecordIds,
     );
-    const systemAcceptance = validAcceptance(versions, systemTest, testRecords);
+    const systemTestProfile = currentSystemTestProfile(systemTest, testRecords, environments);
+    const systemAcceptance = validAcceptance(versions, systemTest, testRecords, environments);
     const gates: string[] = [];
     if (!currentVersion(versions, "PRODUCT_BRIEF", "project")) gates.push("产品概述尚未批准");
     if (!mapVersion) gates.push("需求地图尚未批准");
@@ -149,16 +149,18 @@ export class StatusService {
       modules,
       systemTest,
       systemAcceptance,
+      systemTestProfile,
     });
     return {
       initialized: true,
       projectName: manifest.projectName,
-      lifecyclePhase: lifecyclePhase(mapVersion, requirementSet, designSet, systemTest, systemAcceptance),
+      lifecyclePhase: lifecyclePhase(mapVersion, requirementSet, designSet, systemTest, systemAcceptance, systemTestProfile),
       ...(mapVersion ? { requirementMapVersionId: mapVersion.versionId } : {}),
       ...(requirementSet ? { requirementSetVersionId: requirementSet.versionId } : {}),
       ...(designSet ? { designSetVersionId: designSet.versionId } : {}),
       ...(systemTest ? { systemTestVersionId: systemTest.versionId } : {}),
       ...(systemTest ? { systemTestRecordIds: systemTest.testRecordIds } : {}),
+      ...(systemTestProfile ? { systemTestProfile } : {}),
       ...(systemAcceptance ? { systemAcceptanceVersionId: systemAcceptance.versionId } : {}),
       registeredSources: sources.map(({ sourceId, sha256 }) => ({ sourceId, sha256 })),
       pendingCandidates,
@@ -344,7 +346,9 @@ function moduleProgress(input: {
     ...(code ? { codeVersionId: code.versionId } : {}),
     ...(moduleTest ? { moduleTestVersionId: moduleTest.versionId } : {}),
     ...(input.systemTest ? { systemTestVersionId: input.systemTest.versionId } : {}),
-    ...(testRecord ? { unitTestResult: testRecord.outcome, moduleTestResult: testRecord.outcome } : {}),
+    ...(validModuleTest && testRecord
+      ? { unitTestResult: testRecord.outcome, moduleTestResult: testRecord.outcome }
+      : {}),
     ...(input.systemTest ? { systemTestResult: "PASSED" } : {}),
     blockers,
     ...(recommendedCommand ? { recommendedCommand } : {}),
@@ -391,14 +395,40 @@ function validAcceptance(
   versions: ApprovedVersion[],
   systemTest: ApprovedVersion | undefined,
   records: TestRecord[],
+  environments: EnvironmentVersion[],
 ): ApprovedVersion | undefined {
   if (!systemTest) return undefined;
   const acceptance = currentVersion(versions, "SYSTEM_ACCEPTANCE", "system");
   if (!acceptance || !hasInputs(acceptance, [systemTest.versionId])
     || !sameSet(acceptance.testRecordIds, systemTest.testRecordIds)
     || acceptance.testRecordIds.length === 0) return undefined;
-  return acceptance.testRecordIds.every((id) =>
-    records.some((record) => record.testRecordId === id && record.outcome === "PASSED")) ? acceptance : undefined;
+  const environmentById = new Map(environments.map((environment) => [environment.environmentVersionId, environment]));
+  return acceptance.testRecordIds.every((id) => {
+    const record = records.find((candidate) => candidate.testRecordId === id && candidate.outcome === "PASSED");
+    const environment = record?.environmentVersionId
+      ? environmentById.get(record.environmentVersionId)
+      : undefined;
+    return Boolean(environment && isRealAcceptanceEnvironment(environment));
+  }) ? acceptance : undefined;
+}
+
+function currentSystemTestProfile(
+  systemTest: ApprovedVersion | undefined,
+  records: TestRecord[],
+  environments: EnvironmentVersion[],
+): EffectiveEnvironmentProfile | undefined {
+  if (!systemTest) return undefined;
+  const environmentById = new Map(environments.map((environment) => [environment.environmentVersionId, environment]));
+  const profiles = systemTest.testRecordIds.map((id) => {
+    const record = records.find((candidate) => candidate.testRecordId === id);
+    const environment = record?.environmentVersionId
+      ? environmentById.get(record.environmentVersionId)
+      : undefined;
+    return environment ? effectiveEnvironmentProfile(environment) : "UNSPECIFIED" as const;
+  });
+  if (profiles.length > 0 && profiles.every((profile) => profile === "REAL")) return "REAL";
+  if (profiles.some((profile) => profile === "SIMULATION")) return "SIMULATION";
+  return "UNSPECIFIED";
 }
 
 function recommend(input: {
@@ -410,6 +440,7 @@ function recommend(input: {
   modules: ModuleProgress[] | undefined;
   systemTest: ApprovedVersion | undefined;
   systemAcceptance: ApprovedVersion | undefined;
+  systemTestProfile: EffectiveEnvironmentProfile | undefined;
 }): RecommendedAction {
   const candidate = input.pendingCandidates.find((item) => item.reviewState === "PENDING") ?? input.pendingCandidates[0];
   if (candidate) return action(
@@ -457,6 +488,9 @@ function recommend(input: {
   const blocked = input.modules?.find((module) => module.state === "BLOCKED");
   if (blocked?.recommendedCommand) return action(blocked.stage, blocked.recommendedCommand, blocked.blockers.join("；") || "业务模块被阻塞");
   if (!input.systemTest) return action("SYSTEM_TEST", "/sdlc-test system", "模块已具备系统测试条件");
+  if (input.systemTestProfile !== "REAL") {
+    return action("REAL_SYSTEM_TEST", "/sdlc-test system", "本地模拟闭环已验证；真实环境系统测试和正式验收尚未完成");
+  }
   if (!input.systemAcceptance) return action("SYSTEM_ACCEPTANCE", "/sdlc-test system", "需要形成系统验收候选");
   return action("STATUS", "/sdlc-status", "当前系统验收版本有效");
 }
@@ -471,8 +505,10 @@ function lifecyclePhase(
   designSet: ApprovedVersion | undefined,
   systemTest: ApprovedVersion | undefined,
   acceptance: ApprovedVersion | undefined,
+  systemTestProfile: EffectiveEnvironmentProfile | undefined,
 ): string {
   if (acceptance) return "已验收";
+  if (systemTest && systemTestProfile !== "REAL") return "本地模拟闭环已验证";
   if (systemTest) return "系统验收";
   if (designSet) return "编码与测试";
   if (requirementSet) return "设计";

@@ -76,10 +76,13 @@ describe("测试记录与报告", () => {
     const store = new ProjectStore(workspace);
     await writeManifest(store, workspace);
     await mkdir(path.join(workspace, "src", "system-management"), { recursive: true });
+    await mkdir(path.join(workspace, "test", "system-management"), { recursive: true });
     const sourcePath = "src/system-management/index.ts";
     const sourceBytes = Buffer.from("export const value = 1;\n", "utf8");
     await writeFile(path.join(workspace, sourcePath), sourceBytes);
+    await writeFile(path.join(workspace, "test/system-management/flow.test.ts"), "export const tested = true;\n", "utf8");
     await writeFile(path.join(workspace, "package.json"), "{\"private\":true}\n", "utf8");
+    await writeFile(path.join(workspace, "vitest.config.ts"), "export default {};\n", "utf8");
     const code = approvedVersion({
       kind: "CODE",
       scope: { type: "MODULE", id: "module-system-management", name: "系统管理" },
@@ -128,7 +131,12 @@ describe("测试记录与报告", () => {
       evidencePaths: [],
     });
 
-    expect(record.fingerprintFiles?.map((item) => item.path)).toEqual(["package.json", sourcePath]);
+    expect(record.fingerprintFiles?.map((item) => item.path)).toEqual([
+      "package.json",
+      sourcePath,
+      "test/system-management/flow.test.ts",
+      "vitest.config.ts",
+    ]);
     await writeFile(path.join(workspace, sourcePath), "export const value = 2;\n", "utf8");
     await expect(assertApprovedCodeIntegrity(store, workspace, [code.versionId]))
       .rejects.toBeInstanceOf(ApprovedCodeDriftError);

@@ -2,7 +2,7 @@
 description: 执行业务模块测试或系统集成测试并形成真实记录
 ---
 
-参数为 `system` 时加载 `sdlc-system-testing` Skill；否则加载 `sdlc-module-testing` Skill。随后调用 `sdlc_status`。
+参数为 `system` 或以 `system ` 开头时加载 `sdlc-system-testing` Skill；否则加载 `sdlc-module-testing` Skill。随后调用 `sdlc_status`。
 
 当前用户参数为：
 
@@ -14,4 +14,6 @@ description: 执行业务模块测试或系统集成测试并形成真实记录
 
 模块测试通过后使用 `sdlc_module_test_candidate_create`；系统测试报告生成后使用 `sdlc_system_test_candidate_create`。两者只接收测试记录编号，由工具恢复运行和版本事实，不得再让模型传入测试源文件、Git 基点或完整版本清单。
 
-若 `sdlc_status.recommendedAction.action` 为 `SYSTEM_ACCEPTANCE`，不得再启动运行、查找复用记录或读取测试正文；直接调用 `sdlc_system_acceptance_candidate_create` 形成验收候选。
+若 `sdlc_status.recommendedAction.action` 为 `SYSTEM_ACCEPTANCE` 且 `systemTestProfile=REAL`，不得再启动运行、
+查找复用记录或读取测试正文；直接调用 `sdlc_system_acceptance_candidate_create` 形成验收候选。模拟环境
+只能形成系统测试版本，不得形成正式系统验收。

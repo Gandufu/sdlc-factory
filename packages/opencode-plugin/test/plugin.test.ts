@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { Candidate, CommandEvidence, EnvironmentVersion, TestRecord } from "../src/domain.js";
 import { SdlcFactoryPlugin } from "../src/plugin.js";
+import { ProjectStore } from "../src/project-store.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -75,6 +77,46 @@ describe("SdlcFactoryPlugin", () => {
     ) as string);
 
     expect(page).toMatchObject({ content: "2345", offset: 2, nextOffset: 6, complete: false });
+  });
+
+  it("把授权素材目录作为一个来源登记、按条目读取并精确复制", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    const sourceRoot = await mkdtemp(path.join(tmpdir(), "sdlc-source-"));
+    temporaryDirectories.push(directory, sourceRoot);
+    await mkdir(path.join(sourceRoot, "prototype", "assets"), { recursive: true });
+    await writeFile(path.join(sourceRoot, "prototype", "index.html"), "<main>原型</main>\n", "utf8");
+    await writeFile(path.join(sourceRoot, "prototype", "assets", "icon.png"), Buffer.from([1, 2, 3]));
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks.tool!.sdlc_init!.execute(
+      { projectName: "测试项目", allowedReadRoots: [sourceRoot], allowedExecutables: ["node"] },
+      { sessionID: "session-directory-source" } as never,
+    );
+    await hooks["command.execute.before"]!({
+      command: "sdlc-spec", sessionID: "session-directory-source", arguments: "",
+    }, { parts: [] } as never);
+
+    const listing = JSON.parse(await hooks.tool!.sdlc_source_list!.execute(
+      { rootIndex: 0, relativePath: "prototype", recursive: true, maxEntries: 20 },
+      { sessionID: "session-directory-source" } as never,
+    ) as string);
+    await hooks.tool!.sdlc_source_snapshot!.execute(
+      { sourceId: "source-prototype", sourcePath: path.join(sourceRoot, "prototype") },
+      { sessionID: "session-directory-source" } as never,
+    );
+    const page = JSON.parse(await hooks.tool!.sdlc_source_read!.execute(
+      { sourceId: "source-prototype", entryPath: "index.html", offset: 0, limit: 12000 },
+      { sessionID: "session-directory-source" } as never,
+    ) as string);
+    const materialized = JSON.parse(await hooks.tool!.sdlc_source_materialize!.execute(
+      { sourceId: "source-prototype", targetPath: "assets/prototype" },
+      { sessionID: "session-directory-source" } as never,
+    ) as string);
+
+    expect(listing.entries).toHaveLength(3);
+    expect(page).toMatchObject({ entryPath: "index.html", content: "<main>原型</main>\n", complete: true });
+    expect(materialized.fileCount).toBe(2);
+    await expect(readFile(path.join(directory, "assets", "prototype", "assets", "icon.png")))
+      .resolves.toEqual(Buffer.from([1, 2, 3]));
   });
 
   it("生命周期文档只允许写入 docs 下的 Markdown 或 YAML", async () => {
@@ -192,6 +234,135 @@ describe("SdlcFactoryPlugin", () => {
     await expect(hooks["tool.execute.before"]!({
       tool: "grep", sessionID: "session-review", callID: "call-1",
     }, { args: { path: directory, pattern: "candidate" } })).rejects.toThrow("禁止扫描或直接读取工作区");
+  });
+
+  it("测试命令禁止原生写入和 shell，受控测试工具仍可使用", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks["command.execute.before"]!({
+      command: "sdlc-test", sessionID: "session-test-boundary", arguments: "系统",
+    }, { parts: [] } as never);
+
+    for (const tool of ["write", "edit", "apply_patch", "bash", "shell"]) {
+      await expect(hooks["tool.execute.before"]!({
+        tool, sessionID: "session-test-boundary", callID: `call-${tool}`,
+      }, { args: {} })).rejects.toThrow("测试阶段禁止使用原生写入或 shell 工具");
+    }
+    await expect(hooks["tool.execute.before"]!({
+      tool: "sdlc_command_execute", sessionID: "session-test-boundary", callID: "call-controlled",
+    }, { args: {} })).resolves.toBeUndefined();
+  });
+
+  it("测试候选审核投影包含环境边界和受控命令摘要", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const store = new ProjectStore(directory);
+    const environment: EnvironmentVersion = {
+      environmentVersionId: "environment-system-simulation-r1",
+      environmentId: "system-simulation",
+      name: "系统模拟环境",
+      purpose: "只验证本地闭环，不代表真实设备验收",
+      revision: 1,
+      applicationUrl: "app://test",
+      readinessUrl: "app://test",
+      externalInterfaces: [{ interfaceId: "device-api", address: "https://device.invalid.test" }],
+      dependencies: [],
+      credentialReferences: [],
+      effectiveFrom: "2026-08-13T00:00:00.000Z",
+      contentHash: "e".repeat(64),
+      createdBySessionId: "session-test",
+      createdAt: "2026-08-13T00:00:00.000Z",
+    };
+    const evidence: CommandEvidence = {
+      evidenceId: "evidence-system",
+      runId: "run-system",
+      executable: "pnpm",
+      arguments: ["verify:contracts", "--password=top-secret"],
+      workingDirectory: ".",
+      exitCode: 0,
+      timedOut: false,
+      startedAt: "2026-08-13T00:00:01.000Z",
+      finishedAt: "2026-08-13T00:00:02.000Z",
+      durationMs: 1000,
+      stdoutPath: ".sdlc-factory/evidence/stdout.log",
+      stdoutHash: "o".repeat(64),
+      stderrPath: ".sdlc-factory/evidence/stderr.log",
+      stderrHash: "s".repeat(64),
+    };
+    const record: TestRecord = {
+      testRecordId: "test-record-system",
+      scope: { type: "SYSTEM", id: "system", name: "系统" },
+      runId: "run-system",
+      outcome: "PASSED",
+      inputVersionIds: ["design-set-project-r1"],
+      environmentVersionId: environment.environmentVersionId,
+      environmentHash: environment.contentHash,
+      resolvedAddresses: ["app://test", "https://device.invalid.test"],
+      commandEvidenceIds: [evidence.evidenceId],
+      passedCommands: 1,
+      failedCommands: 0,
+      skippedCommands: 0,
+      blockedCommands: 0,
+      assertionCountsAvailable: false,
+      evidencePaths: [],
+      fingerprint: "f".repeat(64),
+      startedAt: evidence.startedAt,
+      finishedAt: evidence.finishedAt,
+      createdAt: evidence.finishedAt,
+    };
+    const candidate: Candidate = {
+      candidateId: "candidate-system-test",
+      kind: "SYSTEM_TEST",
+      scope: record.scope,
+      revision: 1,
+      contentHash: "c".repeat(64),
+      subjectPaths: ["docs/verification/verification-report.md"],
+      subjects: [{
+        path: "docs/verification/verification-report.md",
+        sha256: "r".repeat(64),
+        size: 100,
+        snapshotPath: ".sdlc-factory/objects/report",
+      }],
+      inputVersionIds: record.inputVersionIds,
+      sourceIds: [],
+      testRecordIds: [record.testRecordId],
+      changeType: "BEHAVIOR",
+      changeSummary: "形成系统测试报告",
+      proposedImpactScopeIds: [],
+      deterministicChecks: [],
+      createdBySessionId: "session-test",
+      createdAt: evidence.finishedAt,
+    };
+    await store.writeImmutable("environments", environment.environmentVersionId, environment);
+    await store.writeImmutable("command-evidence", evidence.evidenceId, evidence);
+    await store.writeImmutable("test-runs", record.testRecordId, record);
+    await store.writeImmutable("candidates", candidate.candidateId, candidate);
+
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+    const projection = JSON.parse(await hooks.tool!.sdlc_candidate_read!.execute(
+      { candidateId: candidate.candidateId },
+      { sessionID: "session-test" } as never,
+    ) as string);
+
+    expect(projection.testRecords[0]).toMatchObject({
+      testRecordId: record.testRecordId,
+      outcome: "PASSED",
+      resolvedAddresses: ["app://test", "https://device.invalid.test"],
+      environment: {
+        environmentVersionId: environment.environmentVersionId,
+        purpose: "只验证本地闭环，不代表真实设备验收",
+      },
+      commands: [{
+        evidenceId: evidence.evidenceId,
+        executable: "pnpm",
+        arguments: ["verify:contracts", "--password=[REDACTED]"],
+        exitCode: 0,
+      }],
+    });
+    expect(JSON.stringify(projection)).not.toContain(evidence.stdoutPath);
+    expect(JSON.stringify(projection)).not.toContain("top-secret");
+    expect(JSON.stringify(projection)).not.toContain("credentialReferences");
   });
 
   it("需求命令不能扫描工作区或直接读取插件内部状态", async () => {

@@ -7,6 +7,7 @@ import { tool, type Plugin } from "@opencode-ai/plugin";
 
 import { findModule, findRequirementMap, isModuleDesignFacts } from "./artifact-validator.js";
 import { CandidateService, currentVersion } from "./candidate-service.js";
+import { safeCommandArguments } from "./command-safety.js";
 import { ContextService } from "./context-service.js";
 import { ControlledExecutionService } from "./controlled-execution.js";
 import { writeLifecycleDocument } from "./document-service.js";
@@ -16,10 +17,12 @@ import type {
   ArtifactScope,
   Candidate,
   CandidateFacts,
+  CommandEvidence,
   EnvironmentVersion,
   JournalEvent,
   ProjectManifest,
   RunRecord,
+  TestRecord,
 } from "./domain.js";
 import { EnvironmentService } from "./environment-service.js";
 import { readGitBase } from "./git-service.js";
@@ -28,11 +31,11 @@ import { ProjectStore } from "./project-store.js";
 import { ReviewService } from "./review-service.js";
 import { RunService } from "./run-service.js";
 import { SetService } from "./set-service.js";
-import { SourceService } from "./source-service.js";
+import { SourceService, type SourceSnapshot } from "./source-service.js";
 import { findModuleByExactName, StatusService } from "./status-service.js";
 import { TestRecordService, VerificationReportService } from "./test-record-service.js";
 import { resolveStoredSnapshotPath, resolveWorkspacePath } from "./workspace-path.js";
-import { assertApprovedCodeIntegrity } from "./version-integrity.js";
+import { assertApprovedCodeIntegrity, codeVersionDependsOn } from "./version-integrity.js";
 
 const PLUGIN_VERSION = "0.1.0";
 const DEFAULT_EXECUTABLES = ["node", "corepack", "pnpm", "npm", "npx", "mvn", "mvnw", "gradle", "gradlew", "java", "playwright"];
@@ -100,6 +103,9 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       const service = new RunService(store(), runtime);
       const command = sessionCommands.get(input.sessionID);
       enforceReadBoundary(directory, command, input.tool, output.args);
+      if (command === "sdlc-test" && isMutatingTool(input.tool)) {
+        throw new Error("测试阶段禁止使用原生写入或 shell 工具；测试代码必须在编码阶段维护，测试命令只能通过 sdlc_command_execute 执行");
+      }
       if (command === "sdlc-code" && isMutatingTool(input.tool)) {
         await service.requireActiveCodingRun(input.sessionID);
       }
@@ -141,7 +147,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         },
       }),
       sdlc_source_snapshot: tool({
-        description: "Snapshot an explicitly authorized source into immutable project facts.",
+        description: "Snapshot an explicitly authorized source file or directory into one immutable source fact.",
         args: { sourceId: tool.schema.string().min(1), sourcePath: tool.schema.string().min(1) },
         async execute(args, context) {
           await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-init", "sdlc-spec"]);
@@ -151,24 +157,51 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
             .snapshot(args.sourceId, args.sourcePath));
         },
       }),
+      sdlc_source_list: tool({
+        description: "List bounded metadata under one explicitly authorized source root without reading file contents.",
+        args: {
+          rootIndex: tool.schema.number().int().nonnegative().default(0),
+          relativePath: tool.schema.string().default("."),
+          recursive: tool.schema.boolean().default(true),
+          maxEntries: tool.schema.number().int().min(1).max(1_000).default(500),
+        },
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-init", "sdlc-spec"]);
+          const projectStore = store();
+          const manifest = await projectStore.readManifest<ProjectManifest>();
+          return JSON.stringify(await new SourceService(projectStore, directory, manifest.allowedReadRoots).list(
+            args.rootIndex ?? 0,
+            args.relativePath ?? ".",
+            args.recursive ?? true,
+            args.maxEntries ?? 500,
+          ));
+        },
+      }),
       sdlc_source_read: tool({
         description: "Read one bounded page from an immutable source snapshot.",
         args: {
           sourceId: tool.schema.string().min(1),
+          entryPath: tool.schema.string().min(1).optional(),
           offset: tool.schema.number().int().nonnegative().default(0),
           limit: tool.schema.number().int().min(1).max(12000).default(12000),
         },
         async execute(args) {
-          const snapshot = await store().readJson<{
-            sourceId: string; originalPath: string; snapshotPath: string; sha256: string;
-          }>("sources", args.sourceId);
-          const text = await readFile(await resolveStoredSnapshotPath(directory, snapshot.snapshotPath), "utf8");
+          const snapshot = await store().readJson<SourceSnapshot>("sources", args.sourceId);
+          const entryPath = args.entryPath?.replaceAll("\\", "/");
+          const entry = entryPath
+            ? snapshot.entries?.find((candidate) => candidate.path === entryPath)
+            : undefined;
+          if (args.entryPath && !entry) throw new Error(`来源目录条目不存在: ${args.entryPath}`);
+          const text = snapshot.kind === "DIRECTORY" && !entry
+            ? (snapshot.entries ?? []).map((candidate) => `${candidate.path}\t${candidate.size}\t${candidate.sha256}`).join("\n")
+            : await readFile(await resolveStoredSnapshotPath(directory, entry?.snapshotPath ?? snapshot.snapshotPath!), "utf8");
           const offset = args.offset ?? 0;
           const limit = args.limit ?? 12000;
           const nextOffset = Math.min(offset + limit, text.length);
           return JSON.stringify({
             sourceId: snapshot.sourceId,
             originalPath: snapshot.originalPath,
+            ...(entry ? { entryPath: entry.path } : {}),
             sha256: snapshot.sha256,
             content: text.slice(offset, nextOffset),
             offset,
@@ -180,13 +213,33 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       }),
       sdlc_source_materialize: tool({
         description: "Copy exact immutable source bytes into a bounded workspace path.",
-        args: { sourceId: tool.schema.string().min(1), targetPath: tool.schema.string().min(1) },
+        args: {
+          sourceId: tool.schema.string().min(1),
+          targetPath: tool.schema.string().min(1),
+          entryPath: tool.schema.string().min(1).optional(),
+        },
         async execute(args, context) {
           await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-init", "sdlc-spec"]);
-          const snapshot = await store().readJson<{ sourceId: string; snapshotPath: string; sha256: string }>("sources", args.sourceId);
+          const snapshot = await store().readJson<SourceSnapshot>("sources", args.sourceId);
+          if (snapshot.kind === "DIRECTORY") {
+            const entryPath = args.entryPath?.replaceAll("\\", "/");
+            const selected = entryPath
+              ? snapshot.entries?.filter((entry) => entry.path === entryPath) ?? []
+              : snapshot.entries ?? [];
+            if (selected.length === 0) throw new Error(`来源目录条目不存在或目录为空: ${args.entryPath ?? args.sourceId}`);
+            for (const entry of selected) {
+              const relativeTarget = args.entryPath ? args.targetPath : path.join(args.targetPath, ...entry.path.split("/"));
+              const target = await resolveWorkspacePath(directory, relativeTarget);
+              await mkdir(path.dirname(target), { recursive: true });
+              await copyFile(await resolveStoredSnapshotPath(directory, entry.snapshotPath), target);
+              if (sha256(await readFile(target)) !== entry.sha256) throw new Error(`来源复制哈希不一致: ${args.sourceId}/${entry.path}`);
+            }
+            return JSON.stringify({ sourceId: args.sourceId, targetPath: args.targetPath, fileCount: selected.length, sha256: snapshot.sha256 });
+          }
+          if (args.entryPath) throw new Error("单文件来源不能指定 entryPath");
           const target = await resolveWorkspacePath(directory, args.targetPath);
           await mkdir(path.dirname(target), { recursive: true });
-          await copyFile(await resolveStoredSnapshotPath(directory, snapshot.snapshotPath), target);
+          await copyFile(await resolveStoredSnapshotPath(directory, snapshot.snapshotPath!), target);
           const actualHash = sha256(await readFile(target));
           if (actualHash !== snapshot.sha256) throw new Error(`来源复制哈希不一致: ${args.sourceId}`);
           return JSON.stringify({ sourceId: args.sourceId, targetPath: args.targetPath, sha256: actualHash });
@@ -218,13 +271,13 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         args: {
           workflow: tool.schema.enum(["SPEC", "DESIGN", "CODE", "MODULE_TEST", "SYSTEM_TEST"]),
           moduleName: tool.schema.string().min(1).optional(),
-          maxTotalCharacters: tool.schema.number().int().min(4000).max(60000).default(30000),
+          maxTotalCharacters: tool.schema.number().int().min(4000).max(30000).default(16000),
         },
         async execute(args) {
           return JSON.stringify(await new ContextService(store()).assemble(
             args.workflow,
             args.moduleName,
-            args.maxTotalCharacters ?? 30000,
+            args.maxTotalCharacters ?? 16000,
           ));
         },
       }),
@@ -317,6 +370,56 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         args: { candidateId: tool.schema.string().min(1) },
         async execute(args) {
           const candidate = await store().readJson<Candidate>("candidates", args.candidateId);
+          const testRecords = await Promise.all(candidate.testRecordIds.map(async (testRecordId) => {
+            const record = await store().readJson<TestRecord>("test-runs", testRecordId);
+            const environment = record.environmentVersionId
+              ? await store().readJson<EnvironmentVersion>("environments", record.environmentVersionId)
+              : undefined;
+            const commands = await Promise.all(record.commandEvidenceIds.map(async (evidenceId) => {
+              const evidence = await store().readJson<CommandEvidence>("command-evidence", evidenceId);
+              return {
+                evidenceId: evidence.evidenceId,
+                executable: evidence.executable,
+                arguments: safeCommandArguments(evidence.arguments),
+                workingDirectory: evidence.workingDirectory,
+                exitCode: evidence.exitCode,
+                timedOut: evidence.timedOut,
+                durationMs: evidence.durationMs,
+                stdoutHash: evidence.stdoutHash,
+                stderrHash: evidence.stderrHash,
+              };
+            }));
+            return {
+              testRecordId: record.testRecordId,
+              scope: record.scope,
+              outcome: record.outcome,
+              inputVersionIds: record.inputVersionIds,
+              fingerprint: record.fingerprint,
+              passedCommands: record.passedCommands,
+              failedCommands: record.failedCommands,
+              skippedCommands: record.skippedCommands,
+              blockedCommands: record.blockedCommands,
+              assertionCountsAvailable: record.assertionCountsAvailable,
+              resolvedAddresses: record.resolvedAddresses,
+              commands,
+              ...(environment ? {
+                environment: {
+                  environmentVersionId: environment.environmentVersionId,
+                  environmentId: environment.environmentId,
+                  name: environment.name,
+                  purpose: environment.purpose,
+                  applicationUrl: environment.applicationUrl,
+                  readinessUrl: environment.readinessUrl,
+                  externalInterfaces: environment.externalInterfaces,
+                  dependencies: environment.dependencies,
+                  effectiveFrom: environment.effectiveFrom,
+                  contentHash: environment.contentHash,
+                },
+              } : {}),
+              startedAt: record.startedAt,
+              finishedAt: record.finishedAt,
+            };
+          }));
           return JSON.stringify({
             candidateId: candidate.candidateId,
             contentHash: candidate.contentHash,
@@ -327,6 +430,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
             inputVersionIds: candidate.inputVersionIds,
             sourceIds: candidate.sourceIds,
             testRecordIds: candidate.testRecordIds,
+            ...(testRecords.length > 0 ? { testRecords } : {}),
             subjects: candidate.subjects.map(({ path: subjectPath, sha256: subjectHash, size }) => ({
               path: subjectPath,
               sha256: subjectHash,
@@ -446,6 +550,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           environmentId: tool.schema.string().min(2),
           name: tool.schema.string().min(1),
           purpose: tool.schema.string().min(1),
+          profile: tool.schema.enum(["SIMULATION", "REAL", "UNSPECIFIED"]).optional(),
           parentVersionId: tool.schema.string().min(1).optional(),
           applicationUrl: tool.schema.string().min(1).optional(),
           readinessUrl: tool.schema.string().min(1).optional(),
@@ -464,6 +569,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
             environmentId: args.environmentId,
             name: args.name,
             purpose: args.purpose,
+            ...(args.profile ? { profile: args.profile } : {}),
             ...(args.parentVersionId ? { parentVersionId: args.parentVersionId } : {}),
             ...(args.applicationUrl ? { applicationUrl: args.applicationUrl } : {}),
             ...(args.readinessUrl ? { readinessUrl: args.readinessUrl } : {}),
@@ -508,7 +614,10 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
               scope: { type: "SYSTEM", id: "system", name: "系统" },
               gitBase,
               inputVersionIds,
-              allowedProductPaths: [],
+              allowedProductPaths: map.businessModules.flatMap((module) => {
+                const design = currentVersion(versions, "MODULE_DESIGN", module.moduleId);
+                return isModuleDesignFacts(design?.facts) ? design.facts.productPaths : [];
+              }),
               allowedTestPaths: map.businessModules.flatMap((module) => {
                 const design = currentVersion(versions, "MODULE_DESIGN", module.moduleId);
                 return isModuleDesignFacts(design?.facts) ? design.facts.testPaths : [];
@@ -524,7 +633,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
               throw new Error(`运行命令必须包含完整业务模块名称: ${codeCommand} 或 ${testCommand}`);
             }
             const isCode = args.command === codeCommand;
-            if (isCode && (moduleProgress.stage !== "CODING" || ["BLOCKED", "WAITING_REVIEW", "SUSPENDED"].includes(moduleProgress.state))) {
+            if (isCode && (!["CODING", "MODULE_TEST", "SYSTEM_TEST", "COMPLETED"].includes(moduleProgress.stage)
+              || ["WAITING_REVIEW", "SUSPENDED", "IN_PROGRESS"].includes(moduleProgress.state))) {
               throw new Error(`业务模块当前不能进入编码: ${moduleProgress.state}/${moduleProgress.stage}`);
             }
             if (!isCode && (moduleProgress.stage !== "MODULE_TEST" || ["WAITING_REVIEW", "SUSPENDED"].includes(moduleProgress.state))) {
@@ -537,12 +647,29 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
               if (!dependencyCode) throw new Error(`依赖模块尚无已批准代码: ${dependencyId}`);
               return dependencyCode.versionId;
             });
+            const currentCodeVersions = map.businessModules
+              .map((item) => currentVersion(versions, "CODE", item.moduleId))
+              .filter((version): version is ApprovedVersion => Boolean(version));
+            const downstreamCodeVersionIds = !isCode && moduleProgress.codeVersionId
+              ? currentCodeVersions
+                .filter((version) => codeVersionDependsOn(
+                  version,
+                  moduleProgress.codeVersionId!,
+                  currentCodeVersions,
+                ))
+                .map((version) => version.versionId)
+              : [];
             const inputVersionIds = isCode
-              ? [
+              ? [...new Set([
                 status.requirementSetVersionId!, status.designSetVersionId!,
-                moduleProgress.requirementVersionId!, design.versionId, ...dependencyCodeVersionIds,
-              ]
-              : [status.designSetVersionId!, design.versionId, moduleProgress.codeVersionId!, ...dependencyCodeVersionIds];
+                moduleProgress.requirementVersionId!, design.versionId,
+                ...(moduleProgress.codeVersionId ? [moduleProgress.codeVersionId] : []),
+                ...dependencyCodeVersionIds,
+              ])]
+              : [...new Set([
+                status.designSetVersionId!, design.versionId, moduleProgress.codeVersionId!,
+                ...dependencyCodeVersionIds, ...downstreamCodeVersionIds,
+              ])];
             runInput = {
               command: args.command,
               commandType: isCode ? "CODE" : "MODULE_TEST",

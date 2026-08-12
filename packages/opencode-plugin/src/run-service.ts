@@ -78,8 +78,9 @@ export class RunService {
     const evidence = await this.commandEvidence(runId);
     if (state === "SUCCEEDED") {
       if (evidence.length === 0) throw new InvalidRunOutcomeError("成功运行至少需要一条系统采集的命令证据");
-      if (evidence.some((item) => item.exitCode !== 0 || item.timedOut)) {
-        throw new InvalidRunOutcomeError("存在失败或超时命令证据，运行不能标记为成功");
+      const latestEvidence = latestCommandEvidence(evidence);
+      if ([...latestEvidence.values()].some((item) => item.exitCode !== 0 || item.timedOut)) {
+        throw new InvalidRunOutcomeError("存在尚未用同一命令成功重试的失败或超时证据，运行不能标记为成功");
       }
       if (run.commandType === "CODE") {
         const todo = latestTodo(events);
@@ -122,4 +123,13 @@ export class RunService {
 function latestTodo(events: JournalEvent[]): TodoItem[] | undefined {
   const event = [...events].reverse().find((candidate) => candidate.type === "TODO_UPDATED");
   return event?.todos as TodoItem[] | undefined;
+}
+
+function latestCommandEvidence(evidence: CommandEvidence[]): Map<string, CommandEvidence> {
+  const latest = new Map<string, CommandEvidence>();
+  for (const item of [...evidence].sort((left, right) => left.startedAt.localeCompare(right.startedAt))) {
+    const key = JSON.stringify([item.executable, item.arguments, item.workingDirectory]);
+    latest.set(key, item);
+  }
+  return latest;
 }

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 import { currentVersion } from "./candidate-service.js";
+import { assertRealAcceptanceRecords } from "./environment-service.js";
 import type { ApprovedVersion, Candidate, ReviewRecord } from "./domain.js";
 import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
@@ -46,6 +47,9 @@ export class ReviewService {
 
     if (request.decision === "APPROVE") {
       await this.verifyCandidateBytes(candidate);
+      if (candidate.kind === "SYSTEM_ACCEPTANCE") {
+        await assertRealAcceptanceRecords(this.store, candidate.testRecordIds);
+      }
       const versions = await this.store.listJson<ApprovedVersion>("approved-versions");
       const current = currentVersion(versions, candidate.kind, candidate.scope.id);
       if (current?.versionId !== candidate.parentVersionId) {

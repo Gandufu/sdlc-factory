@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { ApprovedVersion, RequirementMapFacts, TestRecord } from "../src/domain.js";
+import type { ApprovedVersion, EnvironmentVersion, RequirementMapFacts, TestRecord } from "../src/domain.js";
 import { ProjectStore } from "../src/project-store.js";
 import { StatusService } from "../src/status-service.js";
 import { approvedVersion, writeManifest, writeVersions } from "./fixtures.js";
@@ -122,6 +122,26 @@ describe("双业务模块生命周期重建", () => {
       ...codeVersions.map((version) => version.versionId),
       ...moduleTests.map((version) => version.versionId),
     ]);
+    const realEnvironment: EnvironmentVersion = {
+      environmentVersionId: "environment-real-r1",
+      environmentId: "real",
+      name: "真实系统环境",
+      purpose: "真实系统测试与验收",
+      profile: "REAL",
+      revision: 1,
+      applicationUrl: "https://app.example.test",
+      externalInterfaces: [],
+      dependencies: [],
+      credentialReferences: [],
+      effectiveFrom: "2026-08-11T05:00:00.000Z",
+      contentHash: "e".repeat(64),
+      createdBySessionId: "session-environment",
+      createdAt: "2026-08-11T05:00:00.000Z",
+    };
+    await store.writeImmutable("environments", realEnvironment.environmentVersionId, realEnvironment);
+    systemRecord.environmentVersionId = realEnvironment.environmentVersionId;
+    systemRecord.environmentHash = realEnvironment.contentHash;
+    systemRecord.resolvedAddresses = [realEnvironment.applicationUrl!];
     await store.writeImmutable("test-runs", systemRecord.testRecordId, systemRecord);
     const systemTest = approvedVersion({
       kind: "SYSTEM_TEST",

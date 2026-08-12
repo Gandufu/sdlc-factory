@@ -80,6 +80,10 @@ export function validateRequirementMap(facts: RequirementMapFacts): Deterministi
   const qualityIds = new Set<string>();
   const qualityNames = new Set<string>();
   const qualitySlugs = new Set<string>();
+  const globalQualityRequirements = facts.qualityRequirements.filter((quality) => quality.scope === "GLOBAL");
+  if (globalQualityRequirements.length > 1) {
+    fail("quality-global", "全局非功能需求必须合并为需求地图中的一个对象和一份 global.md，分类使用文档内稳定编号表达");
+  }
   for (const quality of facts.qualityRequirements) {
     validateIdentity(
       "非功能需求",

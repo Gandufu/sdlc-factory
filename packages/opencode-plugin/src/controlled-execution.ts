@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { CommandEvidence, ProjectManifest, RunRecord } from "./domain.js";
+import { assertSafeCommandArguments } from "./command-safety.js";
 import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
 import { RunService } from "./run-service.js";
@@ -48,6 +49,7 @@ export class ControlledExecutionService {
     if (process.platform === "win32" && [input.executable, ...input.arguments].some((value) => WINDOWS_SHELL_META.test(value))) {
       throw new Error("Windows 受控命令参数不能包含 shell 元字符");
     }
+    assertSafeCommandArguments(input.arguments);
     const workingDirectory = await resolveWorkspacePath(this.workspaceRoot, input.workingDirectory);
     const evidenceId = this.runtime.id();
     const evidenceDirectory = path.join(this.workspaceRoot, "evidence", run.runId);

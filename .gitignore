@@ -7,3 +7,6 @@
 # Local Node.js install and generated Plugin bundles.
 **/node_modules/
 packages/opencode-plugin/dist/
+
+# Local render and inspection artifacts.
+/tmp/

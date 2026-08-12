@@ -13,6 +13,7 @@ import type {
   RunRecord,
   TestRecord,
 } from "./domain.js";
+import { assertRealAcceptanceRecords } from "./environment-service.js";
 import { sha256 } from "./hash.js";
 import type { ProjectStore } from "./project-store.js";
 import { RunService } from "./run-service.js";
@@ -149,12 +150,14 @@ export class CandidateService {
   ): Promise<Candidate> {
     validateIdentityAndScope(input.kind, input.scope);
     if (!input.changeSummary.trim()) throw new Error("候选必须包含修订摘要");
-    const normalizedPaths = normalizeSubjectPaths(input.subjectPaths);
-    if (normalizedPaths.length === 0 && input.testRecordIds.length === 0) {
+    const requestedPaths = normalizeSubjectPaths(input.subjectPaths);
+    if (requestedPaths.length === 0 && input.testRecordIds.length === 0) {
       throw new Error("候选至少需要一个文件或测试记录");
     }
 
     const approvedVersions = await this.store.listJson<ApprovedVersion>("approved-versions");
+    const current = currentVersion(approvedVersions, input.kind, input.scope.id);
+    const normalizedPaths = revisionSubjectPaths(input.kind, current, requestedPaths);
     await this.validateReferences(input, approvedVersions);
     this.validateScope(input, approvedVersions);
     await this.validateLifecycleInputs(
@@ -163,7 +166,6 @@ export class CandidateService {
       normalizedPaths,
       options.entry,
     );
-    const current = currentVersion(approvedVersions, input.kind, input.scope.id);
     if (current?.versionId !== input.parentVersionId) {
       throw new Error(current
         ? `父版本必须是当前已批准版本: ${current.versionId}`
@@ -413,14 +415,14 @@ export class CandidateService {
     if (input.kind === "CODE") {
       const allowed = [...run.allowedProductPaths, ...run.allowedTestPaths];
       for (const subjectPath of subjectPaths) {
-        if (!allowed.some((prefix) => isWithinPrefix(subjectPath, prefix))) {
+        if (!allowed.some((prefix) => isWithinApprovedPath(subjectPath, prefix))) {
           throw new Error(`代码候选文件超出模块设计批准的路径边界: ${subjectPath}`);
         }
       }
     }
     if (input.kind === "MODULE_TEST") {
       for (const subjectPath of subjectPaths) {
-        if (!run.allowedTestPaths.some((prefix) => isWithinPrefix(subjectPath, prefix))) {
+        if (!run.allowedTestPaths.some((prefix) => isWithinApprovedPath(subjectPath, prefix))) {
           throw new Error(`模块测试候选文件超出模块设计批准的测试路径边界: ${subjectPath}`);
         }
       }
@@ -447,6 +449,7 @@ export class CandidateService {
       const record = await this.store.readJson<TestRecord>("test-runs", testRecordId);
       if (record.outcome !== "PASSED") throw new Error(`系统验收引用了未通过的测试记录: ${testRecordId}`);
     }
+    await assertRealAcceptanceRecords(this.store, input.testRecordIds);
   }
 
   private async requireCurrentVersionBytes(version: ApprovedVersion): Promise<void> {
@@ -469,6 +472,16 @@ export function currentVersion(
     .sort((left, right) => right.revision - left.revision)[0];
 }
 
+export function revisionSubjectPaths(
+  kind: ArtifactKind,
+  current: ApprovedVersion | undefined,
+  requestedPaths: string[],
+): string[] {
+  return kind === "CODE" && current
+    ? [...new Set([...current.subjectPaths, ...requestedPaths])].sort()
+    : requestedPaths;
+}
+
 function validateIdentityAndScope(kind: ArtifactKind, scope: ArtifactScope): void {
   if (!STABLE_ID.test(scope.id) || !scope.name.trim()) throw new Error(`候选范围编号或名称无效: ${scope.id}`);
   if (kind === "CODE" && scope.type !== "MODULE") throw new Error("代码候选只能属于业务模块");
@@ -488,9 +501,34 @@ function sameSet(left: string[], right: string[]): boolean {
   return left.length === right.length && [...left].sort().every((value, index) => value === [...right].sort()[index]);
 }
 
-function isWithinPrefix(subjectPath: string, allowedPrefix: string): boolean {
-  const subject = path.normalize(subjectPath);
-  const prefix = path.normalize(allowedPrefix);
+export function isWithinApprovedPath(subjectPath: string, allowedPattern: string): boolean {
+  const subject = path.normalize(subjectPath).replaceAll("\\", "/");
+  const pattern = path.normalize(allowedPattern).replaceAll("\\", "/");
+  if (/[?*]/u.test(pattern)) return globPattern(pattern).test(subject);
+  const prefix = path.normalize(pattern);
   const relative = path.relative(prefix, subject);
   return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+function globPattern(pattern: string): RegExp {
+  let source = "";
+  for (let index = 0; index < pattern.length;) {
+    if (pattern.startsWith("**/", index)) {
+      source += "(?:.*/)?";
+      index += 3;
+    } else if (pattern.startsWith("**", index)) {
+      source += ".*";
+      index += 2;
+    } else if (pattern[index] === "*") {
+      source += "[^/]*";
+      index += 1;
+    } else if (pattern[index] === "?") {
+      source += "[^/]";
+      index += 1;
+    } else {
+      source += pattern[index]!.replace(/[.+^${}()|[\]\\]/gu, "\\$&");
+      index += 1;
+    }
+  }
+  return new RegExp(`^${source}$`, "u");
 }
