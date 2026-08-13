@@ -56,6 +56,9 @@ describe("OpenCode 运行资源", () => {
     expect(skill).toContain("纯本地、确定性的模块测试不登记虚构环境");
     expect(skill).toContain("模块测试不需要编码待办");
     expect(skill).toContain("不用通用 shell、递归 glob 或全文搜索枚举项目");
+    expect(skill).toContain("sdlc_test_execute_existing");
+    expect(skill).toContain("sdlc-test-run.mjs module");
+    expect(skill).toContain("最多执行两次");
   });
 
   it("系统测试复用当前模块记录并区分模拟与真实验收", async () => {
@@ -77,6 +80,9 @@ describe("OpenCode 运行资源", () => {
     expect(skill).toContain("/sdlc-test system");
     expect(skill).toContain("不传工具返回的");
     expect(skill).toContain("`evidence/...`");
+    expect(skill).toContain("sdlc_test_execute_existing");
+    expect(skill).toContain("sdlc-test-run.mjs system");
+    expect(skill).toContain("首错即停");
   });
 
   it("审核命令必须展示测试证据和模拟环境边界", async () => {
@@ -156,5 +162,17 @@ describe("OpenCode 运行资源", () => {
       initialized: false,
       recommendedAction: { command: "/sdlc-init" },
     });
+  });
+
+  it("提供不经过模型的已有测试确定性重跑入口", () => {
+    const root = path.resolve(import.meta.dirname, "..", "runtime");
+    const result = spawnSync(process.execPath, [path.join(root, "bin", "sdlc-test-run.mjs")], {
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("sdlc-test-run.mjs system");
+    expect(result.stderr).toContain("不调用模型");
   });
 });

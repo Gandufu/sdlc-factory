@@ -50,6 +50,8 @@ describe("SdlcFactoryPlugin", () => {
     expect(hooks.tool).toHaveProperty("sdlc_module_test_candidate_create");
     expect(hooks.tool).toHaveProperty("sdlc_system_test_candidate_create");
     expect(hooks.tool).toHaveProperty("sdlc_system_acceptance_candidate_create");
+    expect(hooks.tool).toHaveProperty("sdlc_test_recipe_read");
+    expect(hooks.tool).toHaveProperty("sdlc_test_execute_existing");
   });
 
   it("分页读取授权来源并保持真实字节", async () => {

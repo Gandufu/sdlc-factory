@@ -119,7 +119,7 @@ export class TestRecordService {
     inputVersionIds: string[],
     environmentVersionId: string | undefined,
     fingerprintPaths: string[],
-    commands: Array<{ executable: string; arguments: string[]; workingDirectory: string }>,
+    commands: Array<{ executable: string; arguments: string[]; workingDirectory: string; timeoutMs?: number }>,
   ): Promise<TestRecord | undefined> {
     const environment = environmentVersionId
       ? await this.store.readJson<EnvironmentVersion>("environments", environmentVersionId)
@@ -134,7 +134,11 @@ export class TestRecordService {
         inputVersionIds,
         fingerprintPaths,
       )),
-      commands,
+      commands: commands.map(({ executable, arguments: commandArguments, workingDirectory }) => ({
+        executable,
+        arguments: commandArguments,
+        workingDirectory,
+      })),
     }), "utf8"));
     return (await this.store.listJson<TestRecord>("test-runs"))
       .filter((record) => record.scope.id === scope.id && record.outcome === "PASSED" && record.fingerprint === fingerprint)

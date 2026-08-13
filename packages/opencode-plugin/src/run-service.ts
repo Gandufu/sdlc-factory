@@ -15,6 +15,8 @@ export class RunService {
   async start(input: Omit<RunRecord, "runId" | "createdAt">): Promise<RunRecord> {
     const active = await this.findActiveRun(input.sessionId);
     if (active) throw new Error(`当前会话已有未结束运行: ${active.runId}`);
+    const activeScope = await this.findActiveRunForScope(input.scope.type, input.scope.id);
+    if (activeScope) throw new Error(`当前范围已有未结束运行: ${activeScope.runId}`);
     const run: RunRecord = { runId: this.runtime.id(), ...input, createdAt: this.runtime.now() };
     await this.store.writeImmutable("runs", run.runId, run);
     await this.store.appendJournal({
@@ -102,6 +104,17 @@ export class RunService {
     const finished = new Set(events.filter((event) => event.type === "RUN_FINISHED").map((event) => String(event.runId)));
     return runs
       .filter((run) => run.sessionId === sessionId && !finished.has(run.runId))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  }
+
+  async findActiveRunForScope(scopeType: RunRecord["scope"]["type"], scopeId: string): Promise<RunRecord | undefined> {
+    const [runs, events] = await Promise.all([
+      this.store.listJson<RunRecord>("runs"),
+      this.store.readJournal<JournalEvent>(),
+    ]);
+    const finished = new Set(events.filter((event) => event.type === "RUN_FINISHED").map((event) => String(event.runId)));
+    return runs
+      .filter((run) => run.scope.type === scopeType && run.scope.id === scopeId && !finished.has(run.runId))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
   }
 

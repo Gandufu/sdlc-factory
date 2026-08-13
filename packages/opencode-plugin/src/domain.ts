@@ -163,6 +163,7 @@ export type CommandEvidence = {
   executable: string;
   arguments: string[];
   workingDirectory: string;
+  timeoutMs?: number;
   exitCode: number | null;
   timedOut: boolean;
   startedAt: string;

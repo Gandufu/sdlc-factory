@@ -66,6 +66,24 @@ describe("RunService", () => {
       .rejects.toBeInstanceOf(CodingTodoRequiredError);
   });
 
+  it("不同会话不能同时启动同一业务范围的运行", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-run-"));
+    temporaryDirectories.push(workspace);
+    const store = new ProjectStore(workspace);
+    await startCoding(store);
+
+    await expect(service(store).start({
+      command: "/sdlc-test 系统管理",
+      commandType: "MODULE_TEST",
+      sessionId: "session-2",
+      scope: { type: "MODULE", id: "module-system-management", name: "系统管理" },
+      gitBase: "abc123",
+      inputVersionIds: ["code-module-system-management-r1"],
+      allowedProductPaths: [],
+      allowedTestPaths: [],
+    })).rejects.toThrow("当前范围已有未结束运行");
+  });
+
   it("失败命令证据不能被运行结论隐藏", async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-run-"));
     temporaryDirectories.push(workspace);

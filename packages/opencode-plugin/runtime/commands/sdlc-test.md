@@ -12,8 +12,15 @@ description: 执行业务模块测试或系统集成测试并形成真实记录
 
 所有命令必须通过 `sdlc_command_execute` 运行并自动记录退出码、耗时、输出哈希和证据。不得使用固定 sleep 轮询 OpenCode；命令完成以进程退出和结构化结果为准。失败、跳过和阻塞不得描述为通过。
 
+当前范围已有已批准通过的测试版本时，不再由模型逐步调用运行、命令、记录、报告和候选工具；直接调用一次
+`sdlc_test_execute_existing`。模块测试传完整模块名称；系统测试必须显式传本次环境版本。工具从批准记录恢复
+精确命令配方，首错即停，内部模型调用为零。只有首次测试没有批准配方时，才执行 Skills 中的逐步流程。
+
 模块测试通过后使用 `sdlc_module_test_candidate_create`；系统测试报告生成后使用 `sdlc_system_test_candidate_create`。两者只接收测试记录编号，由工具恢复运行和版本事实，不得再让模型传入测试源文件、Git 基点或完整版本清单。
 
 若 `sdlc_status.recommendedAction.action` 为 `SYSTEM_ACCEPTANCE` 且 `systemTestProfile=REAL`，不得再启动运行、
 查找复用记录或读取测试正文；直接调用 `sdlc_system_acceptance_candidate_create` 形成验收候选。模拟环境
 只能形成系统测试版本，不得形成正式系统验收。
+
+不需要对结果进行语义分析的日常重跑和持续集成不应进入本命令，直接使用目标项目中的
+`node .opencode/bin/sdlc-test-run.mjs`，其模型调用量和模型 token 均为零。

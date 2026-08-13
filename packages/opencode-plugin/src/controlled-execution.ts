@@ -11,6 +11,9 @@ import { resolveWorkspacePath } from "./workspace-path.js";
 
 const MAX_CAPTURE_BYTES = 5 * 1024 * 1024;
 const WINDOWS_SHELL_META = /[&|<>^%\r\n]/u;
+const MAX_IDENTICAL_COMMAND_ATTEMPTS = 2;
+
+export class CommandAttemptLimitError extends Error {}
 
 type RuntimeValues = { id(): string; now(): string };
 type ExecuteInput = {
@@ -51,6 +54,15 @@ export class ControlledExecutionService {
     }
     assertSafeCommandArguments(input.arguments);
     const workingDirectory = await resolveWorkspacePath(this.workspaceRoot, input.workingDirectory);
+    const relativeWorkingDirectory = path.relative(this.workspaceRoot, workingDirectory).replaceAll("\\", "/") || ".";
+    const attempts = (await this.store.listJson<CommandEvidence>("command-evidence")).filter((evidence) =>
+      evidence.runId === input.runId
+      && evidence.executable === executable
+      && evidence.workingDirectory === relativeWorkingDirectory
+      && JSON.stringify(evidence.arguments) === JSON.stringify(input.arguments));
+    if (attempts.length >= MAX_IDENTICAL_COMMAND_ATTEMPTS) {
+      throw new CommandAttemptLimitError("同一运行中的同一命令最多执行两次；请结束当前运行并处理根因，禁止继续消耗模型和执行资源");
+    }
     const evidenceId = this.runtime.id();
     const evidenceDirectory = path.join(this.workspaceRoot, "evidence", run.runId);
     await mkdir(evidenceDirectory, { recursive: true });
@@ -68,7 +80,8 @@ export class ControlledExecutionService {
       runId: input.runId,
       executable,
       arguments: input.arguments,
-      workingDirectory: path.relative(this.workspaceRoot, workingDirectory).replaceAll("\\", "/") || ".",
+      workingDirectory: relativeWorkingDirectory,
+      timeoutMs: input.timeoutMs,
       exitCode: result.exitCode,
       timedOut: result.timedOut,
       startedAt,
@@ -88,7 +101,8 @@ export class ControlledExecutionService {
       exitCode: evidence.exitCode,
       timedOut: evidence.timedOut,
     });
-    return { ...evidence, stdoutTail: tail(stdout), stderrTail: tail(stderr) };
+    const outputLimit = evidence.exitCode === 0 && !evidence.timedOut ? 2_000 : 8_000;
+    return { ...evidence, stdoutTail: tail(stdout, outputLimit), stderrTail: tail(stderr, outputLimit) };
   }
 }
 
@@ -142,6 +156,6 @@ function redact(value: string): string {
     .replace(/((?:password|secret|token|api[_-]?key)\s*[=:]\s*)\S+/giu, "$1[REDACTED]");
 }
 
-function tail(value: string): string {
-  return value.length <= 8_000 ? value : value.slice(-8_000);
+function tail(value: string, limit: number): string {
+  return value.length <= limit ? value : value.slice(-limit);
 }

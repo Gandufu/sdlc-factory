@@ -5,14 +5,13 @@ import path from "node:path";
 
 import { tool, type Plugin } from "@opencode-ai/plugin";
 
-import { findModule, findRequirementMap, isModuleDesignFacts } from "./artifact-validator.js";
-import { CandidateService, currentVersion } from "./candidate-service.js";
+import { CandidateService } from "./candidate-service.js";
 import { safeCommandArguments } from "./command-safety.js";
 import { ContextService } from "./context-service.js";
 import { ControlledExecutionService } from "./controlled-execution.js";
+import { DeterministicTestService } from "./deterministic-test-service.js";
 import { writeLifecycleDocument } from "./document-service.js";
 import type {
-  ApprovedVersion,
   ArtifactKind,
   ArtifactScope,
   Candidate,
@@ -25,17 +24,16 @@ import type {
   TestRecord,
 } from "./domain.js";
 import { EnvironmentService } from "./environment-service.js";
-import { readGitBase } from "./git-service.js";
 import { sha256 } from "./hash.js";
 import { ProjectStore } from "./project-store.js";
 import { ReviewService } from "./review-service.js";
+import { RunPreparationService } from "./run-preparation-service.js";
 import { RunService } from "./run-service.js";
 import { SetService } from "./set-service.js";
 import { SourceService, type SourceSnapshot } from "./source-service.js";
-import { findModuleByExactName, StatusService } from "./status-service.js";
+import { StatusService } from "./status-service.js";
 import { TestRecordService, VerificationReportService } from "./test-record-service.js";
 import { resolveStoredSnapshotPath, resolveWorkspacePath } from "./workspace-path.js";
-import { assertApprovedCodeIntegrity, codeVersionDependsOn } from "./version-integrity.js";
 
 const PLUGIN_VERSION = "0.1.0";
 const DEFAULT_EXECUTABLES = ["node", "corepack", "pnpm", "npm", "npx", "mvn", "mvnw", "gradle", "gradlew", "java", "playwright"];
@@ -584,6 +582,43 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           }, context.sessionID));
         },
       }),
+      sdlc_test_recipe_read: tool({
+        description: "Read the exact safe command recipe from an approved passing module or system test record.",
+        args: {
+          scopeType: tool.schema.enum(["MODULE", "SYSTEM"]),
+          moduleName: tool.schema.string().min(1).optional(),
+          recipeTestRecordId: tool.schema.string().min(1).optional(),
+        },
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-test"]);
+          return JSON.stringify(await new DeterministicTestService(store(), directory, runtime).readRecipe({
+            scopeType: args.scopeType,
+            ...(args.moduleName ? { moduleName: args.moduleName } : {}),
+            ...(args.recipeTestRecordId ? { recipeTestRecordId: args.recipeTestRecordId } : {}),
+          }));
+        },
+      }),
+      sdlc_test_execute_existing: tool({
+        description: "Replay an approved passing test command recipe as one deterministic workflow with zero internal model calls.",
+        args: {
+          scopeType: tool.schema.enum(["MODULE", "SYSTEM"]),
+          moduleName: tool.schema.string().min(1).optional(),
+          recipeTestRecordId: tool.schema.string().min(1).optional(),
+          environmentVersionId: tool.schema.string().min(1).optional(),
+          createCandidate: tool.schema.boolean().default(false),
+        },
+        async execute(args, context) {
+          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-test"]);
+          return JSON.stringify(await new DeterministicTestService(store(), directory, runtime).execute({
+            scopeType: args.scopeType,
+            ...(args.moduleName ? { moduleName: args.moduleName } : {}),
+            ...(args.recipeTestRecordId ? { recipeTestRecordId: args.recipeTestRecordId } : {}),
+            ...(args.environmentVersionId ? { environmentVersionId: args.environmentVersionId } : {}),
+            createCandidate: args.createCandidate ?? false,
+            sessionId: context.sessionID,
+          }));
+        },
+      }),
       sdlc_run_start: tool({
         description: "Start one gated business-module coding/test run or one system-test run without an execution plan.",
         args: {
@@ -593,96 +628,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         async execute(args, context) {
           await requireLifecycleCommand(sessionCommands, store(), context.sessionID, [args.command.startsWith("/sdlc-code ") ? "sdlc-code" : "sdlc-test"]);
           const projectStore = store();
-          const status = await new StatusService(projectStore).read();
-          const versions = await projectStore.listJson<ApprovedVersion>("approved-versions");
-          const map = findRequirementMap(versions);
-          const gitBase = await readGitBase(directory);
-          if (!status.designSetVersionId || !map) throw new Error("总设计版本批准并有效后才能开始编码或测试运行");
-          let runInput: Omit<RunRecord, "runId" | "createdAt">;
-          if (args.command === "/sdlc-test system") {
-            if (args.moduleName && args.moduleName !== "system") throw new Error("系统测试不能指定业务模块名称");
-            const incomplete = status.modules?.filter((module) => !module.moduleTestVersionId || module.moduleTestResult !== "PASSED") ?? [];
-            if (incomplete.length > 0) throw new Error(`以下业务模块尚无当前通过的模块测试: ${incomplete.map((item) => item.moduleName).join("、")}`);
-            const inputVersionIds = [status.designSetVersionId];
-            for (const module of status.modules ?? []) {
-              inputVersionIds.push(module.codeVersionId!, module.moduleTestVersionId!);
-            }
-            runInput = {
-              command: args.command,
-              commandType: "SYSTEM_TEST",
-              sessionId: context.sessionID,
-              scope: { type: "SYSTEM", id: "system", name: "系统" },
-              gitBase,
-              inputVersionIds,
-              allowedProductPaths: map.businessModules.flatMap((module) => {
-                const design = currentVersion(versions, "MODULE_DESIGN", module.moduleId);
-                return isModuleDesignFacts(design?.facts) ? design.facts.productPaths : [];
-              }),
-              allowedTestPaths: map.businessModules.flatMap((module) => {
-                const design = currentVersion(versions, "MODULE_DESIGN", module.moduleId);
-                return isModuleDesignFacts(design?.facts) ? design.facts.testPaths : [];
-              }),
-            };
-          } else {
-            if (!args.moduleName) throw new Error("业务模块运行必须提供完整模块名称");
-            const moduleProgress = findModuleByExactName(status, args.moduleName);
-            const module = findModule(versions, moduleProgress.moduleId)!;
-            const codeCommand = `/sdlc-code ${module.name}`;
-            const testCommand = `/sdlc-test ${module.name}`;
-            if (args.command !== codeCommand && args.command !== testCommand) {
-              throw new Error(`运行命令必须包含完整业务模块名称: ${codeCommand} 或 ${testCommand}`);
-            }
-            const isCode = args.command === codeCommand;
-            if (isCode && (!["CODING", "MODULE_TEST", "SYSTEM_TEST", "COMPLETED"].includes(moduleProgress.stage)
-              || ["WAITING_REVIEW", "SUSPENDED", "IN_PROGRESS"].includes(moduleProgress.state))) {
-              throw new Error(`业务模块当前不能进入编码: ${moduleProgress.state}/${moduleProgress.stage}`);
-            }
-            if (!isCode && (moduleProgress.stage !== "MODULE_TEST" || ["WAITING_REVIEW", "SUSPENDED"].includes(moduleProgress.state))) {
-              throw new Error(`业务模块当前不能进入模块测试: ${moduleProgress.state}/${moduleProgress.stage}`);
-            }
-            const design = currentVersion(versions, "MODULE_DESIGN", module.moduleId)!;
-            if (!isModuleDesignFacts(design.facts)) throw new Error(`模块设计缺少实现路径边界: ${design.versionId}`);
-            const dependencyCodeVersionIds = module.dependencies.map((dependencyId) => {
-              const dependencyCode = currentVersion(versions, "CODE", dependencyId);
-              if (!dependencyCode) throw new Error(`依赖模块尚无已批准代码: ${dependencyId}`);
-              return dependencyCode.versionId;
-            });
-            const currentCodeVersions = map.businessModules
-              .map((item) => currentVersion(versions, "CODE", item.moduleId))
-              .filter((version): version is ApprovedVersion => Boolean(version));
-            const downstreamCodeVersionIds = !isCode && moduleProgress.codeVersionId
-              ? currentCodeVersions
-                .filter((version) => codeVersionDependsOn(
-                  version,
-                  moduleProgress.codeVersionId!,
-                  currentCodeVersions,
-                ))
-                .map((version) => version.versionId)
-              : [];
-            const inputVersionIds = isCode
-              ? [...new Set([
-                status.requirementSetVersionId!, status.designSetVersionId!,
-                moduleProgress.requirementVersionId!, design.versionId,
-                ...(moduleProgress.codeVersionId ? [moduleProgress.codeVersionId] : []),
-                ...dependencyCodeVersionIds,
-              ])]
-              : [...new Set([
-                status.designSetVersionId!, design.versionId, moduleProgress.codeVersionId!,
-                ...dependencyCodeVersionIds, ...downstreamCodeVersionIds,
-              ])];
-            runInput = {
-              command: args.command,
-              commandType: isCode ? "CODE" : "MODULE_TEST",
-              sessionId: context.sessionID,
-              scope: { type: "MODULE", id: module.moduleId, name: module.name },
-              gitBase,
-              inputVersionIds,
-              allowedProductPaths: design.facts.productPaths,
-              allowedTestPaths: design.facts.testPaths,
-            };
-          }
-          await assertApprovedCodeIntegrity(projectStore, directory, runInput.inputVersionIds);
-          return JSON.stringify(await new RunService(projectStore, runtime).start(runInput));
+          return JSON.stringify(await new RunPreparationService(projectStore, directory, runtime)
+            .start(args.command, args.moduleName, context.sessionID));
         },
       }),
       sdlc_command_execute: tool({
@@ -735,13 +682,14 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         },
         async execute(args, context) {
           await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-test"]);
-          return JSON.stringify(await new TestRecordService(store(), directory, runtime).create({
+          const record = await new TestRecordService(store(), directory, runtime).create({
             runId: args.runId,
             scope: { type: args.scopeType, id: args.scopeId, name: args.scopeName },
             ...(args.environmentVersionId ? { environmentVersionId: args.environmentVersionId } : {}),
             fingerprintPaths: args.fingerprintPaths ?? [],
             evidencePaths: args.evidencePaths ?? [],
-          }));
+          });
+          return JSON.stringify(testRecordProjection(record));
         },
       }),
       sdlc_test_reuse_find: tool({
@@ -757,6 +705,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
             executable: tool.schema.string().min(1),
             arguments: tool.schema.array(tool.schema.string()).default([]),
             workingDirectory: tool.schema.string().min(1).default("."),
+            timeoutMs: tool.schema.number().int().min(1000).max(1800000).default(300000),
           })).min(1),
         },
         async execute(args, context) {
@@ -770,9 +719,10 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
               executable: command.executable,
               arguments: command.arguments ?? [],
               workingDirectory: command.workingDirectory ?? ".",
+              timeoutMs: command.timeoutMs ?? 300000,
             })),
           );
-          return JSON.stringify({ reusable: Boolean(record), ...(record ? { testRecord: record } : {}) });
+          return JSON.stringify({ reusable: Boolean(record), ...(record ? { testRecord: testRecordProjection(record) } : {}) });
         },
       }),
       sdlc_verification_report_generate: tool({
@@ -789,6 +739,26 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
 
 function isMutatingTool(toolName: string): boolean {
   return ["write", "edit", "patch", "apply_patch", "bash", "shell"].includes(toolName.toLowerCase());
+}
+
+function testRecordProjection(record: TestRecord) {
+  return {
+    testRecordId: record.testRecordId,
+    scope: record.scope,
+    outcome: record.outcome,
+    inputVersionIds: record.inputVersionIds,
+    ...(record.environmentVersionId ? { environmentVersionId: record.environmentVersionId } : {}),
+    passedCommands: record.passedCommands,
+    failedCommands: record.failedCommands,
+    skippedCommands: record.skippedCommands,
+    blockedCommands: record.blockedCommands,
+    assertionCountsAvailable: record.assertionCountsAvailable,
+    fingerprint: record.fingerprint,
+    commandEvidenceIds: record.commandEvidenceIds,
+    evidencePaths: record.evidencePaths.map((evidence) => evidence.path),
+    startedAt: record.startedAt,
+    finishedAt: record.finishedAt,
+  };
 }
 
 async function requireLifecycleCommand(
