@@ -16,6 +16,10 @@ metadata:
 
 `sdlc_status.recommendedAction` 是本轮唯一工作分支，必须先判断，再装配上下文或写文档：
 
+- `recommendedAction.target` 明确给出本轮唯一 `kind`、`scopeId` 和 `documentPaths`；普通候选必须逐项
+  完全一致，并严格采用其中的 `parentVersionId`；值为 `null` 时必须省略候选参数。不得改写、重新提交
+  或顺带包含已经批准的其他设计文档；
+
 - 原因为“需要生成并审核总设计版本”时，只能调用一次
   `sdlc_set_candidate_create(kind=DESIGN_SET)`；不得装配上下文、不得写设计文档、不得调用普通候选工具；
 - 原因为产品总体设计尚未批准时，只维护产品总体设计；

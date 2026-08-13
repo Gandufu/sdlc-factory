@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Candidate, CommandEvidence, EnvironmentVersion, TestRecord } from "../src/domain.js";
 import { SdlcFactoryPlugin } from "../src/plugin.js";
 import { ProjectStore } from "../src/project-store.js";
+import { approvedVersion, requirementMapFacts } from "./fixtures.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -125,20 +126,168 @@ describe("SdlcFactoryPlugin", () => {
     const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
     temporaryDirectories.push(directory);
     const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks.tool!.sdlc_init!.execute(
+      { projectName: "测试项目", allowedReadRoots: [], allowedExecutables: ["node"] },
+      { sessionID: "session-1" } as never,
+    );
     await hooks["command.execute.before"]!({
       command: "sdlc-spec", sessionID: "session-1", arguments: "",
     }, { parts: [] } as never);
 
     await hooks.tool!.sdlc_document_write!.execute(
-      { targetPath: "docs/requirements/requirement-set.yaml", content: "schemaVersion: 1\n" },
+      { targetPath: "docs/requirements/product-brief.md", content: "# 产品概述\n" },
       { sessionID: "session-1" } as never,
     );
-    await expect(readFile(path.join(directory, "docs", "requirements", "requirement-set.yaml"), "utf8"))
-      .resolves.toBe("schemaVersion: 1\n");
+    await expect(readFile(path.join(directory, "docs", "requirements", "product-brief.md"), "utf8"))
+      .resolves.toBe("# 产品概述\n");
     await expect(hooks.tool!.sdlc_document_write!.execute(
       { targetPath: "src/app.ts", content: "越权" },
       { sessionID: "session-1" } as never,
-    )).rejects.toThrow("docs 目录");
+    )).rejects.toThrow("只允许写入");
+  });
+
+  it("需求地图阶段不能改写已批准产品概述", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks.tool!.sdlc_init!.execute(
+      { projectName: "测试项目", allowedReadRoots: [], allowedExecutables: ["node"] },
+      { sessionID: "session-map" } as never,
+    );
+    const brief = approvedVersion({
+      kind: "PRODUCT_BRIEF",
+      scope: { type: "PROJECT", id: "project", name: "测试项目" },
+    });
+    await new ProjectStore(directory).writeImmutable("approved-versions", brief.versionId, brief);
+    await hooks["command.execute.before"]!({
+      command: "sdlc-spec", sessionID: "session-map", arguments: "",
+    }, { parts: [] } as never);
+
+    await expect(hooks.tool!.sdlc_document_write!.execute(
+      { targetPath: "docs/requirements/product-brief.md", content: "# 被误改的产品概述\n" },
+      { sessionID: "session-map" } as never,
+    )).rejects.toThrow("docs/requirements/requirement-map.md");
+    await expect(hooks.tool!.sdlc_document_write!.execute(
+      {
+        targetPath: "docs/requirements/requirement-map.md",
+        content: [
+          "# 需求地图", "## 业务模块", "## 功能组", "## 执行依赖", "## 外部接口", "## 非功能需求", "",
+        ].join("\n"),
+      },
+      { sessionID: "session-map" } as never,
+    )).resolves.toBeTypeOf("string");
+    await expect(hooks.tool!.sdlc_candidate_create!.execute({
+      kind: "REQUIREMENT_MAP",
+      scopeType: "PROJECT",
+      scopeId: "project",
+      scopeName: "测试项目",
+      subjectPaths: [
+        "docs/requirements/product-brief.md",
+        "docs/requirements/requirement-map.md",
+      ],
+      inputVersionIds: [],
+      sourceIds: [],
+      testRecordIds: [],
+      changeType: "STRUCTURE",
+      changeSummary: "错误地携带已批准产品概述",
+      proposedImpactScopeIds: [],
+      businessModules: [],
+      interfaces: [],
+      qualityRequirements: [],
+    }, { sessionID: "session-map" } as never)).rejects.toThrow("必须且只能包含: docs/requirements/requirement-map.md");
+
+    const mapCandidate = JSON.parse(await hooks.tool!.sdlc_candidate_create!.execute({
+      kind: "REQUIREMENT_MAP",
+      scopeType: "PROJECT",
+      scopeId: "project",
+      scopeName: "测试项目",
+      subjectPaths: ["docs/requirements/requirement-map.md"],
+      inputVersionIds: [brief.versionId],
+      sourceIds: [],
+      testRecordIds: [],
+      changeType: "STRUCTURE",
+      changeSummary: "建立业务模块地图",
+      proposedImpactScopeIds: [],
+      businessModules: [{
+        moduleId: "system-management",
+        name: "系统管理",
+        slug: "system-management",
+        goal: "管理系统基础能力",
+        functionalGroups: ["用户管理"],
+        dependencies: [],
+        interfaceIds: [],
+        qualityIds: [],
+        status: "ACTIVE",
+      }],
+      interfaces: [],
+      qualityRequirements: [],
+    }, { sessionID: "session-map" } as never) as string);
+    const projection = JSON.parse(await hooks.tool!.sdlc_candidate_read!.execute(
+      { candidateId: mapCandidate.candidateId },
+      { sessionID: "session-map" } as never,
+    ) as string);
+    expect(projection.facts.businessModules).toEqual([expect.objectContaining({
+      moduleId: "system-management",
+      name: "系统管理",
+      functionalGroups: ["用户管理"],
+    })]);
+  });
+
+  it("显式对象名称允许修订已批准需求且仍限制规范路径", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "sdlc-plugin-"));
+    temporaryDirectories.push(directory);
+    const hooks = await SdlcFactoryPlugin({ directory } as never);
+    await hooks.tool!.sdlc_init!.execute(
+      { projectName: "测试项目", allowedReadRoots: [], allowedExecutables: ["node"] },
+      { sessionID: "session-revision" } as never,
+    );
+    const project = { type: "PROJECT", id: "project", name: "测试项目" } as const;
+    const brief = approvedVersion({ kind: "PRODUCT_BRIEF", scope: project });
+    const map = approvedVersion({ kind: "REQUIREMENT_MAP", scope: project, facts: requirementMapFacts });
+    const requirement = approvedVersion({
+      kind: "MODULE_REQUIREMENT",
+      scope: { type: "MODULE", id: "module-system-management", name: "系统管理" },
+      inputVersionIds: [map.versionId],
+    });
+    const projectStore = new ProjectStore(directory);
+    for (const version of [brief, map, requirement]) {
+      await projectStore.writeImmutable("approved-versions", version.versionId, version);
+    }
+    await hooks["command.execute.before"]!({
+      command: "sdlc-spec", sessionID: "session-revision", arguments: "系统管理",
+    }, { parts: [] } as never);
+
+    await expect(hooks.tool!.sdlc_document_write!.execute({
+      targetPath: "docs/requirements/modules/system-management/functional-requirements.md",
+      content: [
+        "# 系统管理需求修订", "## 模块目标", "## 范围", "## 角色", "## 功能组", "## 需求条目",
+        "## 异常", "## 依赖模块", "## 外部接口", "## 非功能需求", "## 验证", "## 来源", "## 修订", "",
+      ].join("\n"),
+    }, { sessionID: "session-revision" } as never)).resolves.toBeTypeOf("string");
+    await expect(hooks.tool!.sdlc_document_write!.execute({
+      targetPath: "docs/requirements/product-brief.md",
+      content: "# 越界修订\n",
+    }, { sessionID: "session-revision" } as never)).rejects.toThrow("functional-requirements.md");
+    const candidate = JSON.parse(await hooks.tool!.sdlc_candidate_create!.execute({
+      kind: "MODULE_REQUIREMENT",
+      scopeType: "MODULE",
+      scopeId: "module-system-management",
+      scopeName: "系统管理",
+      subjectPaths: ["docs/requirements/modules/system-management/functional-requirements.md"],
+      parentVersionId: requirement.versionId,
+      inputVersionIds: [map.versionId],
+      sourceIds: [],
+      testRecordIds: [],
+      changeType: "CLARIFICATION",
+      changeSummary: "澄清系统管理需求",
+      proposedImpactScopeIds: ["module-system-management"],
+    }, { sessionID: "session-revision" } as never) as string);
+    expect(candidate).toMatchObject({
+      kind: "MODULE_REQUIREMENT",
+      revision: 2,
+      parentVersionId: requirement.versionId,
+      subjectPaths: ["docs/requirements/modules/system-management/functional-requirements.md"],
+    });
   });
 
   it("插件重启后从项目日志恢复当前会话进入的生命周期命令", async () => {
@@ -155,11 +304,11 @@ describe("SdlcFactoryPlugin", () => {
 
     const restartedHooks = await SdlcFactoryPlugin({ directory } as never);
     await restartedHooks.tool!.sdlc_document_write!.execute(
-      { targetPath: "docs/requirements/recovered.md", content: "# 已恢复\n" },
+      { targetPath: "docs/requirements/product-brief.md", content: "# 已恢复\n" },
       { sessionID: "session-recovered" } as never,
     );
 
-    await expect(readFile(path.join(directory, "docs", "requirements", "recovered.md"), "utf8"))
+    await expect(readFile(path.join(directory, "docs", "requirements", "product-brief.md"), "utf8"))
       .resolves.toBe("# 已恢复\n");
   });
 

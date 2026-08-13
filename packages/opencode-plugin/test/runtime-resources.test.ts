@@ -94,6 +94,8 @@ describe("OpenCode 运行资源", () => {
     expect(command).toContain("通过/失败/跳过/阻塞命令数");
     expect(command).toContain("不代表真实设备验收");
     expect(command).toContain("不得推断真实设备");
+    expect(command).toContain("结构化事实");
+    expect(command).toContain("需求地图必须逐项展示业务模块");
   });
 
   it("编码技能允许已完成模块形成继承父版本的完整代码修订", async () => {

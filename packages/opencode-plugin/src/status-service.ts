@@ -22,6 +22,13 @@ export type RecommendedAction = {
   todo: string;
   command: string;
   reason: string;
+  target?: {
+    kind: ArtifactKind;
+    scopeId: string;
+    scopeName: string;
+    documentPaths: string[];
+    parentVersionId: string | null;
+  };
 };
 
 export type ModuleProgress = {
@@ -448,36 +455,90 @@ function recommend(input: {
     candidate.scopeId === "project" || candidate.scopeId === "system" ? "/sdlc-review" : `/sdlc-review ${candidate.scopeName}`,
     "存在等待人工决定的候选",
   );
-  if (!currentVersion(input.versions, "PRODUCT_BRIEF", "project") || !input.map) {
-    return action("SPEC", "/sdlc-spec", "需要建立产品概述和需求地图");
+  if (!currentVersion(input.versions, "PRODUCT_BRIEF", "project")) {
+    return action("SPEC", "/sdlc-spec", "产品概述尚未批准", {
+      kind: "PRODUCT_BRIEF",
+      scopeId: "project",
+      scopeName: "项目",
+      documentPaths: ["docs/requirements/product-brief.md"],
+      parentVersionId: null,
+    });
+  }
+  if (!input.map) {
+    return action("SPEC", "/sdlc-spec", "需求地图尚未批准", {
+      kind: "REQUIREMENT_MAP",
+      scopeId: "project",
+      scopeName: "项目",
+      documentPaths: ["docs/requirements/requirement-map.md"],
+      parentVersionId: null,
+    });
   }
   for (const module of input.map.businessModules.filter((item) => item.status === "ACTIVE")) {
     if (!currentVersion(input.versions, "MODULE_REQUIREMENT", module.moduleId)) {
-      return action("SPEC", `/sdlc-spec ${module.name}`, "业务模块需求尚未批准");
+      return action("SPEC", `/sdlc-spec ${module.name}`, "业务模块需求尚未批准", {
+        kind: "MODULE_REQUIREMENT",
+        scopeId: module.moduleId,
+        scopeName: module.name,
+        documentPaths: [`docs/requirements/modules/${module.slug}/functional-requirements.md`],
+        parentVersionId: null,
+      });
     }
   }
   for (const contract of input.map.interfaces) {
     if (!currentVersion(input.versions, "INTERFACE_REQUIREMENT", contract.interfaceId)) {
-      return action("SPEC", "/sdlc-spec", `外部接口需求尚未批准: ${contract.name}`);
+      return action("SPEC", "/sdlc-spec", `外部接口需求尚未批准: ${contract.name}`, {
+        kind: "INTERFACE_REQUIREMENT",
+        scopeId: contract.interfaceId,
+        scopeName: contract.name,
+        documentPaths: [`docs/requirements/interfaces/${contract.slug}.md`],
+        parentVersionId: null,
+      });
     }
   }
   for (const quality of input.map.qualityRequirements) {
     if (!currentVersion(input.versions, "QUALITY_REQUIREMENT", quality.qualityId)) {
-      return action("SPEC", "/sdlc-spec", `非功能需求尚未批准: ${quality.name}`);
+      return action("SPEC", "/sdlc-spec", `非功能需求尚未批准: ${quality.name}`, {
+        kind: "QUALITY_REQUIREMENT",
+        scopeId: quality.qualityId,
+        scopeName: quality.name,
+        documentPaths: [`docs/requirements/quality/${quality.scope === "GLOBAL" ? "global" : quality.slug}.md`],
+        parentVersionId: null,
+      });
     }
   }
   if (!input.requirementSet) return action("SPEC", "/sdlc-spec", "需要生成并审核总需求版本");
   if (!currentVersion(input.versions, "PRODUCT_ARCHITECTURE", "project")) {
-    return action("DESIGN", "/sdlc-design", "产品总体设计尚未批准");
+    return action("DESIGN", "/sdlc-design", "产品总体设计尚未批准", {
+      kind: "PRODUCT_ARCHITECTURE",
+      scopeId: "project",
+      scopeName: "项目",
+      documentPaths: ["docs/design/product-architecture.md"],
+      parentVersionId: null,
+    });
   }
   for (const module of input.map.businessModules.filter((item) => item.status === "ACTIVE")) {
     if (!currentVersion(input.versions, "MODULE_DESIGN", module.moduleId)) {
-      return action("DESIGN", `/sdlc-design ${module.name}`, "业务模块设计和测试说明尚未批准");
+      return action("DESIGN", `/sdlc-design ${module.name}`, "业务模块设计和测试说明尚未批准", {
+        kind: "MODULE_DESIGN",
+        scopeId: module.moduleId,
+        scopeName: module.name,
+        documentPaths: [
+          `docs/design/modules/${module.slug}/design.md`,
+          `docs/verification/modules/${module.slug}/verification-spec.md`,
+        ],
+        parentVersionId: null,
+      });
     }
   }
   for (const contract of input.map.interfaces) {
     if (!currentVersion(input.versions, "INTERFACE_DESIGN", contract.interfaceId)) {
-      return action("DESIGN", "/sdlc-design", `接口设计尚未批准: ${contract.name}`);
+      return action("DESIGN", "/sdlc-design", `接口设计尚未批准: ${contract.name}`, {
+        kind: "INTERFACE_DESIGN",
+        scopeId: contract.interfaceId,
+        scopeName: contract.name,
+        documentPaths: [`docs/design/interfaces/${contract.slug}.md`],
+        parentVersionId: null,
+      });
     }
   }
   if (!input.designSet) return action("DESIGN", "/sdlc-design", "需要生成并审核总设计版本");
@@ -495,8 +556,13 @@ function recommend(input: {
   return action("STATUS", "/sdlc-status", "当前系统验收版本有效");
 }
 
-function action(actionName: string, command: string, reason: string): RecommendedAction {
-  return { action: actionName, command, todo: `执行 ${command}`, reason };
+function action(
+  actionName: string,
+  command: string,
+  reason: string,
+  target?: RecommendedAction["target"],
+): RecommendedAction {
+  return { action: actionName, command, todo: `执行 ${command}`, reason, ...(target ? { target } : {}) };
 }
 
 function lifecyclePhase(

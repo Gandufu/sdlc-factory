@@ -63,6 +63,36 @@ function lifecycleVersions(): ApprovedVersion[] {
 }
 
 describe("StatusService", () => {
+  it("需求阶段给出唯一产物种类和允许文档路径", async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-status-"));
+    temporaryDirectories.push(workspace);
+    const store = new ProjectStore(workspace);
+    await writeManifest(store, workspace);
+
+    const initial = await new StatusService(store).read();
+    expect(initial.recommendedAction.target).toEqual({
+      kind: "PRODUCT_BRIEF",
+      scopeId: "project",
+      scopeName: "项目",
+      documentPaths: ["docs/requirements/product-brief.md"],
+      parentVersionId: null,
+    });
+
+    const brief = approvedVersion({
+      kind: "PRODUCT_BRIEF",
+      scope: { type: "PROJECT", id: "project", name: "项目" },
+    });
+    await writeVersions(store, [brief]);
+    const afterBrief = await new StatusService(store).read();
+    expect(afterBrief.recommendedAction.target).toEqual({
+      kind: "REQUIREMENT_MAP",
+      scopeId: "project",
+      scopeName: "项目",
+      documentPaths: ["docs/requirements/requirement-map.md"],
+      parentVersionId: null,
+    });
+  });
+
   it("总设计批准前不生成完整项目进度", async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), "sdlc-status-"));
     temporaryDirectories.push(workspace);

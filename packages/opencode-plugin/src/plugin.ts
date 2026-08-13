@@ -5,7 +5,8 @@ import path from "node:path";
 
 import { tool, type Plugin } from "@opencode-ai/plugin";
 
-import { CandidateService } from "./candidate-service.js";
+import { findRequirementMap } from "./artifact-validator.js";
+import { CandidateService, currentVersion } from "./candidate-service.js";
 import { safeCommandArguments } from "./command-safety.js";
 import { ContextService } from "./context-service.js";
 import { ControlledExecutionService } from "./controlled-execution.js";
@@ -14,6 +15,7 @@ import { writeLifecycleDocument } from "./document-service.js";
 import type {
   ArtifactKind,
   ArtifactScope,
+  ApprovedVersion,
   Candidate,
   CandidateFacts,
   CommandEvidence,
@@ -38,6 +40,15 @@ import { resolveStoredSnapshotPath, resolveWorkspacePath } from "./workspace-pat
 const PLUGIN_VERSION = "0.1.0";
 const DEFAULT_EXECUTABLES = ["node", "corepack", "pnpm", "npm", "npx", "mvn", "mvnw", "gradle", "gradlew", "java", "playwright"];
 
+type LifecycleInvocation = { command: string; arguments: string };
+type LifecycleTarget = {
+  kind: ArtifactKind;
+  scopeId: string;
+  scopeName: string;
+  documentPaths: string[];
+  parentVersionId: string | null;
+};
+
 export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
   const runtime = { id: randomUUID, now: () => new Date().toISOString() };
   const store = () => new ProjectStore(directory);
@@ -49,7 +60,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       return latest.parts.filter((part) => part.type === "text").map((part) => part.text).join("");
     },
   };
-  const sessionCommands = new Map<string, string>();
+  const sessionCommands = new Map<string, LifecycleInvocation>();
 
   const moduleSchema = tool.schema.object({
     moduleId: tool.schema.string().min(2),
@@ -57,8 +68,10 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
     slug: tool.schema.string().min(1),
     goal: tool.schema.string().min(1),
     functionalGroups: tool.schema.array(tool.schema.string().min(1)).min(1),
-    dependencies: tool.schema.array(tool.schema.string().min(1)).default([]),
-    interfaceIds: tool.schema.array(tool.schema.string().min(1)).default([]),
+    dependencies: tool.schema.array(tool.schema.string().min(1)).default([])
+      .describe("只填写其他业务模块的 moduleId；外部接口编号必须填写到 interfaceIds"),
+    interfaceIds: tool.schema.array(tool.schema.string().min(1)).default([])
+      .describe("只填写外部接口的 interfaceId，不得填写到 dependencies"),
     qualityIds: tool.schema.array(tool.schema.string().min(1)).default([]),
     status: tool.schema.enum(["ACTIVE", "RETIRED"]).default("ACTIVE"),
     derivedFromModuleIds: tool.schema.array(tool.schema.string().min(1)).default([]),
@@ -87,19 +100,20 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
       await new RunService(store(), runtime).captureTodo(properties.sessionID, properties.todos);
     },
     "command.execute.before": async (input) => {
-      sessionCommands.set(input.sessionID, input.command);
+      sessionCommands.set(input.sessionID, { command: input.command, arguments: input.arguments ?? "" });
       if (existsSync(path.join(directory, ".sdlc-factory", "manifest.json"))) {
         await store().appendJournal({
           type: "LIFECYCLE_COMMAND_ENTERED",
           at: runtime.now(),
           sessionId: input.sessionID,
           command: input.command,
+          arguments: input.arguments ?? "",
         });
       }
     },
     "tool.execute.before": async (input, output) => {
       const service = new RunService(store(), runtime);
-      const command = sessionCommands.get(input.sessionID);
+      const command = sessionCommands.get(input.sessionID)?.command;
       enforceReadBoundary(directory, command, input.tool, output.args);
       if (command === "sdlc-test" && isMutatingTool(input.tool)) {
         throw new Error("测试阶段禁止使用原生写入或 shell 工具；测试代码必须在编码阶段维护，测试命令只能通过 sdlc_command_execute 执行");
@@ -247,7 +261,14 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         description: "Atomically write a Markdown or YAML lifecycle document inside docs.",
         args: { targetPath: tool.schema.string().min(1), content: tool.schema.string() },
         async execute(args, context) {
-          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, ["sdlc-spec", "sdlc-design"]);
+          const projectStore = store();
+          const invocation = await requireLifecycleCommand(
+            sessionCommands,
+            projectStore,
+            context.sessionID,
+            ["sdlc-spec", "sdlc-design"],
+          );
+          await assertCurrentDocumentTarget(projectStore, invocation, args.targetPath);
           return JSON.stringify(await writeLifecycleDocument(directory, args.targetPath, args.content));
         },
       }),
@@ -291,7 +312,8 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           scopeId: tool.schema.string().min(1),
           scopeName: tool.schema.string().min(1),
           subjectPaths: tool.schema.array(tool.schema.string().min(1)).default([]),
-          parentVersionId: tool.schema.string().min(1).optional(),
+          parentVersionId: tool.schema.string().min(1).optional()
+            .describe("仅修订同种类同范围的既有批准版本时填写；首个修订必须省略，输入版本不能作为父版本"),
           inputVersionIds: tool.schema.array(tool.schema.string().min(1)).default([]),
           sourceIds: tool.schema.array(tool.schema.string().min(1)).default([]),
           testRecordIds: tool.schema.array(tool.schema.string().min(1)).default([]),
@@ -308,7 +330,22 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
         },
         async execute(args, context) {
           const kind = args.kind as ArtifactKind;
-          await requireLifecycleCommand(sessionCommands, store(), context.sessionID, [commandForCandidateKind(kind)]);
+          const projectStore = store();
+          const invocation = await requireLifecycleCommand(
+            sessionCommands,
+            projectStore,
+            context.sessionID,
+            [commandForCandidateKind(kind)],
+          );
+          if (invocation.command === "sdlc-spec" || invocation.command === "sdlc-design") {
+            await assertCurrentCandidateTarget(
+              projectStore,
+              invocation,
+              kind,
+              args.scopeId,
+              args.subjectPaths ?? [],
+            );
+          }
           let facts: CandidateFacts | undefined;
           if (kind === "REQUIREMENT_MAP") {
             facts = {
@@ -334,7 +371,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
           const provenance = args.runId && args.gitBase
             ? { runId: args.runId, gitBase: args.gitBase, inputVersionIds, testRecordIds }
             : undefined;
-          const candidate = await new CandidateService(store(), directory, runtime).create({
+          const candidate = await new CandidateService(projectStore, directory, runtime).create({
             kind,
             scope: { type: args.scopeType, id: args.scopeId, name: args.scopeName },
             subjectPaths: args.subjectPaths ?? [],
@@ -435,6 +472,7 @@ export const SdlcFactoryPlugin: Plugin = async ({ client, directory }) => {
               size,
             })),
             deterministicChecks: candidate.deterministicChecks,
+            ...(candidate.facts ? { facts: candidate.facts } : {}),
             changeType: candidate.changeType,
             changeSummary: candidate.changeSummary,
             proposedImpactScopeIds: candidate.proposedImpactScopeIds,
@@ -762,18 +800,129 @@ function testRecordProjection(record: TestRecord) {
 }
 
 async function requireLifecycleCommand(
-  sessionCommands: Map<string, string>,
+  sessionCommands: Map<string, LifecycleInvocation>,
   projectStore: ProjectStore,
   sessionId: string,
   allowedCommands: string[],
-): Promise<void> {
+): Promise<LifecycleInvocation> {
   const events = await projectStore.readJournal<JournalEvent>();
   const persisted = [...events].reverse().find((event) =>
     event.type === "LIFECYCLE_COMMAND_ENTERED" && event.sessionId === sessionId);
-  const current = sessionCommands.get(sessionId) ?? String(persisted?.command ?? "");
-  if (!current || !allowedCommands.includes(current)) {
+  const current = sessionCommands.get(sessionId) ?? {
+    command: String(persisted?.command ?? ""),
+    arguments: String(persisted?.arguments ?? ""),
+  };
+  if (!current.command || !allowedCommands.includes(current.command)) {
     throw new Error(`当前写操作必须通过 ${allowedCommands.map((command) => `/${command}`).join(" 或 ")} 命令执行`);
   }
+  return current;
+}
+
+async function assertCurrentDocumentTarget(
+  projectStore: ProjectStore,
+  invocation: LifecycleInvocation,
+  targetPath: string,
+): Promise<void> {
+  const targets = await allowedLifecycleTargets(projectStore, invocation);
+  const normalized = targetPath.replaceAll("\\", "/");
+  if (!targets.some((target) => target.documentPaths.includes(normalized))) {
+    throw new Error(`当前生命周期动作只允许写入: ${targets.flatMap((target) => target.documentPaths).join(", ")}`);
+  }
+}
+
+async function assertCurrentCandidateTarget(
+  projectStore: ProjectStore,
+  invocation: LifecycleInvocation,
+  kind: ArtifactKind,
+  scopeId: string,
+  subjectPaths: string[],
+): Promise<void> {
+  const targets = await allowedLifecycleTargets(projectStore, invocation);
+  const target = targets.find((candidate) => candidate.kind === kind && candidate.scopeId === scopeId);
+  if (!target || target.kind !== kind || target.scopeId !== scopeId) {
+    throw new Error(
+      `当前生命周期候选必须是 ${targets.map((candidate) => `${candidate.kind} / ${candidate.scopeId}`).join(" 或 ")}`,
+    );
+  }
+  const actual = [...new Set(subjectPaths.map((item) => item.replaceAll("\\", "/")))].sort();
+  const expected = [...target.documentPaths].sort();
+  if (actual.length !== expected.length || actual.some((item, index) => item !== expected[index])) {
+    throw new Error(`当前生命周期候选必须且只能包含: ${target.documentPaths.join(", ")}`);
+  }
+}
+
+async function allowedLifecycleTargets(
+  projectStore: ProjectStore,
+  invocation: LifecycleInvocation,
+): Promise<LifecycleTarget[]> {
+  const status = await new StatusService(projectStore).read();
+  if (status.recommendedAction.action === "REVIEW") {
+    throw new Error(`当前存在待审核候选，必须先执行 ${status.recommendedAction.command}`);
+  }
+  const explicitName = invocation.arguments.trim();
+  if (!explicitName) {
+    const target = status.recommendedAction.target;
+    const expectedCommand = status.recommendedAction.command.split(" ", 1)[0];
+    if (!target || expectedCommand !== `/${invocation.command}`) {
+      throw new Error(`当前生命周期动作 ${status.recommendedAction.command} 不允许写需求或设计文档`);
+    }
+    return [target];
+  }
+
+  const versions = await projectStore.listJson<ApprovedVersion>("approved-versions");
+  const map = findRequirementMap(versions);
+  const target = (
+    kind: ArtifactKind,
+    scopeId: string,
+    scopeName: string,
+    documentPaths: string[],
+  ): LifecycleTarget => ({
+    kind,
+    scopeId,
+    scopeName,
+    documentPaths,
+    parentVersionId: currentVersion(versions, kind, scopeId)?.versionId ?? null,
+  });
+  const targets: LifecycleTarget[] = [];
+  if (invocation.command === "sdlc-spec") {
+    if (explicitName === "产品概述") {
+      targets.push(target("PRODUCT_BRIEF", "project", "项目", ["docs/requirements/product-brief.md"]));
+    }
+    if (explicitName === "需求地图") {
+      targets.push(target("REQUIREMENT_MAP", "project", "项目", ["docs/requirements/requirement-map.md"]));
+    }
+    for (const module of map?.businessModules.filter((item) => item.name === explicitName) ?? []) {
+      targets.push(target("MODULE_REQUIREMENT", module.moduleId, module.name,
+        [`docs/requirements/modules/${module.slug}/functional-requirements.md`]));
+    }
+    for (const contract of map?.interfaces.filter((item) => item.name === explicitName) ?? []) {
+      targets.push(target("INTERFACE_REQUIREMENT", contract.interfaceId, contract.name,
+        [`docs/requirements/interfaces/${contract.slug}.md`]));
+    }
+    for (const quality of map?.qualityRequirements.filter((item) => item.name === explicitName) ?? []) {
+      targets.push(target("QUALITY_REQUIREMENT", quality.qualityId, quality.name,
+        [`docs/requirements/quality/${quality.scope === "GLOBAL" ? "global" : quality.slug}.md`]));
+    }
+  }
+  if (invocation.command === "sdlc-design") {
+    if (["产品总体设计", "总体设计"].includes(explicitName)) {
+      targets.push(target("PRODUCT_ARCHITECTURE", "project", "项目", ["docs/design/product-architecture.md"]));
+    }
+    for (const module of map?.businessModules.filter((item) => item.name === explicitName) ?? []) {
+      targets.push(target("MODULE_DESIGN", module.moduleId, module.name, [
+        `docs/design/modules/${module.slug}/design.md`,
+        `docs/verification/modules/${module.slug}/verification-spec.md`,
+      ]));
+    }
+    for (const contract of map?.interfaces.filter((item) => item.name === explicitName) ?? []) {
+      targets.push(target("INTERFACE_DESIGN", contract.interfaceId, contract.name,
+        [`docs/design/interfaces/${contract.slug}.md`]));
+    }
+  }
+  if (targets.length === 0) {
+    throw new Error(`生命周期命令参数必须是当前项目中的完整对象名称: ${explicitName}`);
+  }
+  return targets;
 }
 
 function commandForCandidateKind(kind: ArtifactKind): string {
